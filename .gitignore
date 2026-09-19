@@ -1,0 +1,18 @@
+# secretos y config local
+.env
+
+# base de datos local (en producción vive en el disco persistente de Render)
+crm.db
+
+# documentos de negocio (no van al repo de código)
+*.pptx
+*.docx
+
+# python
+__pycache__/
+*.pyc
+
+# archivos sueltos de diagnóstico
+salida.txt
+salida2.txt
+test_simple.py

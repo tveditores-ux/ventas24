@@ -1,0 +1,9 @@
+nombre,marca,modelo,anio_desde,anio_hasta,precio,stock
+Filtro de aceite,Toyota,Corolla,2014,2019,8,12
+Filtro de aceite,Chevrolet,Aveo,2008,2017,7,5
+Filtro de aire,Toyota,Corolla,2014,2019,10,9
+Filtro de aire,Ford,Fiesta,2011,2017,9,0
+Filtro de combustible,Chevrolet,Aveo,2008,2017,12,6
+Filtro de cabina (polen),Toyota,Corolla,2014,2019,11,8
+Bombillo LED H4,Universal,Universal,,,6,20
+Limpiaparabrisas 20",Universal,Universal,,,5,15
