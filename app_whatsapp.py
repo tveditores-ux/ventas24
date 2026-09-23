@@ -176,14 +176,18 @@ def _loop_polling_wecall():
     """Respaldo del webhook: revisa cada tanto si algún contacto tiene mensajes
     nuevos que el webhook no haya avisado (es 'best-effort', sin reintentos)."""
     intervalo = int(os.environ.get("WECALL_POLL_INTERVAL_SEGUNDOS", 90))
+    con_error = set()  # teléfonos que ya fallaron en el ciclo anterior, para no repetir el aviso
     while True:
         time.sleep(intervalo)
         try:
             for c in db.listar_contactos_wecall():
                 try:
                     nuevos = wecall.obtener_mensajes_nuevos(c["telefono"], desde_id=c["wecall_ultimo_id"])
+                    con_error.discard(c["telefono"])
                 except Exception as e:
-                    print(f"  (wecall-poll) error consultando {c['telefono']}: {e}")
+                    if c["telefono"] not in con_error:
+                        print(f"  (wecall-poll) error consultando {c['telefono']}: {e}")
+                        con_error.add(c["telefono"])
                     continue
                 for m in sorted(nuevos, key=lambda x: x.get("id", 0)):
                     if m.get("direccion") == "entrante":
