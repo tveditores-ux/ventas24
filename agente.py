@@ -115,13 +115,20 @@ class Agente:
         self.telefono = telefono or "terminal-sin-numero"
         self.contacto_id = db.obtener_o_crear_contacto(self.telefono, tipo=tipo)
 
-    def procesar_mensaje(self, texto_usuario: str) -> str:
-        """Envía el mensaje del usuario al agente y devuelve la respuesta final en texto."""
+    def procesar_mensaje(self, texto_usuario: str, historial_previo=None) -> str:
+        """Envía el mensaje del usuario al agente y devuelve la respuesta final en texto.
+
+        Por defecto, el historial de contexto sale de crm.db (lo que ya
+        conversó este contacto acá). Si el canal externo (ej. WeCall) ya
+        trae su propio historial de mensajes, se puede pasar en
+        historial_previo como lista de {"role": "user"|"assistant",
+        "content": texto} y se usa eso en su lugar — igual se sigue
+        registrando todo en crm.db para el CRM.
+        """
         db.tocar_ultimo_contacto(self.contacto_id)
 
-        # Historial limpio (solo texto, sin detalle de herramientas) para
-        # darle contexto de conversaciones anteriores al modelo.
-        historial = db.obtener_historial(self.contacto_id)
+        historial = historial_previo if historial_previo is not None else db.obtener_historial(self.contacto_id)
+        historial = list(historial)
         historial.append({"role": "user", "content": texto_usuario})
 
         while True:

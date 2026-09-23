@@ -3,6 +3,7 @@ python-dotenv>=1.0.0
 flask>=3.0.0
 twilio>=9.0.0
 gunicorn>=23.0.0
+requests>=2.31.0
 
 # Descomenta estas dos líneas cuando conectes tu Google Sheet real:
 # gspread>=6.0.0

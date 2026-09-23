@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS contactos (
     estado TEXT NOT NULL DEFAULT 'nuevo',      -- nuevo/contactado/interesado/no_interesado/cliente
     notas TEXT DEFAULT '',
     fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
-    fecha_ultimo_contacto TEXT
+    fecha_ultimo_contacto TEXT,
+    wecall_ultimo_id INTEGER                   -- último id de mensaje de WeCall ya procesado
 );
 
 CREATE TABLE IF NOT EXISTS interacciones (
@@ -84,6 +85,26 @@ def conectar():
 def inicializar():
     with conectar() as con:
         con.executescript(ESQUEMA)
+        # Migración liviana para bases creadas antes de agregar esta columna.
+        columnas = {f["name"] for f in con.execute("PRAGMA table_info(contactos)")}
+        if "wecall_ultimo_id" not in columnas:
+            con.execute("ALTER TABLE contactos ADD COLUMN wecall_ultimo_id INTEGER")
+        # Los contactos migrados desde Twilio guardaban el prefijo "whatsapp:".
+        # Se normaliza acá para que todos los canales compartan el mismo formato E.164.
+        con.execute(
+            "UPDATE contactos SET telefono = substr(telefono, 10) "
+            "WHERE telefono LIKE 'whatsapp:%'"
+        )
+
+
+def normalizar_telefono(telefono: str) -> str:
+    """Formato E.164 (+58...) sin importar si viene con el prefijo whatsapp: de Twilio."""
+    if not telefono:
+        return telefono
+    t = telefono.strip()
+    if t.startswith("whatsapp:"):
+        t = t[len("whatsapp:"):]
+    return t
 
 
 # ---------------------------------------------------------------------
@@ -92,6 +113,7 @@ def inicializar():
 
 def obtener_o_crear_contacto(telefono: str, tipo: str = "cliente") -> int:
     """Devuelve el id del contacto para ese teléfono, creándolo si no existe."""
+    telefono = normalizar_telefono(telefono)
     with conectar() as con:
         fila = con.execute("SELECT id FROM contactos WHERE telefono = ?", (telefono,)).fetchone()
         if fila:
@@ -115,6 +137,15 @@ def actualizar_contacto(contacto_id: int, **campos):
 
 def tocar_ultimo_contacto(contacto_id: int):
     actualizar_contacto(contacto_id, fecha_ultimo_contacto=datetime.now().isoformat(timespec="minutes"))
+
+
+def listar_contactos_wecall():
+    """Contactos que ya tuvieron al menos un mensaje de WeCall — para el polling de respaldo."""
+    with conectar() as con:
+        filas = con.execute(
+            "SELECT id, telefono, wecall_ultimo_id FROM contactos WHERE wecall_ultimo_id IS NOT NULL"
+        ).fetchall()
+        return [dict(f) for f in filas]
 
 
 def listar_mayoristas(estado: str | None = None):

@@ -1,33 +1,44 @@
 """
-Servidor web que conecta el Agente a WhatsApp vía el webhook de Twilio.
+Servidor web que conecta el Agente a WhatsApp.
+
+Dos canales:
+  - Twilio (sandbox/número propio) — ver /whatsapp. Se deja andando como
+    respaldo; WeCall Inbox es el canal real del negocio.
+  - WeCall Inbox (WhatsApp Business real vía Meta Cloud API) — ver
+    /webhook/wecall. Además de recibir el webhook, hay un hilo de
+    polling de respaldo (revisa mensajes nuevos cada cierto intervalo)
+    porque el webhook de WeCall es "best-effort" sin reintentos.
 
 Uso:
     python app_whatsapp.py
 
-Requiere en .env: ANTHROPIC_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN
-y TWILIO_WHATSAPP_FROM (el número de Twilio, ej. "whatsapp:+14155238886").
-También requiere que el puerto 5000 esté expuesto públicamente (ej. con
-ngrok) para que Twilio pueda llamar a este servidor.
+Requiere en .env: ANTHROPIC_API_KEY, y según el canal, TWILIO_ACCOUNT_SID/
+TWILIO_AUTH_TOKEN/TWILIO_WHATSAPP_FROM y/o WECALL_API_KEY/WECALL_WEBHOOK_SECRET.
 
-El webhook responde a Twilio de inmediato con un TwiML vacío y procesa
-el mensaje del agente en un hilo aparte, mandando la respuesta real por
-la API REST de Twilio cuando esté lista. Esto evita que Twilio corte la
-conexión si el agente (que hace varias llamadas a la API de Anthropic)
-tarda más de lo que Twilio espera por una respuesta síncrona.
+El webhook responde de inmediato (TwiML vacío o 200 vacío según el canal)
+y procesa el mensaje del agente en un hilo aparte, mandando la respuesta
+real por la API correspondiente cuando esté lista. Esto evita que el
+webhook corte la conexión si el agente (que hace varias llamadas a la
+API de Anthropic) tarda más de lo que el remitente espera por una
+respuesta síncrona.
 """
 
 import os
 import sys
 import threading
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from dotenv import load_dotenv
-from flask import Flask, request, Response
+from flask import Flask, request, Response, jsonify
 from twilio.rest import Client
 
+import db
+import wecall
+from wecall import VentanaCerradaError, EnvioFallidoError
 from agente import Agente
 
 load_dotenv()
@@ -44,6 +55,10 @@ twilio_client = (
     else None
 )
 
+# Serializa el chequeo "¿ya procesé este mensaje de WeCall?" entre el
+# webhook y el polling de respaldo, para no mandar la respuesta dos veces.
+wecall_lock = threading.Lock()
+
 
 def procesar_y_responder(numero: str, mensaje: str):
     try:
@@ -59,6 +74,134 @@ def procesar_y_responder(numero: str, mensaje: str):
         )
     except Exception as e:
         print(f"❌ Error procesando mensaje de {numero}: {e}")
+
+
+def _mapear_historial_wecall(mensajes, excluir_id=None):
+    """Convierte los mensajes de WeCall al formato {role, content} que usa el agente."""
+    historial = []
+    for m in mensajes:
+        if excluir_id is not None and m.get("id") == excluir_id:
+            continue
+        rol = "user" if m.get("direccion") == "entrante" else "assistant"
+        texto = m.get("texto") or "[archivo adjunto]"
+        historial.append({"role": rol, "content": texto})
+    return historial
+
+
+def procesar_mensaje_wecall(telefono: str, mensaje: dict):
+    """Procesa un mensaje entrante de WeCall (llamado desde el webhook o el polling)."""
+    mensaje_id = mensaje.get("id")
+    texto_mensaje = (mensaje.get("texto") or "").strip()
+    if mensaje.get("direccion") != "entrante" or not texto_mensaje or mensaje_id is None:
+        return
+
+    telefono = db.normalizar_telefono(telefono)
+
+    # Marca el mensaje como visto ANTES de procesarlo (dentro del lock) para
+    # que si el webhook y el polling lo agarran casi al mismo tiempo, el
+    # segundo lo vea ya procesado y no mande la respuesta dos veces.
+    with wecall_lock:
+        contacto_id = db.obtener_o_crear_contacto(telefono, tipo="cliente")
+        with db.conectar() as con:
+            fila = con.execute(
+                "SELECT wecall_ultimo_id FROM contactos WHERE id = ?", (contacto_id,)
+            ).fetchone()
+        ya_visto = fila["wecall_ultimo_id"] if fila else None
+        if ya_visto is not None and ya_visto >= mensaje_id:
+            return
+        db.actualizar_contacto(contacto_id, wecall_ultimo_id=mensaje_id)
+
+    try:
+        contexto = wecall.obtener_contexto(telefono, limite=30)
+    except Exception as e:
+        print(f"  (wecall) no pude traer contexto de {telefono}: {e}")
+        contexto = None
+
+    historial_previo = None
+    if contexto:
+        nombre = (contexto.get("contacto") or {}).get("nombre")
+        if nombre:
+            db.actualizar_contacto(contacto_id, nombre=nombre)
+        historial_previo = _mapear_historial_wecall(contexto.get("mensajes", []), excluir_id=mensaje_id)
+
+    print(f"📩 (wecall) {telefono}: {texto_mensaje}")
+    agente = Agente(telefono=telefono)
+    respuesta = agente.procesar_mensaje(texto_mensaje, historial_previo=historial_previo)
+    print(f"🤖 (wecall) → {telefono}: {respuesta}")
+
+    try:
+        wecall.enviar_mensaje(telefono, texto=respuesta)
+    except VentanaCerradaError:
+        print(f"  ⚠️ (wecall) ventana de 24h cerrada para {telefono} — hace falta responder con una plantilla aprobada")
+    except EnvioFallidoError as e:
+        print(f"  ❌ (wecall) Meta rechazó el envío a {telefono}: {e.detalle}")
+    except Exception as e:
+        print(f"  ❌ (wecall) error enviando a {telefono}: {e}")
+
+
+@app.route("/webhook/wecall", methods=["POST"])
+def wecall_webhook():
+    cuerpo_crudo = request.get_data()
+    firma = request.headers.get("X-WeCall-Signature", "")
+
+    if not wecall.verificar_firma(cuerpo_crudo, firma):
+        print("  ⚠️ (wecall) firma inválida en el webhook, ignorado")
+        return ("firma inválida", 401)
+
+    payload = request.get_json(silent=True) or {}
+    if payload.get("evento") == "mensaje_nuevo":
+        contacto = payload.get("contacto") or {}
+        mensaje = payload.get("mensaje") or {}
+        telefono = contacto.get("telefono", "")
+        if telefono and mensaje:
+            threading.Thread(
+                target=procesar_mensaje_wecall, args=(telefono, mensaje), daemon=True
+            ).start()
+
+    # Responder rápido — WeCall solo espera 6s y no reintenta.
+    return ("", 200)
+
+
+@app.route("/api/wecall/enlace/<telefono>", methods=["GET"])
+def wecall_enlace_conversacion(telefono):
+    """Para el botón 'Ver WhatsApp' del CRM: arma el link al chat completo en WeCall."""
+    try:
+        datos = wecall.generar_enlace_conversacion(db.normalizar_telefono(telefono), minutos_validez=60)
+        return jsonify(datos)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+
+def _loop_polling_wecall():
+    """Respaldo del webhook: revisa cada tanto si algún contacto tiene mensajes
+    nuevos que el webhook no haya avisado (es 'best-effort', sin reintentos)."""
+    intervalo = int(os.environ.get("WECALL_POLL_INTERVAL_SEGUNDOS", 90))
+    while True:
+        time.sleep(intervalo)
+        try:
+            for c in db.listar_contactos_wecall():
+                try:
+                    nuevos = wecall.obtener_mensajes_nuevos(c["telefono"], desde_id=c["wecall_ultimo_id"])
+                except Exception as e:
+                    print(f"  (wecall-poll) error consultando {c['telefono']}: {e}")
+                    continue
+                for m in sorted(nuevos, key=lambda x: x.get("id", 0)):
+                    if m.get("direccion") == "entrante":
+                        procesar_mensaje_wecall(c["telefono"], m)
+                    else:
+                        # Mensaje saliente que no pasó por nuestro propio envío
+                        # (ej. alguien contestó a mano desde WeCall): solo
+                        # avanzamos el cursor para no volver a revisarlo.
+                        mid = m.get("id")
+                        if mid is not None:
+                            with wecall_lock:
+                                db.actualizar_contacto(c["id"], wecall_ultimo_id=mid)
+        except Exception as e:
+            print(f"  (wecall-poll) error en el ciclo: {e}")
+
+
+if os.environ.get("WECALL_API_KEY") and os.environ.get("WECALL_WEBHOOK_SECRET"):
+    threading.Thread(target=_loop_polling_wecall, daemon=True).start()
 
 
 @app.route("/whatsapp", methods=["POST"])
