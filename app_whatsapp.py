@@ -45,6 +45,11 @@ load_dotenv()
 
 app = Flask(__name__)
 
+
+@app.route("/debug/version", methods=["GET"])
+def debug_version():
+    return jsonify({"commit": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "desconocido")})
+
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
@@ -176,6 +181,32 @@ def wecall_webhook():
 
     # Responder rápido — WeCall solo espera 6s y no reintenta.
     return ("", 200)
+
+
+@app.route("/debug/wecall-test/<telefono>", methods=["GET"])
+def wecall_debug_test(telefono):
+    """DIAGNÓSTICO TEMPORAL — no manda nada, solo corre la misma cadena de
+    procesamiento de forma síncrona y devuelve el error real si lo hay,
+    en vez de que se pierda en un hilo en segundo plano."""
+    import traceback
+    telefono = db.normalizar_telefono(telefono)
+    salida = {"telefono": telefono}
+    try:
+        contexto = wecall.obtener_contexto(telefono, limite=30)
+        salida["contexto_ok"] = contexto is not None
+        salida["mensajes_en_contexto"] = len(contexto.get("mensajes", [])) if contexto else 0
+        historial_previo = _mapear_historial_wecall(contexto.get("mensajes", [])) if contexto else None
+        salida["historial_previo"] = historial_previo
+        agente = Agente(telefono=telefono)
+        respuesta = agente.procesar_mensaje("prueba de diagnóstico, ignora este mensaje y responde solo 'ok'", historial_previo=historial_previo)
+        salida["respuesta_agente"] = respuesta
+        salida["exito"] = True
+    except Exception as e:
+        salida["exito"] = False
+        salida["error_tipo"] = type(e).__name__
+        salida["error_msg"] = str(e)
+        salida["traceback"] = traceback.format_exc()
+    return jsonify(salida)
 
 
 @app.route("/api/wecall/enlace/<telefono>", methods=["GET"])
