@@ -36,6 +36,8 @@ def _headers():
 
 def verificar_firma(cuerpo_crudo: bytes, firma_header: str) -> bool:
     """Verifica X-WeCall-Signature: sha256=<hex> contra el cuerpo crudo del POST."""
+    if not WECALL_WEBHOOK_SECRET:
+        return False
     if not firma_header or not firma_header.startswith("sha256="):
         return False
     firma_recibida = firma_header[len("sha256="):]
