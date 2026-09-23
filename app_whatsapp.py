@@ -125,6 +125,23 @@ def crm_modo_manual(contacto_id):
     return jsonify({"contacto_id": contacto_id, "modo_manual": bool(activo)})
 
 
+@app.route("/debug/cargar-catalogo", methods=["POST"])
+def debug_cargar_catalogo():
+    """DIAGNÓSTICO / ADMIN — recarga el catálogo desde
+    catalogo_50_modelos_venezuela.csv (que viaja con el deploy) hacia la
+    crm.db real de producción, reemplazando lo que haya. Protegido con
+    el mismo token del dashboard porque reescribe datos reales."""
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    import migrar_datos
+    with db.conectar() as con:
+        antes = con.execute("SELECT COUNT(*) AS n FROM catalogo").fetchone()["n"]
+    migrar_datos.migrar_catalogo(forzar=True)
+    with db.conectar() as con:
+        despues = con.execute("SELECT COUNT(*) AS n FROM catalogo").fetchone()["n"]
+    return jsonify({"productos_antes": antes, "productos_despues": despues})
+
+
 @app.route("/debug/version", methods=["GET"])
 def debug_version():
     return jsonify({"commit": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "desconocido")})
