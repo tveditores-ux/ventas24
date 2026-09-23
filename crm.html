@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Conversaciones · Ventas24</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EEF1EF; --surface:#FFFFFF; --surface-2:#E4E9E7;
+    --ink:#1B2430; --ink-soft:#5C6670; --ink-faint:#8B949C;
+    --steel:#2B4562; --steel-ink:#0F2136;
+    --rust:#C1631A; --rust-ink:#8C4610;
+    --ok:#2F7D5B; --ok-bg:#E3F0E8;
+    --danger:#B3361E; --danger-bg:#F7E4DF;
+    --warn:#9C6B08; --warn-bg:#F4E9D2;
+    --line:#D6DBD8;
+    --shadow: 0 1px 2px rgba(15,33,54,.06), 0 6px 20px -8px rgba(15,33,54,.18);
+    --font-display:'Big Shoulders Display','Arial Narrow',sans-serif;
+    --font-body:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Consolas,monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#12181F; --surface:#1A222B; --surface-2:#212B35;
+      --ink:#E7EBEE; --ink-soft:#A6B0B9; --ink-faint:#6C7680;
+      --steel:#7FA8D4; --steel-ink:#DCEAFA;
+      --rust:#E28A46; --rust-ink:#FFD9B3;
+      --ok:#6FCB9C; --ok-bg:#173226;
+      --danger:#E88871; --danger-bg:#3A1E18;
+      --warn:#E3B65C; --warn-bg:#3A2E12;
+      --line:#2C3742;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -10px rgba(0,0,0,.55);
+      color-scheme: dark;
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{ height:100%; }
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--font-body);
+    padding-inline: max(16px, calc((100vw - 1180px)/2));
+    padding-block: 0 32px;
+  }
+  h1,h2{ font-family:var(--font-display); font-weight:700; letter-spacing:.01em; margin:0; }
+
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding-block:14px; background:var(--paper); border-bottom:1px solid var(--line);
+    margin-bottom:20px;
+  }
+  .brand{ display:flex; align-items:baseline; gap:10px; }
+  .brand .mark{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:32px; height:32px; border-radius:8px; background:var(--steel); color:var(--surface);
+    font-family:var(--font-display); font-weight:800; font-size:16px;
+  }
+  .brand h1{ font-size:19px; }
+  .brand .sub{ color:var(--ink-soft); font-size:12px; }
+  .back{ font-size:12.5px; color:var(--ink-soft); text-decoration:none; }
+  .back:hover{ color:var(--steel); }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+    background:var(--steel); color:var(--surface); border:none; border-radius:9px;
+    padding:10px 16px; font-size:13.5px; font-weight:600; font-family:var(--font-body);
+  }
+  .btn:disabled{ opacity:.55; cursor:default; }
+  .btn.ghost{ background:transparent; border:1px solid var(--line); color:var(--ink-soft); }
+  input:focus-visible, button:focus-visible{ outline:2px solid var(--rust); outline-offset:2px; }
+
+  .token-gate{
+    background:var(--surface); border:1px dashed var(--line); border-radius:12px;
+    padding:22px; display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; max-width:640px;
+  }
+  .token-gate .txt{ flex:1 1 260px; }
+  .token-gate h2{ font-size:16px; margin-bottom:4px; }
+  .token-gate p{ margin:0; font-size:13px; color:var(--ink-soft); line-height:1.5; }
+  .token-gate input[type="password"]{
+    flex:1 1 200px; min-width:160px; background:var(--paper); border:1px solid var(--line);
+    border-radius:9px; padding:10px 12px; font-size:13.5px; font-family:var(--font-mono); color:var(--ink);
+  }
+
+  .toolbar{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
+  .toolbar input[type="search"]{
+    flex:0 1 260px; min-width:160px; background:var(--surface); border:1px solid var(--line);
+    border-radius:9px; padding:9px 12px; font-size:14px; color:var(--ink); font-family:var(--font-body);
+  }
+  .count{ font-family:var(--font-mono); color:var(--ink-faint); font-size:12.5px; margin-left:auto; }
+
+  .shell{
+    display:grid; grid-template-columns:300px 1fr; gap:0;
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    box-shadow:var(--shadow); overflow:hidden; height:calc(100vh - 190px); min-height:420px;
+  }
+  .list{ border-right:1px solid var(--line); overflow-y:auto; }
+  .row{
+    display:flex; gap:10px; align-items:flex-start; padding:12px 14px;
+    border-bottom:1px solid var(--line); cursor:pointer; background:var(--surface);
+  }
+  .row:hover{ background:var(--surface-2); }
+  .row.active{ background:var(--surface-2); box-shadow:inset 3px 0 0 var(--steel); }
+  .row .avatar{
+    width:34px; height:34px; border-radius:999px; background:var(--steel); color:var(--surface);
+    display:flex; align-items:center; justify-content:center; font-family:var(--font-display);
+    font-weight:800; font-size:13px; flex:none;
+  }
+  .row .who{ font-weight:600; font-size:13.5px; display:flex; align-items:center; gap:6px; }
+  .row .prev{ color:var(--ink-soft); font-size:12px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:190px; }
+  .manual-dot{ width:7px; height:7px; border-radius:999px; background:var(--rust); flex:none; }
+  .empty{ padding:40px 20px; text-align:center; color:var(--ink-faint); font-size:13px; }
+  .error{ padding:40px 20px; text-align:center; color:var(--danger); font-size:13px; }
+
+  .main{ display:flex; flex-direction:column; min-width:0; }
+  .head{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:14px 18px; border-bottom:1px solid var(--line); flex-wrap:wrap;
+  }
+  .head .who{ font-weight:600; font-size:14.5px; }
+  .head .phone{ font-family:var(--font-mono); color:var(--ink-faint); font-size:12px; margin-top:2px; }
+  .toggle-manual{
+    display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+    border:1px solid var(--line); background:var(--surface); border-radius:999px;
+    padding:7px 14px 7px 7px; font-size:12.5px; font-weight:600; color:var(--ink-soft);
+  }
+  .toggle-manual .knob{ width:30px; height:18px; border-radius:999px; background:var(--surface-2); position:relative; flex:none; transition:background .15s; }
+  .toggle-manual .knob::after{ content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:999px; background:var(--surface); box-shadow:0 1px 2px rgba(0,0,0,.25); transition:left .15s; }
+  .toggle-manual[aria-pressed="true"] .knob{ background:var(--rust); }
+  .toggle-manual[aria-pressed="true"] .knob::after{ left:14px; background:#fff; }
+  .toggle-manual[aria-pressed="true"]{ color:var(--rust-ink); border-color:color-mix(in srgb, var(--rust) 40%, transparent); }
+  .thread{ flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:10px; }
+  .bubble{ max-width:72%; padding:9px 13px; border-radius:13px; font-size:13.5px; line-height:1.5; white-space:pre-wrap; }
+  .bubble.entrante{ align-self:flex-start; background:var(--surface-2); color:var(--ink); border-bottom-left-radius:4px; }
+  .bubble.saliente{ align-self:flex-end; background:var(--steel); color:var(--surface); border-bottom-right-radius:4px; }
+  .bubble .meta{ display:block; margin-top:4px; font-size:10.5px; opacity:.65; font-family:var(--font-mono); }
+
+  @media (max-width:760px){
+    .shell{ grid-template-columns:1fr; height:auto; }
+    .list{ border-right:none; border-bottom:1px solid var(--line); max-height:220px; }
+    .thread{ max-height:60vh; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="mark">24</span>
+    <div>
+      <h1>Conversaciones</h1>
+      <div class="sub">Ventas24 · datos en vivo</div>
+    </div>
+  </div>
+  <a class="back" href="https://claude.ai/artifact/VkNtdDSyXLAJusbpdk4YVU" target="_blank" rel="noopener">← Volver al CRM completo</a>
+</div>
+
+<div class="token-gate" id="tokenGate">
+  <div class="txt">
+    <h2>Conectar con el servidor</h2>
+    <p>Pegá el <code>CRM_DASHBOARD_TOKEN</code> configurado en Railway. Se guarda solo en este navegador.</p>
+  </div>
+  <input type="password" id="tokenInput" placeholder="Token del dashboard">
+  <button class="btn" id="tokenSave" type="button">Conectar</button>
+</div>
+
+<div id="convWrap" hidden>
+  <div class="toolbar">
+    <input type="search" id="searchConv" placeholder="Buscar por nombre o teléfono…">
+    <button class="btn ghost" id="btnRefresh" type="button">↻ Actualizar</button>
+    <span class="count" id="countConv">0 conversaciones</span>
+  </div>
+  <div class="shell">
+    <div class="list" id="convList"></div>
+    <div class="main" id="convMain">
+      <div class="empty">Elegí una conversación de la lista para verla acá.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const TOKEN_KEY = 'ventas24_crm_token';
+  let token = null;
+  try { token = localStorage.getItem(TOKEN_KEY); } catch(e) {}
+
+  let contactos = [];
+  let activoId = null;
+  let pollTimer = null;
+
+  function iniciales(nombre){
+    return (nombre||'').split(/\s+/).filter(Boolean).slice(0,2).map(p=>p[0].toUpperCase()).join('') || '?';
+  }
+
+  function api(path, opts={}){
+    return fetch(path, { ...opts, headers: { ...(opts.headers||{}), 'Authorization': 'Bearer ' + token } });
+  }
+
+  function mostrarGate(mostrar){
+    document.getElementById('tokenGate').hidden = !mostrar;
+    document.getElementById('convWrap').hidden = mostrar;
+  }
+
+  function iniciar(){
+    if (!token){ mostrarGate(true); return; }
+    mostrarGate(false);
+    cargarContactos();
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(cargarContactos, 20000);
+  }
+
+  document.getElementById('tokenSave').addEventListener('click', () => {
+    const v = document.getElementById('tokenInput').value.trim();
+    if (!v) return;
+    token = v;
+    try { localStorage.setItem(TOKEN_KEY, v); } catch(e) {}
+    iniciar();
+  });
+  document.getElementById('tokenInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('tokenSave').click();
+  });
+
+  async function cargarContactos(){
+    const list = document.getElementById('convList');
+    try {
+      const r = await api('/api/crm/contactos');
+      if (r.status === 401){
+        token = null;
+        try { localStorage.removeItem(TOKEN_KEY); } catch(e) {}
+        mostrarGate(true);
+        document.getElementById('tokenGate').querySelector('p').textContent = 'Ese token no es válido — probá de nuevo.';
+        return;
+      }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      contactos = await r.json();
+      renderLista();
+      if (activoId && contactos.some(c => c.id === activoId)) abrir(activoId, true);
+    } catch(e){
+      list.innerHTML = `<div class="error">No pude conectar (${e.message}). Reintentando…</div>`;
+    }
+  }
+
+  function renderLista(){
+    const list = document.getElementById('convList');
+    document.getElementById('countConv').textContent = contactos.length + ' conversaciones';
+    const q = (document.getElementById('searchConv').value || '').trim().toLowerCase();
+    const filtrados = contactos.filter(c => !q || ((c.nombre||'') + ' ' + c.telefono).toLowerCase().includes(q));
+    if (!filtrados.length){
+      list.innerHTML = `<div class="empty">${contactos.length ? 'Sin resultados.' : 'Todavía no hay conversaciones con actividad.'}</div>`;
+      return;
+    }
+    list.innerHTML = filtrados.map(c => `
+      <div class="row${c.id === activoId ? ' active' : ''}" data-id="${c.id}">
+        <div class="avatar">${iniciales(c.nombre || c.telefono)}</div>
+        <div style="flex:1; min-width:0;">
+          <div class="who">${c.nombre || c.telefono}${c.modo_manual ? '<span class="manual-dot" title="Modo manual activo"></span>' : ''}</div>
+          <div class="prev">${(c.ultimo_mensaje || 'Sin mensajes todavía').replace(/\n/g,' ')}</div>
+        </div>
+      </div>
+    `).join('');
+    list.querySelectorAll('.row').forEach(row => {
+      row.addEventListener('click', () => abrir(parseInt(row.dataset.id, 10)));
+    });
+  }
+  document.getElementById('searchConv').addEventListener('input', renderLista);
+  document.getElementById('btnRefresh').addEventListener('click', cargarContactos);
+
+  async function abrir(id, silencioso){
+    activoId = id;
+    renderLista();
+    const main = document.getElementById('convMain');
+    if (!silencioso) main.innerHTML = `<div class="empty">Cargando…</div>`;
+    try {
+      const r = await api('/api/crm/conversacion/' + id);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      pintar(await r.json());
+    } catch(e){
+      main.innerHTML = `<div class="error">No pude cargar esta conversación (${e.message}).</div>`;
+    }
+  }
+
+  function pintar(datos){
+    const c = datos.contacto;
+    const main = document.getElementById('convMain');
+    const manual = !!c.modo_manual;
+    main.innerHTML = `
+      <div class="head">
+        <div>
+          <div class="who">${c.nombre || c.telefono}</div>
+          <div class="phone">${c.telefono}</div>
+        </div>
+        <button class="toggle-manual" id="btnToggle" aria-pressed="${manual}" type="button">
+          <span class="knob"></span>${manual ? 'Modo manual · un humano responde' : 'Modo automático · responde el bot'}
+        </button>
+      </div>
+      <div class="thread" id="thread"></div>
+    `;
+    const thread = document.getElementById('thread');
+    const mensajes = datos.mensajes || [];
+    thread.innerHTML = mensajes.length ? mensajes.map(m => {
+      const entrante = m.direccion === 'entrante';
+      const hora = m.fecha_hora ? new Date(m.fecha_hora).toLocaleString('es-VE', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+      const texto = (m.texto || '[archivo adjunto]').replace(/</g,'&lt;');
+      return `<div class="bubble ${entrante ? 'entrante' : 'saliente'}">${texto}${hora ? `<span class="meta">${hora}${m.estado_whatsapp ? ' · ' + m.estado_whatsapp : ''}</span>` : ''}</div>`;
+    }).join('') : `<div class="empty">Sin mensajes todavía.</div>`;
+    thread.scrollTop = thread.scrollHeight;
+
+    document.getElementById('btnToggle').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const activar = btn.getAttribute('aria-pressed') !== 'true';
+      btn.disabled = true;
+      try {
+        const r = await api('/api/crm/modo-manual/' + c.id, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activo: activar }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        c.modo_manual = activar;
+        btn.setAttribute('aria-pressed', String(activar));
+        btn.innerHTML = `<span class="knob"></span>${activar ? 'Modo manual · un humano responde' : 'Modo automático · responde el bot'}`;
+        const idx = contactos.findIndex(x => x.id === c.id);
+        if (idx >= 0) contactos[idx].modo_manual = activar ? 1 : 0;
+        renderLista();
+      } catch(err){
+        alert('No pude cambiar el modo: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  iniciar();
+</script>
+</body>
+</html>

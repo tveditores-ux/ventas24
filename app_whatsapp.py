@@ -34,7 +34,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from dotenv import load_dotenv
-from flask import Flask, request, Response, jsonify
+from flask import Flask, request, Response, jsonify, send_from_directory
 from twilio.rest import Client
 
 import db
@@ -72,6 +72,11 @@ def _cors(resp):
 @app.route("/api/crm/<path:_>", methods=["OPTIONS"])
 def _crm_preflight(_):
     return ("", 204)
+
+
+@app.route("/crm", methods=["GET"])
+def crm_page():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "crm.html")
 
 
 @app.route("/api/crm/contactos", methods=["GET"])
