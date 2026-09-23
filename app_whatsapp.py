@@ -50,6 +50,30 @@ app = Flask(__name__)
 def debug_version():
     return jsonify({"commit": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "desconocido")})
 
+
+@app.route("/debug/wecall-key-check", methods=["POST"])
+def debug_wecall_key_check():
+    """DIAGNÓSTICO TEMPORAL — nunca expone las claves reales. Solo dice si
+    el valor que mandaste coincide EXACTO con lo que el proceso tiene
+    cargado, para descartar espacios/saltos de línea extra sin filtrar
+    el secreto por HTTP."""
+    import hmac as _hmac
+    datos = request.get_json(silent=True) or {}
+    real_key = os.environ.get("WECALL_API_KEY") or ""
+    real_secret = os.environ.get("WECALL_WEBHOOK_SECRET") or ""
+    resultado = {}
+    if "api_key" in datos:
+        candidato = datos["api_key"]
+        resultado["api_key_coincide"] = _hmac.compare_digest(candidato, real_key)
+        resultado["api_key_longitud_real"] = len(real_key)
+        resultado["api_key_longitud_recibida"] = len(candidato)
+    if "webhook_secret" in datos:
+        candidato = datos["webhook_secret"]
+        resultado["webhook_secret_coincide"] = _hmac.compare_digest(candidato, real_secret)
+        resultado["webhook_secret_longitud_real"] = len(real_secret)
+        resultado["webhook_secret_longitud_recibida"] = len(candidato)
+    return jsonify(resultado)
+
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
