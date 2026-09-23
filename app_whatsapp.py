@@ -335,6 +335,21 @@ def wecall_debug_test(telefono):
     return jsonify(salida)
 
 
+@app.route("/debug/set-tipo/<telefono>", methods=["POST"])
+def debug_set_tipo(telefono):
+    """DIAGNÓSTICO / ADMIN — cambia el tipo de un contacto (cliente/mayorista)
+    para poder probar el vendedor mayorista con un número real."""
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    tipo = request.args.get("tipo")
+    if tipo not in ("cliente", "mayorista"):
+        return jsonify({"error": "usa ?tipo=cliente o ?tipo=mayorista"}), 400
+    telefono = db.normalizar_telefono(telefono)
+    contacto_id = db.obtener_o_crear_contacto(telefono, tipo=tipo)
+    db.actualizar_contacto(contacto_id, tipo=tipo)
+    return jsonify({"telefono": telefono, "contacto_id": contacto_id, "tipo_nuevo": tipo})
+
+
 @app.route("/debug/wecall-reset-cursor/<telefono>", methods=["POST"])
 def wecall_debug_reset_cursor(telefono):
     """DIAGNÓSTICO TEMPORAL — para deshacer el atasco que dejan mensajes
