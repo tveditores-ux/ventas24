@@ -134,7 +134,14 @@ class Agente:
     """Procesa mensajes de un contacto, con historial y estado persistidos en crm.db."""
 
     def __init__(self, api_key=None, telefono=None, tipo="cliente"):
-        self.client = Anthropic(api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"))
+        # Si la clave es de organización (no de un workspace específico),
+        # la API exige mandar el workspace por header aparte.
+        workspace_id = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+        headers_extra = {"anthropic-workspace-id": workspace_id} if workspace_id else None
+        self.client = Anthropic(
+            api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"),
+            default_headers=headers_extra,
+        )
         self.telefono = telefono or "terminal-sin-numero"
         self.contacto_id = db.obtener_o_crear_contacto(self.telefono, tipo=tipo)
 
