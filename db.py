@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS contactos (
     notas TEXT DEFAULT '',
     fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
     fecha_ultimo_contacto TEXT,
-    wecall_ultimo_id INTEGER                   -- último id de mensaje de WeCall ya procesado
+    wecall_ultimo_id INTEGER,                  -- último id de mensaje de WeCall ya procesado
+    modo_manual INTEGER NOT NULL DEFAULT 0     -- 1 = un humano lleva la conversación, el bot no responde solo
 );
 
 CREATE TABLE IF NOT EXISTS interacciones (
@@ -89,6 +90,8 @@ def inicializar():
         columnas = {f["name"] for f in con.execute("PRAGMA table_info(contactos)")}
         if "wecall_ultimo_id" not in columnas:
             con.execute("ALTER TABLE contactos ADD COLUMN wecall_ultimo_id INTEGER")
+        if "modo_manual" not in columnas:
+            con.execute("ALTER TABLE contactos ADD COLUMN modo_manual INTEGER NOT NULL DEFAULT 0")
         # Los contactos migrados desde Twilio guardaban el prefijo "whatsapp:".
         # Se normaliza acá para que todos los canales compartan el mismo formato E.164.
         con.execute(
@@ -145,6 +148,25 @@ def listar_contactos_wecall():
         filas = con.execute(
             "SELECT id, telefono, wecall_ultimo_id FROM contactos WHERE wecall_ultimo_id IS NOT NULL"
         ).fetchall()
+        return [dict(f) for f in filas]
+
+
+def listar_contactos_con_actividad():
+    """Contactos que ya tuvieron alguna conversación (WeCall o Twilio),
+    con su último mensaje, para la vista de conversaciones del CRM."""
+    with conectar() as con:
+        filas = con.execute("""
+            SELECT
+                contactos.id, contactos.telefono, contactos.nombre, contactos.tipo,
+                contactos.estado, contactos.modo_manual, contactos.fecha_ultimo_contacto,
+                contactos.wecall_ultimo_id,
+                (SELECT mensaje FROM interacciones WHERE contacto_id = contactos.id ORDER BY id DESC LIMIT 1) AS ultimo_mensaje,
+                (SELECT rol FROM interacciones WHERE contacto_id = contactos.id ORDER BY id DESC LIMIT 1) AS ultimo_rol
+            FROM contactos
+            WHERE wecall_ultimo_id IS NOT NULL
+               OR EXISTS (SELECT 1 FROM interacciones WHERE contacto_id = contactos.id)
+            ORDER BY fecha_ultimo_contacto DESC
+        """).fetchall()
         return [dict(f) for f in filas]
 
 

@@ -23,6 +23,7 @@ API de Anthropic) tarda más de lo que el remitente espera por una
 respuesta síncrona.
 """
 
+import hmac
 import os
 import sys
 import threading
@@ -44,6 +45,79 @@ from agente import Agente
 load_dotenv()
 
 app = Flask(__name__)
+
+CRM_DASHBOARD_TOKEN = os.environ.get("CRM_DASHBOARD_TOKEN")
+
+
+def _token_valido():
+    if not CRM_DASHBOARD_TOKEN:
+        return False
+    recibido = request.headers.get("Authorization", "")
+    if recibido.startswith("Bearer "):
+        recibido = recibido[len("Bearer "):]
+    else:
+        recibido = request.args.get("token", "")
+    return hmac.compare_digest(recibido, CRM_DASHBOARD_TOKEN)
+
+
+@app.after_request
+def _cors(resp):
+    if request.path.startswith("/api/crm/"):
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return resp
+
+
+@app.route("/api/crm/<path:_>", methods=["OPTIONS"])
+def _crm_preflight(_):
+    return ("", 204)
+
+
+@app.route("/api/crm/contactos", methods=["GET"])
+def crm_contactos():
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    return jsonify(db.listar_contactos_con_actividad())
+
+
+@app.route("/api/crm/conversacion/<int:contacto_id>", methods=["GET"])
+def crm_conversacion(contacto_id):
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    with db.conectar() as con:
+        fila = con.execute("SELECT * FROM contactos WHERE id = ?", (contacto_id,)).fetchone()
+    if not fila:
+        return jsonify({"error": "contacto no encontrado"}), 404
+    contacto = dict(fila)
+
+    mensajes = None
+    if contacto.get("wecall_ultimo_id") is not None:
+        try:
+            contexto = wecall.obtener_contexto(contacto["telefono"], limite=100)
+            if contexto:
+                mensajes = contexto.get("mensajes", [])
+        except Exception as e:
+            print(f"  (crm) no pude traer contexto de WeCall para conversación: {e}")
+
+    if mensajes is None:
+        # Contacto sin WeCall (ej. solo Twilio): se arma con lo que hay en crm.db.
+        mensajes = [
+            {"direccion": "entrante" if h["role"] == "user" else "saliente", "texto": h["content"]}
+            for h in db.obtener_historial(contacto_id)
+        ]
+
+    return jsonify({"contacto": contacto, "mensajes": mensajes})
+
+
+@app.route("/api/crm/modo-manual/<int:contacto_id>", methods=["POST"])
+def crm_modo_manual(contacto_id):
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    datos = request.get_json(silent=True) or {}
+    activo = 1 if datos.get("activo") else 0
+    db.actualizar_contacto(contacto_id, modo_manual=activo)
+    return jsonify({"contacto_id": contacto_id, "modo_manual": bool(activo)})
 
 
 @app.route("/debug/version", methods=["GET"])
@@ -136,12 +210,18 @@ def procesar_mensaje_wecall(telefono: str, mensaje: dict):
         contacto_id = db.obtener_o_crear_contacto(telefono, tipo="cliente")
         with db.conectar() as con:
             fila = con.execute(
-                "SELECT wecall_ultimo_id FROM contactos WHERE id = ?", (contacto_id,)
+                "SELECT wecall_ultimo_id, modo_manual FROM contactos WHERE id = ?", (contacto_id,)
             ).fetchone()
         ya_visto = fila["wecall_ultimo_id"] if fila else None
         if ya_visto is not None and ya_visto >= mensaje_id:
             return
         db.actualizar_contacto(contacto_id, wecall_ultimo_id=mensaje_id)
+        if fila and fila["modo_manual"]:
+            # Un humano está llevando esta conversación desde WeCall — el
+            # bot solo avanza el cursor para no acumular backlog, pero no
+            # responde nada solo.
+            print(f"  🙋 (wecall) {telefono} está en modo manual, el bot no responde")
+            return
 
     try:
         try:
