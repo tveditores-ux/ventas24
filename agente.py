@@ -107,6 +107,29 @@ HERRAMIENTA_PEDIDO = {
 }
 
 
+def _fusionar_consecutivos(historial):
+    """La API de Anthropic exige que los roles se alternen user/assistant.
+    Si el historial trae dos mensajes seguidos del mismo rol (ej. el
+    cliente escribió más de una vez sin que el bot llegara a responder),
+    los fusiona en uno solo para no romper la llamada a la API."""
+    fusionado = []
+    for msg in historial:
+        anterior = fusionado[-1] if fusionado else None
+        if (
+            anterior
+            and anterior["role"] == msg["role"]
+            and isinstance(anterior["content"], str)
+            and isinstance(msg["content"], str)
+        ):
+            fusionado[-1] = {
+                "role": msg["role"],
+                "content": f"{anterior['content']}\n{msg['content']}",
+            }
+        else:
+            fusionado.append(msg)
+    return fusionado
+
+
 class Agente:
     """Procesa mensajes de un contacto, con historial y estado persistidos en crm.db."""
 
@@ -130,6 +153,7 @@ class Agente:
         historial = historial_previo if historial_previo is not None else db.obtener_historial(self.contacto_id)
         historial = list(historial)
         historial.append({"role": "user", "content": texto_usuario})
+        historial = _fusionar_consecutivos(historial)
 
         while True:
             respuesta = self.client.messages.create(

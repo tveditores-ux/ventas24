@@ -99,7 +99,10 @@ def procesar_mensaje_wecall(telefono: str, mensaje: dict):
 
     # Marca el mensaje como visto ANTES de procesarlo (dentro del lock) para
     # que si el webhook y el polling lo agarran casi al mismo tiempo, el
-    # segundo lo vea ya procesado y no mande la respuesta dos veces.
+    # segundo lo vea ya procesado y no mande la respuesta dos veces. Por
+    # eso todo lo que sigue va en un try/except amplio: si algo falla acá
+    # abajo, el mensaje ya quedó marcado como visto y NO se va a reintentar
+    # solo — hace falta que quede un log claro de qué pasó.
     with wecall_lock:
         contacto_id = db.obtener_o_crear_contacto(telefono, tipo="cliente")
         with db.conectar() as con:
@@ -112,31 +115,34 @@ def procesar_mensaje_wecall(telefono: str, mensaje: dict):
         db.actualizar_contacto(contacto_id, wecall_ultimo_id=mensaje_id)
 
     try:
-        contexto = wecall.obtener_contexto(telefono, limite=30)
-    except Exception as e:
-        print(f"  (wecall) no pude traer contexto de {telefono}: {e}")
-        contexto = None
+        try:
+            contexto = wecall.obtener_contexto(telefono, limite=30)
+        except Exception as e:
+            print(f"  (wecall) no pude traer contexto de {telefono}: {e}")
+            contexto = None
 
-    historial_previo = None
-    if contexto:
-        nombre = (contexto.get("contacto") or {}).get("nombre")
-        if nombre:
-            db.actualizar_contacto(contacto_id, nombre=nombre)
-        historial_previo = _mapear_historial_wecall(contexto.get("mensajes", []), excluir_id=mensaje_id)
+        historial_previo = None
+        if contexto:
+            nombre = (contexto.get("contacto") or {}).get("nombre")
+            if nombre:
+                db.actualizar_contacto(contacto_id, nombre=nombre)
+            historial_previo = _mapear_historial_wecall(contexto.get("mensajes", []), excluir_id=mensaje_id)
 
-    print(f"📩 (wecall) {telefono}: {texto_mensaje}")
-    agente = Agente(telefono=telefono)
-    respuesta = agente.procesar_mensaje(texto_mensaje, historial_previo=historial_previo)
-    print(f"🤖 (wecall) → {telefono}: {respuesta}")
+        print(f"📩 (wecall) {telefono}: {texto_mensaje}")
+        agente = Agente(telefono=telefono)
+        respuesta = agente.procesar_mensaje(texto_mensaje, historial_previo=historial_previo)
+        print(f"🤖 (wecall) → {telefono}: {respuesta}")
 
-    try:
-        wecall.enviar_mensaje(telefono, texto=respuesta)
-    except VentanaCerradaError:
-        print(f"  ⚠️ (wecall) ventana de 24h cerrada para {telefono} — hace falta responder con una plantilla aprobada")
-    except EnvioFallidoError as e:
-        print(f"  ❌ (wecall) Meta rechazó el envío a {telefono}: {e.detalle}")
-    except Exception as e:
-        print(f"  ❌ (wecall) error enviando a {telefono}: {e}")
+        try:
+            wecall.enviar_mensaje(telefono, texto=respuesta)
+        except VentanaCerradaError:
+            print(f"  ⚠️ (wecall) ventana de 24h cerrada para {telefono} — hace falta responder con una plantilla aprobada")
+        except EnvioFallidoError as e:
+            print(f"  ❌ (wecall) Meta rechazó el envío a {telefono}: {e.detalle}")
+    except Exception:
+        import traceback
+        print(f"  ❌ (wecall) error procesando mensaje {mensaje_id} de {telefono} (ya quedó marcado como visto, no se reintenta solo):")
+        traceback.print_exc()
 
 
 @app.route("/webhook/wecall", methods=["POST"])
@@ -144,12 +150,18 @@ def wecall_webhook():
     cuerpo_crudo = request.get_data()
     firma = request.headers.get("X-WeCall-Signature", "")
 
+    # Log del body crudo ANTES de cualquier validación — así queda
+    # evidencia de que el webhook llegó aunque la firma o el evento no
+    # sean los esperados.
+    print(f"🔔 (wecall) webhook recibido, {len(cuerpo_crudo)} bytes: {cuerpo_crudo[:500]!r}")
+
     if not wecall.verificar_firma(cuerpo_crudo, firma):
-        print("  ⚠️ (wecall) firma inválida en el webhook, ignorado")
+        print(f"  ⚠️ (wecall) firma inválida en el webhook, ignorado (header recibido: {firma!r})")
         return ("firma inválida", 401)
 
     payload = request.get_json(silent=True) or {}
-    if payload.get("evento") == "mensaje_nuevo":
+    evento = payload.get("evento")
+    if evento == "mensaje_nuevo":
         contacto = payload.get("contacto") or {}
         mensaje = payload.get("mensaje") or {}
         telefono = contacto.get("telefono", "")
@@ -157,6 +169,10 @@ def wecall_webhook():
             threading.Thread(
                 target=procesar_mensaje_wecall, args=(telefono, mensaje), daemon=True
             ).start()
+        else:
+            print(f"  ⚠️ (wecall) evento 'mensaje_nuevo' sin teléfono o sin mensaje: {payload}")
+    else:
+        print(f"  (wecall) webhook con evento distinto de 'mensaje_nuevo': {evento!r} — ignorado")
 
     # Responder rápido — WeCall solo espera 6s y no reintenta.
     return ("", 200)
