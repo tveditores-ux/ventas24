@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Conversaciones · Ventas24</title>
+<title>Conversaciones · Ventas-24</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -54,11 +54,8 @@
     margin-bottom:20px;
   }
   .brand{ display:flex; align-items:baseline; gap:10px; }
-  .brand .mark{
-    display:inline-flex; align-items:center; justify-content:center;
-    width:32px; height:32px; border-radius:8px; background:var(--steel); color:var(--surface);
-    font-family:var(--font-display); font-weight:800; font-size:16px;
-  }
+  .brand .mark{ display:inline-flex; width:32px; height:32px; flex:none; }
+  .brand .mark svg{ width:100%; height:100%; display:block; }
   .brand h1{ font-size:19px; }
   .brand .sub{ color:var(--ink-soft); font-size:12px; }
   .back{ font-size:12.5px; color:var(--ink-soft); text-decoration:none; }
@@ -149,10 +146,16 @@
 
 <div class="topbar">
   <div class="brand">
-    <span class="mark">24</span>
+    <span class="mark"><svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs><clipPath id="markClip"><circle cx="100" cy="100" r="88"/></clipPath></defs>
+      <circle cx="100" cy="100" r="88" fill="#2B4562"/>
+      <g clip-path="url(#markClip)"><path d="M100 12 L188 12 L188 100 Z" fill="#C1631A"/></g>
+      <path d="M55 68 h90 a10 10 0 0 1 10 10 v46 a10 10 0 0 1 -10 10 h-52 l-20 18 v-18 h-18 a10 10 0 0 1 -10 -10 v-46 a10 10 0 0 1 10 -10 z" fill="#FFFFFF"/>
+      <path d="M104 78 L88 98 h10 L96 118 L118 94 h-14 Z" fill="#2B4562"/>
+    </svg></span>
     <div>
       <h1>Conversaciones</h1>
-      <div class="sub">Ventas24 · datos en vivo</div>
+      <div class="sub">Ventas-24 · datos en vivo</div>
     </div>
   </div>
   <a class="back" href="https://claude.ai/artifact/VkNtdDSyXLAJusbpdk4YVU" target="_blank" rel="noopener">← Volver al CRM completo</a>
