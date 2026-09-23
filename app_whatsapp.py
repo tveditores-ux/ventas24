@@ -233,6 +233,22 @@ def wecall_debug_test(telefono):
     return jsonify(salida)
 
 
+@app.route("/debug/wecall-reset-cursor/<telefono>", methods=["POST"])
+def wecall_debug_reset_cursor(telefono):
+    """DIAGNÓSTICO TEMPORAL — para deshacer el atasco que dejan mensajes
+    sintéticos de prueba con id muy alto: baja wecall_ultimo_id al id
+    real que se indique (por query ?hasta=N), para que el polling y el
+    webhook puedan volver a procesar mensajes reales que quedaron
+    bloqueados por el chequeo de duplicados."""
+    hasta = request.args.get("hasta", type=int)
+    if hasta is None:
+        return jsonify({"error": "falta ?hasta=<id>"}), 400
+    telefono = db.normalizar_telefono(telefono)
+    contacto_id = db.obtener_o_crear_contacto(telefono, tipo="cliente")
+    db.actualizar_contacto(contacto_id, wecall_ultimo_id=hasta)
+    return jsonify({"telefono": telefono, "contacto_id": contacto_id, "wecall_ultimo_id_nuevo": hasta})
+
+
 @app.route("/api/wecall/enlace/<telefono>", methods=["GET"])
 def wecall_enlace_conversacion(telefono):
     """Para el botón 'Ver WhatsApp' del CRM: arma el link al chat completo en WeCall."""
