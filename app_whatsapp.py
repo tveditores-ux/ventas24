@@ -34,8 +34,10 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from dotenv import load_dotenv
-from flask import Flask, request, Response, jsonify, send_from_directory
+from flask import Flask, request, Response, jsonify, send_from_directory, session
 from twilio.rest import Client
+from werkzeug.security import check_password_hash, generate_password_hash
+from functools import wraps
 
 import db
 import eventos
@@ -46,11 +48,14 @@ from agente import Agente
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or os.environ.get("CRM_DASHBOARD_TOKEN") or "clave-insegura-de-desarrollo"
+app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=True)
 
 CRM_DASHBOARD_TOKEN = os.environ.get("CRM_DASHBOARD_TOKEN")
 
 
 def _token_valido():
+    """Para los endpoints /debug/* de mantenimiento — no para el dashboard del cliente."""
     if not CRM_DASHBOARD_TOKEN:
         return False
     recibido = request.headers.get("Authorization", "")
@@ -59,6 +64,33 @@ def _token_valido():
     else:
         recibido = request.args.get("token", "")
     return hmac.compare_digest(recibido, CRM_DASHBOARD_TOKEN)
+
+
+def _usuario_actual():
+    usuario_id = session.get("usuario_id")
+    if not usuario_id:
+        return None
+    usuario = db.obtener_usuario(usuario_id)
+    if not usuario or not usuario["activo"]:
+        return None
+    return usuario
+
+
+def requiere_sesion(roles=None):
+    """Decorador para las rutas /api/crm/*: exige sesión iniciada y,
+    opcionalmente, que el rol del usuario esté entre los permitidos."""
+    def decorador(f):
+        @wraps(f)
+        def envoltura(*args, **kwargs):
+            usuario = _usuario_actual()
+            if not usuario:
+                return jsonify({"error": "no autenticado"}), 401
+            if roles and usuario["rol"] not in roles:
+                return jsonify({"error": "no autorizado para tu rol"}), 403
+            request.usuario = usuario
+            return f(*args, **kwargs)
+        return envoltura
+    return decorador
 
 
 @app.after_request
@@ -75,6 +107,62 @@ def _crm_preflight(_):
     return ("", 204)
 
 
+@app.route("/login", methods=["GET"])
+def login_page():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "login.html")
+
+
+@app.route("/api/crm/login", methods=["POST"])
+def api_login():
+    datos = request.get_json(silent=True) or {}
+    email = (datos.get("email") or "").strip().lower()
+    password = datos.get("password") or ""
+    usuario = db.obtener_usuario_por_email(email)
+    if not usuario or not check_password_hash(usuario["password_hash"], password):
+        return jsonify({"error": "email o contraseña incorrectos"}), 401
+    session.clear()
+    session["usuario_id"] = usuario["id"]
+    session.permanent = True
+    return jsonify({"id": usuario["id"], "nombre": usuario["nombre"], "rol": usuario["rol"]})
+
+
+@app.route("/api/crm/logout", methods=["POST"])
+def api_logout():
+    session.clear()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/crm/yo", methods=["GET"])
+def api_yo():
+    usuario = _usuario_actual()
+    if not usuario:
+        return jsonify({"error": "no autenticado"}), 401
+    return jsonify({"id": usuario["id"], "nombre": usuario["nombre"], "rol": usuario["rol"], "email": usuario["email"]})
+
+
+@app.route("/debug/crear-usuario", methods=["POST"])
+def debug_crear_usuario():
+    """ADMIN — crea un usuario del dashboard (super_admin/admin/vendedor).
+    Protegido con CRM_DASHBOARD_TOKEN porque todavía no hay un super_admin
+    que pueda crear el primero desde la interfaz."""
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    datos = request.get_json(silent=True) or {}
+    nombre = (datos.get("nombre") or "").strip()
+    email = (datos.get("email") or "").strip().lower()
+    password = datos.get("password") or ""
+    rol = datos.get("rol") or "vendedor"
+    if not nombre or not email or len(password) < 8:
+        return jsonify({"error": "faltan nombre/email, o la contraseña tiene menos de 8 caracteres"}), 400
+    if rol not in db.ROLES_VALIDOS:
+        return jsonify({"error": f"rol inválido, usa uno de {db.ROLES_VALIDOS}"}), 400
+    try:
+        usuario_id = db.crear_usuario(nombre, email, generate_password_hash(password), rol)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"id": usuario_id, "nombre": nombre, "email": email, "rol": rol})
+
+
 @app.route("/crm", methods=["GET"])
 def crm_page():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "crm.html")
@@ -86,29 +174,29 @@ def monitor_page():
 
 
 @app.route("/api/crm/eventos", methods=["GET"])
+@requiere_sesion(roles=["super_admin"])
 def crm_eventos():
-    if not _token_valido():
-        return jsonify({"error": "no autorizado"}), 401
     desde_id = request.args.get("desde_id", default=0, type=int)
     return jsonify(eventos.listar(desde_id))
 
 
 @app.route("/api/crm/contactos", methods=["GET"])
+@requiere_sesion()
 def crm_contactos():
-    if not _token_valido():
-        return jsonify({"error": "no autorizado"}), 401
-    return jsonify(db.listar_contactos_con_actividad())
+    return jsonify(db.listar_contactos_con_actividad(usuario=request.usuario))
 
 
 @app.route("/api/crm/conversacion/<int:contacto_id>", methods=["GET"])
+@requiere_sesion()
 def crm_conversacion(contacto_id):
-    if not _token_valido():
-        return jsonify({"error": "no autorizado"}), 401
     with db.conectar() as con:
         fila = con.execute("SELECT * FROM contactos WHERE id = ?", (contacto_id,)).fetchone()
     if not fila:
         return jsonify({"error": "contacto no encontrado"}), 404
     contacto = dict(fila)
+
+    if request.usuario["rol"] == "vendedor" and contacto.get("asignado_a") not in (None, request.usuario["id"]):
+        return jsonify({"error": "esta conversación está asignada a otro vendedor"}), 403
 
     mensajes = None
     if contacto.get("wecall_ultimo_id") is not None:
@@ -130,13 +218,22 @@ def crm_conversacion(contacto_id):
 
 
 @app.route("/api/crm/modo-manual/<int:contacto_id>", methods=["POST"])
+@requiere_sesion()
 def crm_modo_manual(contacto_id):
-    if not _token_valido():
-        return jsonify({"error": "no autorizado"}), 401
+    usuario = request.usuario
     datos = request.get_json(silent=True) or {}
     activo = 1 if datos.get("activo") else 0
+
+    if usuario["rol"] == "vendedor" and activo:
+        # Activar modo manual es "atender" la conversación — si estaba
+        # libre, se la queda; si ya era de otro vendedor, no puede tocarla.
+        if not db.asignar_conversacion_si_libre(contacto_id, usuario["id"]):
+            return jsonify({"error": "esta conversación ya está asignada a otro vendedor"}), 403
+
     db.actualizar_contacto(contacto_id, modo_manual=activo)
-    return jsonify({"contacto_id": contacto_id, "modo_manual": bool(activo)})
+    with db.conectar() as con:
+        fila = con.execute("SELECT asignado_a FROM contactos WHERE id = ?", (contacto_id,)).fetchone()
+    return jsonify({"contacto_id": contacto_id, "modo_manual": bool(activo), "asignado_a": fila["asignado_a"] if fila else None})
 
 
 @app.route("/debug/cargar-catalogo", methods=["POST"])

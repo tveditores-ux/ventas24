@@ -165,18 +165,16 @@
   </div>
   <div style="display:flex; align-items:center; gap:12px;">
     <span class="status off" id="statusPill"><span class="dot"></span><span id="statusTxt">conectando…</span></span>
-    <a class="back" href="https://api.ventas-24.com/crm">→ Conversaciones</a>
-    <a class="back" href="https://claude.ai/artifact/VkNtdDSyXLAJusbpdk4YVU" target="_blank" rel="noopener">→ CRM completo</a>
+    <a class="back" href="/crm">→ Conversaciones</a>
+    <a class="back" href="#" id="btnLogout">Cerrar sesión</a>
   </div>
 </div>
 
-<div class="token-gate" id="tokenGate">
+<div class="token-gate" id="noAutorizado" hidden>
   <div class="txt">
-    <h2>CONECTAR CON EL SERVIDOR</h2>
-    <p>Pegá el <code>CRM_DASHBOARD_TOKEN</code> configurado en Railway. Se guarda solo en este navegador.</p>
+    <h2 style="color:var(--red);">SIN ACCESO</h2>
+    <p>El monitor de flujo es solo para super administradores. Volvé a <a href="/crm">Conversaciones</a>.</p>
   </div>
-  <input type="password" id="tokenInput" placeholder="Token del dashboard">
-  <button class="btn" id="tokenSave" type="button">Conectar</button>
 </div>
 
 <div id="wrap" hidden>
@@ -210,9 +208,6 @@
 </div>
 
 <script>
-  const TOKEN_KEY = 'ventas24_crm_token';
-  let token = null;
-  try { token = localStorage.getItem(TOKEN_KEY); } catch(e) {}
   let pollTimer = null;
   let ultimoId = 0;
   let totalEventos = 0, totalMayorista = 0, totalDetal = 0, totalErrores = 0;
@@ -380,7 +375,7 @@
   }
 
   function api(path){
-    return fetch(path, { headers: { 'Authorization': 'Bearer ' + token } });
+    return fetch(path, { credentials: 'same-origin' });
   }
 
   function setEstado(on, txt){
@@ -389,15 +384,16 @@
     document.getElementById('statusTxt').textContent = txt;
   }
 
+  function irALogin(){ location.href = '/login?next=' + encodeURIComponent(location.pathname); }
+
   async function poll(){
     try {
       const r = await api('/api/crm/eventos?desde_id=' + ultimoId);
-      if (r.status === 401){
-        token = null;
-        try { localStorage.removeItem(TOKEN_KEY); } catch(e) {}
-        document.getElementById('tokenGate').hidden = false;
-        document.getElementById('wrap').hidden = true;
+      if (r.status === 401){ irALogin(); return; }
+      if (r.status === 403){
         if (pollTimer) clearInterval(pollTimer);
+        document.getElementById('noAutorizado').hidden = false;
+        document.getElementById('wrap').hidden = true;
         return;
       }
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -409,24 +405,19 @@
     }
   }
 
-  function iniciar(){
-    if (!token){ document.getElementById('tokenGate').hidden = false; document.getElementById('wrap').hidden = true; return; }
-    document.getElementById('tokenGate').hidden = true;
+  async function iniciar(){
+    const r = await api('/api/crm/yo').catch(() => null);
+    if (!r || r.status === 401){ irALogin(); return; }
     document.getElementById('wrap').hidden = false;
     poll();
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(poll, 2500);
   }
 
-  document.getElementById('tokenSave').addEventListener('click', () => {
-    const v = document.getElementById('tokenInput').value.trim();
-    if (!v) return;
-    token = v;
-    try { localStorage.setItem(TOKEN_KEY, v); } catch(e) {}
-    iniciar();
-  });
-  document.getElementById('tokenInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('tokenSave').click();
+  document.getElementById('btnLogout').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/crm/logout', { method: 'POST', credentials: 'same-origin' });
+    irALogin();
   });
 
   iniciar();

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Iniciar sesión · Ventas-24</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EEF1EF; --surface:#FFFFFF; --surface-2:#E4E9E7;
+    --ink:#1B2430; --ink-soft:#5C6670; --ink-faint:#8B949C;
+    --steel:#2B4562; --rust:#C1631A;
+    --danger:#B3361E; --danger-bg:#F7E4DF;
+    --line:#D6DBD8;
+    --shadow: 0 1px 2px rgba(15,33,54,.06), 0 6px 20px -8px rgba(15,33,54,.18);
+    --font-display:'Big Shoulders Display','Arial Narrow',sans-serif;
+    --font-body:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#12181F; --surface:#1A222B; --surface-2:#212B35;
+      --ink:#E7EBEE; --ink-soft:#A6B0B9; --ink-faint:#6C7680;
+      --steel:#7FA8D4; --rust:#E28A46;
+      --danger:#E88871; --danger-bg:#3A1E18;
+      --line:#2C3742;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -10px rgba(0,0,0,.55);
+      color-scheme: dark;
+    }
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0; background:var(--paper); color:var(--ink); font-family:var(--font-body);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .card{
+    width:100%; max-width:360px; background:var(--surface); border:1px solid var(--line);
+    border-radius:16px; padding:32px 28px; box-shadow:var(--shadow);
+  }
+  .brand{ display:flex; align-items:center; gap:10px; margin-bottom:24px; }
+  .brand .mark{ width:32px; height:32px; flex:none; }
+  .brand .mark svg{ width:100%; height:100%; display:block; }
+  .brand span{ font-family:var(--font-display); font-weight:800; font-size:18px; }
+  h1{ font-family:var(--font-display); font-size:20px; font-weight:700; margin:0 0 4px; }
+  .sub{ color:var(--ink-soft); font-size:13px; margin-bottom:22px; }
+  label{ display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:5px; }
+  input{
+    width:100%; background:var(--surface-2); border:1px solid var(--line); border-radius:9px;
+    padding:11px 12px; font-size:14px; color:var(--ink); font-family:var(--font-body); margin-bottom:16px;
+  }
+  input:focus-visible{ outline:2px solid var(--rust); outline-offset:1px; }
+  button{
+    width:100%; cursor:pointer; background:var(--steel); color:#fff; border:none; border-radius:9px;
+    padding:12px; font-size:14px; font-weight:600; font-family:var(--font-body);
+  }
+  button:disabled{ opacity:.6; cursor:default; }
+  .error{
+    background:var(--danger-bg); color:var(--danger); border-radius:9px; padding:9px 12px;
+    font-size:12.5px; margin-bottom:16px; display:none;
+  }
+  .error.show{ display:block; }
+</style>
+</head>
+<body>
+<form class="card" id="form">
+  <div class="brand">
+    <span class="mark"><svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs><clipPath id="markClip"><circle cx="100" cy="100" r="88"/></clipPath></defs>
+      <circle cx="100" cy="100" r="88" fill="#2B4562"/>
+      <g clip-path="url(#markClip)"><path d="M100 12 L188 12 L188 100 Z" fill="#C1631A"/></g>
+      <path d="M55 68 h90 a10 10 0 0 1 10 10 v46 a10 10 0 0 1 -10 10 h-52 l-20 18 v-18 h-18 a10 10 0 0 1 -10 -10 v-46 a10 10 0 0 1 10 -10 z" fill="#FFFFFF"/>
+      <path d="M104 78 L88 98 h10 L96 118 L118 94 h-14 Z" fill="#2B4562"/>
+    </svg></span>
+    <span>Ventas-24</span>
+  </div>
+  <h1>Iniciar sesión</h1>
+  <div class="sub">Entra con la cuenta que te crearon.</div>
+  <div class="error" id="error"></div>
+  <label for="email">Correo</label>
+  <input type="email" id="email" autocomplete="username" required>
+  <label for="password">Contraseña</label>
+  <input type="password" id="password" autocomplete="current-password" required>
+  <button type="submit" id="btn">Entrar</button>
+</form>
+<script>
+  const form = document.getElementById('form');
+  const errBox = document.getElementById('error');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errBox.classList.remove('show');
+    const btn = document.getElementById('btn');
+    btn.disabled = true; btn.textContent = 'Entrando…';
+    try {
+      const r = await fetch('/api/crm/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          email: document.getElementById('email').value.trim(),
+          password: document.getElementById('password').value,
+        }),
+      });
+      if (!r.ok){
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.error || ('HTTP ' + r.status));
+      }
+      const params = new URLSearchParams(location.search);
+      location.href = params.get('next') || '/crm';
+    } catch(err){
+      errBox.textContent = err.message;
+      errBox.classList.add('show');
+      btn.disabled = false; btn.textContent = 'Entrar';
+    }
+  });
+</script>
+</body>
+</html>

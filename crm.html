@@ -156,26 +156,19 @@
     </svg></span>
     <div>
       <h1>Conversaciones</h1>
-      <div class="sub">Ventas-24 · datos en vivo</div>
+      <div class="sub" id="quienSoy">Ventas-24 · datos en vivo</div>
     </div>
   </div>
-  <a class="back" href="https://claude.ai/artifact/VkNtdDSyXLAJusbpdk4YVU" target="_blank" rel="noopener">← Volver al CRM completo</a>
-</div>
-
-<div class="token-gate" id="tokenGate">
-  <div class="txt">
-    <h2>Conectar con el servidor</h2>
-    <p>Pegá el <code>CRM_DASHBOARD_TOKEN</code> configurado en Railway. Se guarda solo en este navegador.</p>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <a class="back" href="/monitor">Monitor</a>
+    <a class="back" href="#" id="btnLogout">Cerrar sesión</a>
   </div>
-  <input type="password" id="tokenInput" placeholder="Token del dashboard">
-  <button class="btn" id="tokenSave" type="button">Conectar</button>
 </div>
 
 <div id="convWrap" hidden>
   <div class="toolbar">
     <input type="search" id="searchConv" placeholder="Buscar por nombre o teléfono…">
     <button class="btn ghost" id="btnRefresh" type="button">↻ Actualizar</button>
-    <button class="btn ghost" id="btnCambiarToken" type="button">Cambiar token</button>
     <span class="count" id="countConv">0 conversaciones</span>
   </div>
   <div class="shell">
@@ -187,10 +180,7 @@
 </div>
 
 <script>
-  const TOKEN_KEY = 'ventas24_crm_token';
-  let token = null;
-  try { token = localStorage.getItem(TOKEN_KEY); } catch(e) {}
-
+  let usuario = null;
   let contactos = [];
   let activoId = null;
   let pollTimer = null;
@@ -200,44 +190,40 @@
   }
 
   function api(path, opts={}){
-    return fetch(path, { ...opts, headers: { ...(opts.headers||{}), 'Authorization': 'Bearer ' + token } });
+    return fetch(path, { ...opts, credentials: 'same-origin', headers: { ...(opts.headers||{}) } });
   }
 
-  function mostrarGate(mostrar){
-    document.getElementById('tokenGate').hidden = !mostrar;
-    document.getElementById('convWrap').hidden = mostrar;
+  function irALogin(){
+    location.href = '/login?next=' + encodeURIComponent(location.pathname);
   }
 
-  function iniciar(){
-    if (!token){ mostrarGate(true); return; }
-    mostrarGate(false);
+  const ROL_LABEL = { super_admin: 'Super administrador', admin: 'Administrador', vendedor: 'Vendedor' };
+
+  async function iniciar(){
+    try {
+      const r = await api('/api/crm/yo');
+      if (r.status === 401){ irALogin(); return; }
+      usuario = await r.json();
+      document.getElementById('quienSoy').textContent = `${usuario.nombre} · ${ROL_LABEL[usuario.rol] || usuario.rol}`;
+    } catch(e){ irALogin(); return; }
+
+    document.getElementById('convWrap').hidden = false;
     cargarContactos();
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(cargarContactos, 20000);
   }
 
-  document.getElementById('tokenSave').addEventListener('click', () => {
-    const v = document.getElementById('tokenInput').value.trim();
-    if (!v) return;
-    token = v;
-    try { localStorage.setItem(TOKEN_KEY, v); } catch(e) {}
-    iniciar();
-  });
-  document.getElementById('tokenInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('tokenSave').click();
+  document.getElementById('btnLogout').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await api('/api/crm/logout', { method: 'POST' });
+    irALogin();
   });
 
   async function cargarContactos(){
     const list = document.getElementById('convList');
     try {
       const r = await api('/api/crm/contactos');
-      if (r.status === 401){
-        token = null;
-        try { localStorage.removeItem(TOKEN_KEY); } catch(e) {}
-        mostrarGate(true);
-        document.getElementById('tokenGate').querySelector('p').textContent = 'Ese token no es válido — probá de nuevo.';
-        return;
-      }
+      if (r.status === 401){ irALogin(); return; }
       if (!r.ok) throw new Error('HTTP ' + r.status);
       contactos = await r.json();
       renderLista();
@@ -256,12 +242,14 @@
       list.innerHTML = `<div class="empty">${contactos.length ? 'Sin resultados.' : 'Todavía no hay conversaciones con actividad.'}</div>`;
       return;
     }
+    const mostrarAsignado = usuario && usuario.rol !== 'vendedor';
     list.innerHTML = filtrados.map(c => `
       <div class="row${c.id === activoId ? ' active' : ''}" data-id="${c.id}">
         <div class="avatar">${iniciales(c.nombre || c.telefono)}</div>
         <div style="flex:1; min-width:0;">
           <div class="who">${c.nombre || c.telefono}${c.modo_manual ? '<span class="manual-dot" title="Modo manual activo"></span>' : ''}</div>
           <div class="prev">${(c.ultimo_mensaje || 'Sin mensajes todavía').replace(/\n/g,' ')}</div>
+          ${mostrarAsignado ? `<div class="prev" style="opacity:.7;">${c.asignado_nombre ? '→ ' + c.asignado_nombre : 'Sin asignar'}</div>` : ''}
         </div>
       </div>
     `).join('');
@@ -271,13 +259,6 @@
   }
   document.getElementById('searchConv').addEventListener('input', renderLista);
   document.getElementById('btnRefresh').addEventListener('click', cargarContactos);
-  document.getElementById('btnCambiarToken').addEventListener('click', () => {
-    if (pollTimer) clearInterval(pollTimer);
-    token = null;
-    try { localStorage.removeItem(TOKEN_KEY); } catch(e) {}
-    document.getElementById('tokenInput').value = '';
-    mostrarGate(true);
-  });
 
   async function abrir(id, silencioso){
     activoId = id;

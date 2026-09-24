@@ -28,7 +28,18 @@ CREATE TABLE IF NOT EXISTS contactos (
     fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
     fecha_ultimo_contacto TEXT,
     wecall_ultimo_id INTEGER,                  -- último id de mensaje de WeCall ya procesado
-    modo_manual INTEGER NOT NULL DEFAULT 0     -- 1 = un humano lleva la conversación, el bot no responde solo
+    modo_manual INTEGER NOT NULL DEFAULT 0,    -- 1 = un humano lleva la conversación, el bot no responde solo
+    asignado_a INTEGER REFERENCES usuarios(id) -- vendedor dueño de esta conversación (NULL = sin asignar)
+);
+
+CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    rol TEXT NOT NULL DEFAULT 'vendedor',      -- 'super_admin' | 'admin' | 'vendedor'
+    activo INTEGER NOT NULL DEFAULT 1,
+    fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS interacciones (
@@ -92,6 +103,8 @@ def inicializar():
             con.execute("ALTER TABLE contactos ADD COLUMN wecall_ultimo_id INTEGER")
         if "modo_manual" not in columnas:
             con.execute("ALTER TABLE contactos ADD COLUMN modo_manual INTEGER NOT NULL DEFAULT 0")
+        if "asignado_a" not in columnas:
+            con.execute("ALTER TABLE contactos ADD COLUMN asignado_a INTEGER REFERENCES usuarios(id)")
         # Los contactos migrados desde Twilio guardaban el prefijo "whatsapp:".
         # Se normaliza acá para que todos los canales compartan el mismo formato E.164.
         con.execute(
@@ -151,23 +164,50 @@ def listar_contactos_wecall():
         return [dict(f) for f in filas]
 
 
-def listar_contactos_con_actividad():
+def listar_contactos_con_actividad(usuario: dict | None = None):
     """Contactos que ya tuvieron alguna conversación (WeCall o Twilio),
-    con su último mensaje, para la vista de conversaciones del CRM."""
+    con su último mensaje, para la vista de conversaciones del CRM.
+
+    Si `usuario` es un vendedor, solo devuelve lo suyo (asignado_a él) o
+    lo que todavía no tiene dueño (para que pueda "tomarlo"). Admin y
+    super_admin ven todo — se les pasa `usuario=None` o con otro rol."""
+    where_rol = ""
+    params = []
+    if usuario and usuario["rol"] == "vendedor":
+        where_rol = " AND (contactos.asignado_a = ? OR contactos.asignado_a IS NULL)"
+        params.append(usuario["id"])
+
     with conectar() as con:
-        filas = con.execute("""
+        filas = con.execute(f"""
             SELECT
                 contactos.id, contactos.telefono, contactos.nombre, contactos.tipo,
                 contactos.estado, contactos.modo_manual, contactos.fecha_ultimo_contacto,
-                contactos.wecall_ultimo_id,
+                contactos.wecall_ultimo_id, contactos.asignado_a,
+                usuarios.nombre AS asignado_nombre,
                 (SELECT mensaje FROM interacciones WHERE contacto_id = contactos.id ORDER BY id DESC LIMIT 1) AS ultimo_mensaje,
                 (SELECT rol FROM interacciones WHERE contacto_id = contactos.id ORDER BY id DESC LIMIT 1) AS ultimo_rol
             FROM contactos
-            WHERE wecall_ultimo_id IS NOT NULL
-               OR EXISTS (SELECT 1 FROM interacciones WHERE contacto_id = contactos.id)
+            LEFT JOIN usuarios ON usuarios.id = contactos.asignado_a
+            WHERE (wecall_ultimo_id IS NOT NULL
+               OR EXISTS (SELECT 1 FROM interacciones WHERE contacto_id = contactos.id))
+              {where_rol}
             ORDER BY fecha_ultimo_contacto DESC
-        """).fetchall()
+        """, params).fetchall()
         return [dict(f) for f in filas]
+
+
+def asignar_conversacion_si_libre(contacto_id: int, usuario_id: int) -> bool:
+    """Asigna la conversación a este usuario SOLO si no tenía dueño todavía
+    (primero que la atiende se la queda). Devuelve True si quedó asignada
+    a este usuario (ya sea recién o de antes), False si es de otro."""
+    with conectar() as con:
+        fila = con.execute("SELECT asignado_a FROM contactos WHERE id = ?", (contacto_id,)).fetchone()
+        if fila is None:
+            return False
+        if fila["asignado_a"] is None:
+            con.execute("UPDATE contactos SET asignado_a = ? WHERE id = ?", (usuario_id, contacto_id))
+            return True
+        return fila["asignado_a"] == usuario_id
 
 
 def listar_mayoristas(estado: str | None = None):
@@ -295,6 +335,53 @@ def insertar_producto(nombre, marca, modelo, anio_desde, anio_hasta, precio, sto
             "INSERT INTO catalogo (nombre, marca, modelo, anio_desde, anio_hasta, precio, stock) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (nombre, marca, modelo, anio_desde, anio_hasta, precio, stock),
         )
+
+
+# ---------------------------------------------------------------------
+# Usuarios (dashboard con roles: super_admin / admin / vendedor)
+# ---------------------------------------------------------------------
+
+ROLES_VALIDOS = ("super_admin", "admin", "vendedor")
+
+
+def crear_usuario(nombre: str, email: str, password_hash: str, rol: str = "vendedor") -> int:
+    if rol not in ROLES_VALIDOS:
+        raise ValueError(f"rol inválido: {rol}")
+    with conectar() as con:
+        cur = con.execute(
+            "INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES (?, ?, ?, ?)",
+            (nombre, email.strip().lower(), password_hash, rol),
+        )
+        return cur.lastrowid
+
+
+def obtener_usuario_por_email(email: str):
+    with conectar() as con:
+        fila = con.execute(
+            "SELECT * FROM usuarios WHERE email = ? AND activo = 1", (email.strip().lower(),)
+        ).fetchone()
+        return dict(fila) if fila else None
+
+
+def obtener_usuario(usuario_id: int):
+    with conectar() as con:
+        fila = con.execute("SELECT * FROM usuarios WHERE id = ?", (usuario_id,)).fetchone()
+        return dict(fila) if fila else None
+
+
+def listar_usuarios():
+    with conectar() as con:
+        filas = con.execute("SELECT id, nombre, email, rol, activo, fecha_creacion FROM usuarios ORDER BY fecha_creacion").fetchall()
+        return [dict(f) for f in filas]
+
+
+def actualizar_usuario(usuario_id: int, **campos):
+    if not campos:
+        return
+    columnas = ", ".join(f"{k} = ?" for k in campos)
+    valores = list(campos.values()) + [usuario_id]
+    with conectar() as con:
+        con.execute(f"UPDATE usuarios SET {columnas} WHERE id = ?", valores)
 
 
 inicializar()
