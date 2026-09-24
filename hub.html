@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Ventas-24</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EEF1EF; --surface:#FFFFFF; --surface-2:#E4E9E7;
+    --ink:#1B2430; --ink-soft:#5C6670; --ink-faint:#8B949C;
+    --steel:#2B4562; --steel-ink:#0F2136;
+    --rust:#C1631A; --rust-ink:#8C4610;
+    --line:#D6DBD8;
+    --shadow: 0 1px 2px rgba(15,33,54,.06), 0 10px 28px -10px rgba(15,33,54,.22);
+    --font-display:'Big Shoulders Display', Arial, sans-serif;
+    --font-body:'IBM Plex Sans', system-ui, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#0F1216; --surface:#181C22; --surface-2:#20252C;
+      --ink:#E7EBEE; --ink-soft:#A6B0B9; --ink-faint:#6C7680;
+      --steel:#7FA8D4; --steel-ink:#DCEAFA;
+      --rust:#E28A46; --rust-ink:#FFD9B3;
+      --line:#2C3742;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 14px 32px -10px rgba(0,0,0,.6);
+      color-scheme: dark;
+    }
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0; background:
+      radial-gradient(ellipse 900px 500px at 20% -10%, color-mix(in srgb, var(--rust) 10%, transparent), transparent),
+      radial-gradient(ellipse 900px 600px at 100% 100%, color-mix(in srgb, var(--steel) 12%, transparent), transparent),
+      var(--paper);
+    color:var(--ink); font-family:var(--font-body);
+    display:flex; align-items:center; justify-content:center;
+    padding:32px;
+  }
+  .wrap{ width:100%; max-width:640px; }
+  .brand{ display:flex; align-items:center; gap:16px; margin-bottom:52px; justify-content:center; }
+  .brand svg{ width:56px; height:56px; flex:none; }
+  .brand h1{ font-family:var(--font-display); font-weight:800; font-size:34px; margin:0; letter-spacing:-.01em; }
+  .brand .sub{ font-size:13px; color:var(--ink-soft); letter-spacing:.06em; text-transform:uppercase; margin-top:2px; }
+  .links{ display:flex; flex-direction:column; gap:16px; }
+  a.card{
+    display:flex; align-items:center; gap:20px; text-decoration:none; color:inherit;
+    background:var(--surface); border:1px solid var(--line); border-radius:18px;
+    padding:24px 26px; box-shadow:var(--shadow); transition:transform .15s, box-shadow .15s;
+  }
+  a.card:hover{ transform:translateY(-3px); box-shadow:0 1px 2px rgba(15,33,54,.08), 0 20px 36px -12px rgba(15,33,54,.3); }
+  a.card .ico{
+    width:56px; height:56px; border-radius:14px; flex:none;
+    display:flex; align-items:center; justify-content:center; font-size:26px;
+  }
+  a.card .txt h2{ font-size:19px; font-weight:600; margin:0 0 4px; font-family:var(--font-body); }
+  a.card .txt p{ font-size:14px; color:var(--ink-soft); margin:0; line-height:1.5; }
+  a.card .arrow{ margin-left:auto; color:var(--ink-faint); font-size:20px; flex:none; }
+  .tag{ display:inline-block; font-size:10.5px; font-weight:600; color:var(--rust-ink); background:color-mix(in srgb, var(--rust) 14%, var(--surface)); padding:2px 9px; border-radius:999px; margin-top:6px; letter-spacing:.03em; }
+  footer{ text-align:center; margin-top:48px; font-size:12px; color:var(--ink-faint); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs><clipPath id="mc"><circle cx="100" cy="100" r="88"/></clipPath></defs>
+      <circle cx="100" cy="100" r="88" fill="#2B4562"/>
+      <g clip-path="url(#mc)"><path d="M100 12 L188 12 L188 100 Z" fill="#C1631A"/></g>
+      <path d="M55 68 h90 a10 10 0 0 1 10 10 v46 a10 10 0 0 1 -10 10 h-52 l-20 18 v-18 h-18 a10 10 0 0 1 -10 -10 v-46 a10 10 0 0 1 10 -10 z" fill="#FFFFFF"/>
+      <path d="M104 78 L88 98 h10 L96 118 L118 94 h-14 Z" fill="#2B4562"/>
+    </svg>
+    <div>
+      <h1>Ventas-24</h1>
+      <div class="sub">Accesos rápidos</div>
+    </div>
+  </div>
+
+  <div class="links">
+    <a class="card" href="https://claude.ai/artifact/UKiPFpeHJ8tyQrMX2aQXh3" target="_blank" rel="noopener">
+      <div class="ico" style="background:color-mix(in srgb, var(--rust) 15%, var(--surface)); color:var(--rust-ink);">▶</div>
+      <div class="txt">
+        <h2>La presentación</h2>
+        <p>Cómo funciona el sistema, de principio a fin.</p>
+      </div>
+      <div class="arrow">→</div>
+    </a>
+
+    <a class="card" href="https://api.ventas-24.com/crm" target="_blank" rel="noopener">
+      <div class="ico" style="background:color-mix(in srgb, var(--steel) 15%, var(--surface)); color:var(--steel);">💬</div>
+      <div class="txt">
+        <h2>El CRM en vivo</h2>
+        <p>Conversaciones, catálogo, lista de espera y pedidos reales.</p>
+      </div>
+      <div class="arrow">→</div>
+    </a>
+
+    <a class="card" href="https://claude.ai/artifact/SAHvEcBWjYgemgoFkz465s" target="_blank" rel="noopener">
+      <div class="ico" style="background:var(--surface-2); color:var(--ink-soft);">🔧</div>
+      <div class="txt">
+        <h2>Grupo Vector <span class="tag">Borrador</span></h2>
+        <p>Sitio del proveedor — filtros, refrigerantes y bujías.</p>
+      </div>
+      <div class="arrow">→</div>
+    </a>
+  </div>
+
+  <footer>Ventas-24 · api.ventas-24.com</footer>
+</div>
+</body>
+</html>

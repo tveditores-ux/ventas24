@@ -173,6 +173,11 @@ def monitor_page():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "monitor.html")
 
 
+@app.route("/hub", methods=["GET"])
+def hub_page():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "hub.html")
+
+
 @app.route("/api/crm/eventos", methods=["GET"])
 @requiere_sesion(roles=["super_admin"])
 def crm_eventos():
