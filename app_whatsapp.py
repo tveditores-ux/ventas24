@@ -38,6 +38,7 @@ from flask import Flask, request, Response, jsonify, send_from_directory
 from twilio.rest import Client
 
 import db
+import eventos
 import wecall
 from wecall import VentanaCerradaError, EnvioFallidoError
 from agente import Agente
@@ -77,6 +78,19 @@ def _crm_preflight(_):
 @app.route("/crm", methods=["GET"])
 def crm_page():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "crm.html")
+
+
+@app.route("/monitor", methods=["GET"])
+def monitor_page():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "monitor.html")
+
+
+@app.route("/api/crm/eventos", methods=["GET"])
+def crm_eventos():
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    desde_id = request.args.get("desde_id", default=0, type=int)
+    return jsonify(eventos.listar(desde_id))
 
 
 @app.route("/api/crm/contactos", methods=["GET"])
@@ -236,6 +250,7 @@ def procesar_mensaje_wecall(telefono: str, mensaje: dict):
             ).fetchone()
         ya_visto = fila["wecall_ultimo_id"] if fila else None
         if ya_visto is not None and ya_visto >= mensaje_id:
+            eventos.registrar("dedup_bloqueado", telefono, f"mensaje {mensaje_id} ya visto")
             return
         db.actualizar_contacto(contacto_id, wecall_ultimo_id=mensaje_id)
         if fila and fila["modo_manual"]:
@@ -243,13 +258,16 @@ def procesar_mensaje_wecall(telefono: str, mensaje: dict):
             # bot solo avanza el cursor para no acumular backlog, pero no
             # responde nada solo.
             print(f"  🙋 (wecall) {telefono} está en modo manual, el bot no responde")
+            eventos.registrar("modo_manual", telefono, "humano lleva la conversación")
             return
 
     try:
         try:
             contexto = wecall.obtener_contexto(telefono, limite=30)
+            eventos.registrar("contexto_wecall", telefono, f"{len(contexto.get('mensajes', [])) if contexto else 0} mensajes")
         except Exception as e:
             print(f"  (wecall) no pude traer contexto de {telefono}: {e}")
+            eventos.registrar("contexto_wecall", telefono, str(e), ok=False)
             contexto = None
 
         historial_previo = None
@@ -261,19 +279,25 @@ def procesar_mensaje_wecall(telefono: str, mensaje: dict):
 
         print(f"📩 (wecall) {telefono}: {texto_mensaje}")
         agente = Agente(telefono=telefono)
+        eventos.registrar("agente_iniciado", telefono, "vendedor " + agente.tipo, agente_tipo=agente.tipo)
         respuesta = agente.procesar_mensaje(texto_mensaje, historial_previo=historial_previo)
         print(f"🤖 (wecall) → {telefono}: {respuesta}")
+        eventos.registrar("respuesta_generada", telefono, respuesta[:80], agente_tipo=agente.tipo)
 
         try:
             wecall.enviar_mensaje(telefono, texto=respuesta)
+            eventos.registrar("envio_wecall", telefono, "enviado", agente_tipo=agente.tipo)
         except VentanaCerradaError:
             print(f"  ⚠️ (wecall) ventana de 24h cerrada para {telefono} — hace falta responder con una plantilla aprobada")
+            eventos.registrar("envio_wecall", telefono, "ventana de 24h cerrada", ok=False, agente_tipo=agente.tipo)
         except EnvioFallidoError as e:
             print(f"  ❌ (wecall) Meta rechazó el envío a {telefono}: {e.detalle}")
-    except Exception:
+            eventos.registrar("envio_wecall", telefono, f"Meta rechazó: {e.detalle}", ok=False, agente_tipo=agente.tipo)
+    except Exception as e:
         import traceback
         print(f"  ❌ (wecall) error procesando mensaje {mensaje_id} de {telefono} (ya quedó marcado como visto, no se reintenta solo):")
         traceback.print_exc()
+        eventos.registrar("error", telefono, str(e), ok=False)
 
 
 @app.route("/webhook/wecall", methods=["POST"])
@@ -288,6 +312,7 @@ def wecall_webhook():
 
     if not wecall.verificar_firma(cuerpo_crudo, firma):
         print(f"  ⚠️ (wecall) firma inválida en el webhook, ignorado (header recibido: {firma!r})")
+        eventos.registrar("firma_invalida", None, "firma inválida en /webhook/wecall", ok=False)
         return ("firma inválida", 401)
 
     payload = request.get_json(silent=True) or {}
@@ -297,11 +322,13 @@ def wecall_webhook():
         mensaje = payload.get("mensaje") or {}
         telefono = contacto.get("telefono", "")
         if telefono and mensaje:
+            eventos.registrar("webhook_recibido", telefono, "mensaje_nuevo")
             threading.Thread(
                 target=procesar_mensaje_wecall, args=(telefono, mensaje), daemon=True
             ).start()
         else:
             print(f"  ⚠️ (wecall) evento 'mensaje_nuevo' sin teléfono o sin mensaje: {payload}")
+            eventos.registrar("webhook_recibido", None, "mensaje_nuevo sin teléfono o mensaje", ok=False)
     else:
         print(f"  (wecall) webhook con evento distinto de 'mensaje_nuevo': {evento!r} — ignorado")
 

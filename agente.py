@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from anthropic import Anthropic
 import db
+import eventos
 
 MODELO = "claude-sonnet-4-6"
 
@@ -249,6 +250,7 @@ class Agente:
         historial = _fusionar_consecutivos(historial)
 
         while True:
+            eventos.registrar("claude_llamado", self.telefono, MODELO, agente_tipo=self.tipo)
             respuesta = self.client.messages.create(
                 model=MODELO,
                 max_tokens=1000,
@@ -273,6 +275,7 @@ class Agente:
             for bloque in bloques_herramienta:
                 params = bloque.input
                 resultado = self._ejecutar_herramienta(bloque.name, params)
+                eventos.registrar("herramienta", self.telefono, bloque.name, agente_tipo=self.tipo)
                 resultados_herramienta.append({
                     "type": "tool_result",
                     "tool_use_id": bloque.id,

@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Monitor · Ventas-24</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#050914; --bg2:#0A1128; --panel:#0D1530; --line:#1B2A52;
+    --cyan:#22D3EE; --violet:#8B7CFF; --amber:#F5B942; --red:#FF4D6D; --green:#2FE6A0;
+    --ink:#D9E4FF; --ink-soft:#7C8AB8; --ink-faint:#4A5680;
+    --font-display:'Orbitron', 'Arial Narrow', sans-serif;
+    --font-mono:'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+    color-scheme: dark;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0; background:
+      radial-gradient(ellipse at 20% -10%, rgba(139,124,255,.16), transparent 55%),
+      radial-gradient(ellipse at 90% 10%, rgba(34,211,238,.14), transparent 50%),
+      var(--bg);
+    color:var(--ink); font-family:var(--font-mono);
+    padding-inline: max(16px, calc((100vw - 1320px)/2));
+    padding-block: 0 32px;
+    background-attachment: fixed;
+  }
+  body::before{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(rgba(34,211,238,.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,211,238,.045) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent);
+  }
+  a{ color:var(--cyan); }
+
+  .topbar{
+    position:relative; z-index:2;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding-block:18px 14px; flex-wrap:wrap;
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand .mark{ width:34px; height:34px; flex:none; }
+  .brand .mark svg{ width:100%; height:100%; display:block; }
+  .brand h1{
+    font-family:var(--font-display); font-weight:800; font-size:19px; letter-spacing:.08em;
+    margin:0; color:#fff; text-shadow: 0 0 18px rgba(34,211,238,.5);
+    text-transform:uppercase;
+  }
+  .brand .sub{ color:var(--ink-soft); font-size:11px; letter-spacing:.06em; }
+  .back{ font-size:11.5px; color:var(--ink-soft); text-decoration:none; letter-spacing:.03em; }
+  .back:hover{ color:var(--cyan); }
+  .status{
+    display:inline-flex; align-items:center; gap:7px; font-size:11px; letter-spacing:.05em;
+    color:var(--green); border:1px solid rgba(47,230,160,.35); background:rgba(47,230,160,.08);
+    padding:6px 12px; border-radius:999px;
+  }
+  .status .dot{ width:6px; height:6px; border-radius:999px; background:currentColor; box-shadow:0 0 8px currentColor; animation: blink 1.6s infinite; }
+  .status.off{ color:var(--ink-faint); border-color:var(--line); background:transparent; }
+  .status.off .dot{ animation:none; }
+  @keyframes blink{ 0%,100%{ opacity:1; } 50%{ opacity:.25; } }
+
+  .stage{
+    position:relative; z-index:1;
+    background: linear-gradient(180deg, rgba(13,21,48,.7), rgba(13,21,48,.35));
+    border:1px solid var(--line); border-radius:16px;
+    padding: 18px 8px 8px; margin-bottom:16px;
+    box-shadow: inset 0 0 60px rgba(34,211,238,.04);
+    overflow-x:auto;
+  }
+  svg#flow{ display:block; width:100%; min-width:960px; height:auto; }
+
+  .node-label{ font-family:var(--font-mono); font-size:11px; fill:var(--ink-soft); letter-spacing:.02em; }
+  .node-label.big{ font-family:var(--font-display); font-size:12px; fill:var(--ink); font-weight:700; letter-spacing:.05em; }
+  .node-count{ font-family:var(--font-mono); font-size:9.5px; fill:var(--ink-faint); }
+
+  .edge-path{ fill:none; stroke:var(--line); stroke-width:1.5; }
+  .edge-path.branch{ stroke-dasharray:3 4; }
+
+  .node-shape{ fill:var(--panel); stroke:var(--ink-faint); stroke-width:1.3; transition: stroke .25s, filter .25s; }
+  .node-shape.core{ fill:#0B1740; }
+  .node.flash-ok .node-shape{ stroke:var(--green); filter: drop-shadow(0 0 12px var(--green)); }
+  .node.flash-error .node-shape{ stroke:var(--red); filter: drop-shadow(0 0 14px var(--red)); }
+  .node.flash-warn .node-shape{ stroke:var(--amber); filter: drop-shadow(0 0 12px var(--amber)); }
+  .node-icon{ font-size:18px; text-anchor:middle; dominant-baseline:central; }
+
+  .pulse-dot{ fill:var(--cyan); filter: drop-shadow(0 0 6px var(--cyan)); }
+  .pulse-dot.err{ fill:var(--red); filter: drop-shadow(0 0 6px var(--red)); }
+  .pulse-dot.warn{ fill:var(--amber); filter: drop-shadow(0 0 6px var(--amber)); }
+
+  .legend{
+    display:flex; gap:16px; flex-wrap:wrap; padding: 4px 14px 14px; font-size:10.5px; color:var(--ink-faint);
+  }
+  .legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .legend i{ width:8px; height:8px; border-radius:999px; display:inline-block; }
+
+  .grid2{ display:grid; grid-template-columns: 1.3fr 1fr; gap:16px; }
+  @media (max-width: 900px){ .grid2{ grid-template-columns: 1fr; } }
+
+  .panel{
+    position:relative; z-index:1;
+    background: linear-gradient(180deg, rgba(13,21,48,.7), rgba(13,21,48,.35));
+    border:1px solid var(--line); border-radius:16px; padding:14px 16px;
+  }
+  .panel h2{
+    font-family:var(--font-display); font-size:12px; letter-spacing:.08em; color:var(--ink-soft);
+    text-transform:uppercase; margin:0 0 10px; font-weight:700;
+  }
+  .log{ height:340px; overflow-y:auto; font-size:12px; line-height:1.7; }
+  .log-row{ display:flex; gap:8px; padding:3px 0; border-bottom:1px dashed rgba(255,255,255,.04); align-items:baseline; }
+  .log-ts{ color:var(--ink-faint); flex:none; font-size:10.5px; }
+  .log-stage{ flex:none; padding:1px 7px; border-radius:5px; font-size:10px; letter-spacing:.03em; text-transform:uppercase; }
+  .log-stage.ok{ background:rgba(47,230,160,.12); color:var(--green); }
+  .log-stage.error{ background:rgba(255,77,109,.14); color:var(--red); }
+  .log-stage.warn{ background:rgba(245,185,66,.14); color:var(--amber); }
+  .log-detail{ color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .log-phone{ color:var(--ink-faint); font-size:10.5px; flex:none; }
+  .log-empty{ color:var(--ink-faint); text-align:center; padding:40px 10px; }
+
+  .kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:8px; }
+  .kpi{ text-align:center; }
+  .kpi .n{ font-family:var(--font-display); font-size:24px; color:#fff; text-shadow:0 0 10px rgba(34,211,238,.4); }
+  .kpi .l{ font-size:9.5px; color:var(--ink-faint); letter-spacing:.05em; text-transform:uppercase; margin-top:2px; }
+
+  .token-gate{
+    background: linear-gradient(180deg, rgba(13,21,48,.7), rgba(13,21,48,.35));
+    border:1px dashed var(--line); border-radius:16px; padding:22px; max-width:640px;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; position:relative; z-index:1;
+  }
+  .token-gate[hidden]{ display:none; }
+  .token-gate .txt{ flex:1 1 260px; }
+  .token-gate h2{ font-family:var(--font-display); font-size:13px; letter-spacing:.05em; margin:0 0 4px; color:#fff; }
+  .token-gate p{ margin:0; font-size:12px; color:var(--ink-soft); line-height:1.5; }
+  .token-gate input[type="password"]{
+    flex:1 1 200px; min-width:160px; background:var(--bg2); border:1px solid var(--line);
+    border-radius:9px; padding:10px 12px; font-size:13px; font-family:var(--font-mono); color:var(--ink);
+  }
+  .btn{
+    display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+    background: linear-gradient(135deg, var(--cyan), var(--violet)); color:#04101f; border:none; border-radius:9px;
+    padding:10px 16px; font-size:12.5px; font-weight:700; font-family:var(--font-mono); letter-spacing:.03em;
+  }
+  .btn.ghost{ background:transparent; border:1px solid var(--line); color:var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="mark"><svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs><clipPath id="markClip"><circle cx="100" cy="100" r="88"/></clipPath></defs>
+      <circle cx="100" cy="100" r="88" fill="#22D3EE"/>
+      <g clip-path="url(#markClip)"><path d="M100 12 L188 12 L188 100 Z" fill="#8B7CFF"/></g>
+      <path d="M55 68 h90 a10 10 0 0 1 10 10 v46 a10 10 0 0 1 -10 10 h-52 l-20 18 v-18 h-18 a10 10 0 0 1 -10 -10 v-46 a10 10 0 0 1 10 -10 z" fill="#050914"/>
+      <path d="M104 78 L88 98 h10 L96 118 L118 94 h-14 Z" fill="#22D3EE"/>
+    </svg></span>
+    <div>
+      <h1>Monitor de flujo</h1>
+      <div class="sub">VENTAS-24 · TELEMETRÍA EN VIVO</div>
+    </div>
+  </div>
+  <div style="display:flex; align-items:center; gap:12px;">
+    <span class="status off" id="statusPill"><span class="dot"></span><span id="statusTxt">conectando…</span></span>
+    <a class="back" href="https://api.ventas-24.com/crm">→ Conversaciones</a>
+    <a class="back" href="https://claude.ai/artifact/VkNtdDSyXLAJusbpdk4YVU" target="_blank" rel="noopener">→ CRM completo</a>
+  </div>
+</div>
+
+<div class="token-gate" id="tokenGate">
+  <div class="txt">
+    <h2>CONECTAR CON EL SERVIDOR</h2>
+    <p>Pegá el <code>CRM_DASHBOARD_TOKEN</code> configurado en Railway. Se guarda solo en este navegador.</p>
+  </div>
+  <input type="password" id="tokenInput" placeholder="Token del dashboard">
+  <button class="btn" id="tokenSave" type="button">Conectar</button>
+</div>
+
+<div id="wrap" hidden>
+  <div class="kpis">
+    <div class="kpi"><div class="n" id="kEventos">0</div><div class="l">Eventos (sesión)</div></div>
+    <div class="kpi"><div class="n" id="kMayorista">0</div><div class="l">Turnos mayorista</div></div>
+    <div class="kpi"><div class="n" id="kDetal">0</div><div class="l">Turnos detal</div></div>
+    <div class="kpi"><div class="n" id="kErrores">0</div><div class="l">Errores</div></div>
+  </div>
+
+  <div class="stage">
+    <svg id="flow" viewBox="0 0 1220 520" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="legend">
+      <span><i style="background:var(--green)"></i> ok</span>
+      <span><i style="background:var(--amber)"></i> desvío / manual</span>
+      <span><i style="background:var(--red)"></i> error</span>
+      <span><i style="background:var(--cyan)"></i> en tránsito</span>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>Bitácora en vivo</h2>
+      <div class="log" id="log"><div class="log-empty">Esperando actividad…</div></div>
+    </div>
+    <div class="panel">
+      <h2>Último mensaje procesado</h2>
+      <div id="ultimo" style="font-size:12.5px; color:var(--ink-soft); line-height:1.7;">Sin datos todavía.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const TOKEN_KEY = 'ventas24_crm_token';
+  let token = null;
+  try { token = localStorage.getItem(TOKEN_KEY); } catch(e) {}
+  let pollTimer = null;
+  let ultimoId = 0;
+  let totalEventos = 0, totalMayorista = 0, totalDetal = 0, totalErrores = 0;
+
+  // -------- definición del grafo --------
+  const NODOS = {
+    wecall_in:   { x: 70,   y: 260, w: 96, h: 64, shape:'hex',  icon:'📲', label:'WeCall Inbox', sub:'mensaje entrante' },
+    webhook:     { x: 250,  y: 260, w: 110, h: 64, shape:'rect', icon:'🔏', label:'Webhook + Firma', sub:'HMAC-SHA256' },
+    dedup:       { x: 430,  y: 110, w: 110, h: 58, shape:'rect', icon:'⛔', label:'Dedup', sub:'ya visto' },
+    manual:      { x: 430,  y: 410, w: 110, h: 58, shape:'rect', icon:'🙋', label:'Modo manual', sub:'humano al mando' },
+    contexto:    { x: 430,  y: 260, w: 120, h: 64, shape:'rect', icon:'📚', label:'Contexto WeCall', sub:'historial real' },
+    mayorista:   { x: 630,  y: 130, w: 130, h: 66, shape:'rect', icon:'🏭', label:'Vendedor mayorista', sub:'B2B, volumen' },
+    detal:       { x: 630,  y: 390, w: 130, h: 66, shape:'rect', icon:'🧑‍🔧', label:'Vendedor detal', sub:'dueño del carro' },
+    claude:      { x: 850,  y: 260, w: 150, h: 96, shape:'hex',  icon:'✦', label:'Claude · Anthropic', sub:'razonamiento', core:true },
+    herramientas:{ x: 850,  y: 460, w: 130, h: 58, shape:'rect', icon:'🛠️', label:'Herramientas', sub:'catálogo · espera · pedido' },
+    respuesta:   { x: 1040, y: 260, w: 110, h: 62, shape:'rect', icon:'✍️', label:'Respuesta', sub:'generada' },
+    envio:       { x: 1180, y: 260, w: 0,   h: 0,  shape:'end',  icon:'📤', label:'Envío WeCall', sub:'→ WhatsApp real' },
+  };
+
+  const EDGES = [
+    ['wecall_in','webhook'], ['webhook','dedup'], ['webhook','manual'], ['webhook','contexto'],
+    ['contexto','mayorista'], ['contexto','detal'],
+    ['mayorista','claude'], ['detal','claude'],
+    ['claude','herramientas'], ['herramientas','claude'],
+    ['claude','respuesta'], ['respuesta','envio'],
+  ];
+
+  // etapa del evento -> nodo destino (y de dónde sale, resuelto en tiempo real)
+  const DESTINO = {
+    webhook_recibido: 'webhook', firma_invalida: 'webhook',
+    dedup_bloqueado: 'dedup', modo_manual: 'manual',
+    contexto_wecall: 'contexto', agente_iniciado: null, // resuelto por agente_tipo
+    claude_llamado: 'claude', herramienta: 'herramientas',
+    respuesta_generada: 'respuesta', envio_wecall: 'envio', error: null,
+  };
+
+  function svgPath(shape, x, y, w, h){
+    if (shape === 'hex'){
+      const k = w*0.22;
+      return `M${x-w/2+k} ${y-h/2} L${x+w/2-k} ${y-h/2} L${x+w/2} ${y} L${x+w/2-k} ${y+h/2} L${x-w/2+k} ${y+h/2} L${x-w/2} ${y} Z`;
+    }
+    return `M${x-w/2+10} ${y-h/2} h${w-20} a10 10 0 0 1 10 10 v${h-20} a10 10 0 0 1 -10 10 h${-(w-20)} a10 10 0 0 1 -10 -10 v${-(h-20)} a10 10 0 0 1 10 -10 z`;
+  }
+
+  function edgePoints(a, b){
+    // punto de salida (derecha/centro de a) y de llegada (izquierda de b)
+    const ax = a.x + (a.shape === 'end' ? 0 : a.w/2), ay = a.y;
+    const bx = b.x - (b.shape === 'end' ? 0 : b.w/2), by = b.y;
+    const midx = (ax + bx) / 2;
+    return { ax, ay, bx, by, midx };
+  }
+
+  const svg = document.getElementById('flow');
+  let svgHtml = '';
+
+  // edges primero (para que queden detrás de los nodos)
+  EDGES.forEach(([a,b]) => {
+    const A = NODOS[a], B = NODOS[b];
+    const p = edgePoints(A, B);
+    const branch = (A.y !== B.y) ? ' branch' : '';
+    svgHtml += `<path id="edge-${a}-${b}" class="edge-path${branch}" d="M${p.ax} ${p.ay} C ${p.midx} ${p.ay}, ${p.midx} ${p.by}, ${p.bx} ${p.by}"/>`;
+  });
+
+  // nodos
+  Object.entries(NODOS).forEach(([id, n]) => {
+    if (n.shape === 'end'){
+      svgHtml += `<text x="${n.x}" y="${n.y+4}" class="node-label" text-anchor="middle">→ WhatsApp</text>`;
+      return;
+    }
+    const path = svgPath(n.shape, n.x, n.y, n.w, n.h);
+    svgHtml += `<g class="node" id="node-${id}">
+      <path class="node-shape${n.core ? ' core' : ''}" d="${path}"/>
+      <text x="${n.x}" y="${n.y - n.h/2 + 22}" class="node-icon">${n.icon}</text>
+      <text x="${n.x}" y="${n.y + n.h/2 - 16}" class="node-label big" text-anchor="middle">${n.label}</text>
+      <text x="${n.x}" y="${n.y + n.h/2 - 4}" class="node-count" text-anchor="middle" id="count-${id}">${n.sub}</text>
+    </g>`;
+  });
+
+  svg.innerHTML = svgHtml;
+
+  const nodeCounts = {};
+  function bump(id){
+    nodeCounts[id] = (nodeCounts[id]||0) + 1;
+    const el = document.getElementById('count-'+id);
+    if (el) el.textContent = nodeCounts[id] + ' eventos';
+  }
+
+  function flashNode(id, kind){
+    const el = document.getElementById('node-'+id);
+    if (!el) return;
+    el.classList.remove('flash-ok','flash-error','flash-warn');
+    void el.offsetWidth; // reinicia la animación si ya estaba
+    el.classList.add(kind === 'error' ? 'flash-error' : (kind === 'warn' ? 'flash-warn' : 'flash-ok'));
+    setTimeout(() => el.classList.remove('flash-ok','flash-error','flash-warn'), 1200);
+  }
+
+  function pulseAlong(fromId, toId, kind){
+    const edge = document.getElementById(`edge-${fromId}-${toId}`);
+    if (!edge) return;
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    dot.setAttribute('r', 4.5);
+    dot.setAttribute('class', 'pulse-dot' + (kind === 'error' ? ' err' : (kind === 'warn' ? ' warn' : '')));
+    const anim = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
+    anim.setAttribute('dur', '0.9s');
+    anim.setAttribute('fill', 'freeze');
+    const mpath = document.createElementNS('http://www.w3.org/2000/svg', 'mpath');
+    mpath.setAttributeNS('http://www.w3.org/1999/xlink', 'href', `#edge-${fromId}-${toId}`);
+    anim.appendChild(mpath);
+    dot.appendChild(anim);
+    svg.appendChild(dot);
+    setTimeout(() => dot.remove(), 950);
+  }
+
+  let ultimoAgenteTipo = {}; // teléfono -> 'mayorista'|'detal' (para resolver el origen de la siguiente arista)
+
+  function procesarEvento(ev){
+    totalEventos++;
+    document.getElementById('kEventos').textContent = totalEventos;
+    if (ev.agente_tipo === 'mayorista'){ totalMayorista++; document.getElementById('kMayorista').textContent = totalMayorista; }
+    if (ev.agente_tipo === 'detal'){ totalDetal++; document.getElementById('kDetal').textContent = totalDetal; }
+    if (!ev.ok){ totalErrores++; document.getElementById('kErrores').textContent = totalErrores; }
+
+    const kind = !ev.ok ? 'error' : (ev.etapa === 'dedup_bloqueado' || ev.etapa === 'modo_manual' ? 'warn' : 'ok');
+
+    let destino = DESTINO[ev.etapa];
+    let origen = 'wecall_in';
+
+    if (ev.etapa === 'webhook_recibido' || ev.etapa === 'firma_invalida') origen = 'wecall_in';
+    else if (ev.etapa === 'dedup_bloqueado' || ev.etapa === 'modo_manual' || ev.etapa === 'contexto_wecall') origen = 'webhook';
+    else if (ev.etapa === 'agente_iniciado'){ destino = ev.agente_tipo === 'mayorista' ? 'mayorista' : 'detal'; origen = 'contexto'; if (ev.telefono) ultimoAgenteTipo[ev.telefono] = destino; }
+    else if (ev.etapa === 'claude_llamado'){ origen = (ev.telefono && ultimoAgenteTipo[ev.telefono]) || 'mayorista'; }
+    else if (ev.etapa === 'herramienta') origen = 'claude';
+    else if (ev.etapa === 'respuesta_generada') origen = 'claude';
+    else if (ev.etapa === 'envio_wecall') origen = 'respuesta';
+
+    if (destino){
+      pulseAlong(origen, destino, kind);
+      setTimeout(() => { flashNode(destino, kind); bump(destino); }, 850);
+    }
+
+    agregarLog(ev, kind);
+
+    if (ev.etapa === 'respuesta_generada'){
+      document.getElementById('ultimo').innerHTML = `
+        <div style="color:var(--ink-faint); font-size:10.5px;">${ev.telefono || ''} · ${new Date(ev.ts).toLocaleTimeString('es-VE')}</div>
+        <div style="margin-top:4px; color:var(--ink);">${(ev.detalle||'').replace(/</g,'&lt;')}${ev.detalle && ev.detalle.length >= 80 ? '…' : ''}</div>
+      `;
+    }
+  }
+
+  function agregarLog(ev, kind){
+    const log = document.getElementById('log');
+    if (log.querySelector('.log-empty')) log.innerHTML = '';
+    const row = document.createElement('div');
+    row.className = 'log-row';
+    const hora = new Date(ev.ts).toLocaleTimeString('es-VE', { hour12:false });
+    row.innerHTML = `
+      <span class="log-ts">${hora}</span>
+      <span class="log-stage ${kind}">${ev.etapa.replace(/_/g,' ')}</span>
+      <span class="log-phone">${ev.telefono ? ev.telefono.slice(-4).padStart(ev.telefono.length,'•') : ''}</span>
+      <span class="log-detail" title="${(ev.detalle||'').replace(/"/g,'&quot;')}">${(ev.detalle||'').replace(/</g,'&lt;')}</span>
+    `;
+    log.prepend(row);
+    while (log.children.length > 80) log.removeChild(log.lastChild);
+  }
+
+  function api(path){
+    return fetch(path, { headers: { 'Authorization': 'Bearer ' + token } });
+  }
+
+  function setEstado(on, txt){
+    const pill = document.getElementById('statusPill');
+    pill.classList.toggle('off', !on);
+    document.getElementById('statusTxt').textContent = txt;
+  }
+
+  async function poll(){
+    try {
+      const r = await api('/api/crm/eventos?desde_id=' + ultimoId);
+      if (r.status === 401){
+        token = null;
+        try { localStorage.removeItem(TOKEN_KEY); } catch(e) {}
+        document.getElementById('tokenGate').hidden = false;
+        document.getElementById('wrap').hidden = true;
+        if (pollTimer) clearInterval(pollTimer);
+        return;
+      }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const nuevos = await r.json();
+      setEstado(true, 'en vivo');
+      nuevos.forEach(ev => { ultimoId = Math.max(ultimoId, ev.id); procesarEvento(ev); });
+    } catch(e){
+      setEstado(false, 'sin conexión — reintentando');
+    }
+  }
+
+  function iniciar(){
+    if (!token){ document.getElementById('tokenGate').hidden = false; document.getElementById('wrap').hidden = true; return; }
+    document.getElementById('tokenGate').hidden = true;
+    document.getElementById('wrap').hidden = false;
+    poll();
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(poll, 2500);
+  }
+
+  document.getElementById('tokenSave').addEventListener('click', () => {
+    const v = document.getElementById('tokenInput').value.trim();
+    if (!v) return;
+    token = v;
+    try { localStorage.setItem(TOKEN_KEY, v); } catch(e) {}
+    iniciar();
+  });
+  document.getElementById('tokenInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('tokenSave').click();
+  });
+
+  iniciar();
+</script>
+</body>
+</html>
