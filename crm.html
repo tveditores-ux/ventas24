@@ -160,7 +160,7 @@
     </div>
   </div>
   <div style="display:flex; align-items:center; gap:14px;">
-    <a class="back" href="/monitor">Monitor</a>
+    <a class="back" href="/monitor" id="linkMonitor" hidden>Monitor</a>
     <a class="back" href="#" id="btnLogout">Cerrar sesión</a>
   </div>
 </div>
@@ -205,6 +205,7 @@
       if (r.status === 401){ irALogin(); return; }
       usuario = await r.json();
       document.getElementById('quienSoy').textContent = `${usuario.nombre} · ${ROL_LABEL[usuario.rol] || usuario.rol}`;
+      document.getElementById('linkMonitor').hidden = usuario.rol !== 'super_admin';
     } catch(e){ irALogin(); return; }
 
     document.getElementById('convWrap').hidden = false;
