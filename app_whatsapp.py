@@ -186,6 +186,24 @@ def crm_contactos():
     return jsonify(db.listar_contactos_con_actividad(usuario=request.usuario))
 
 
+@app.route("/api/crm/catalogo", methods=["GET"])
+@requiere_sesion()
+def crm_catalogo():
+    return jsonify(db.listar_catalogo_completo())
+
+
+@app.route("/api/crm/espera", methods=["GET"])
+@requiere_sesion()
+def crm_espera():
+    return jsonify(db.listar_espera(solo_pendientes=True))
+
+
+@app.route("/api/crm/pedidos", methods=["GET"])
+@requiere_sesion()
+def crm_pedidos():
+    return jsonify(db.listar_pedidos(usuario=request.usuario))
+
+
 @app.route("/api/crm/conversacion/<int:contacto_id>", methods=["GET"])
 @requiere_sesion()
 def crm_conversacion(contacto_id):

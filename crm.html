@@ -141,6 +141,55 @@
     .list{ border-right:none; border-bottom:1px solid var(--line); max-height:220px; }
     .thread{ max-height:60vh; }
   }
+
+  /* ---- subnav de secciones ---- */
+  .subnav{ display:flex; gap:4px; margin-bottom:16px; overflow-x:auto; }
+  .subnav button{
+    font-size:13px; font-weight:600; color:var(--ink-soft); background:none; border:none; cursor:pointer;
+    padding:8px 13px; border-radius:8px; font-family:var(--font-body); white-space:nowrap;
+  }
+  .subnav button.active{ background:var(--surface-2); color:var(--steel); }
+
+  /* ---- catálogo / pedidos: tabla ---- */
+  .table-wrap{
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    box-shadow:var(--shadow); overflow:auto; max-height:calc(100vh - 220px);
+  }
+  table{ width:100%; border-collapse:collapse; min-width:600px; }
+  thead th{
+    position:sticky; top:0; background:var(--surface-2); text-align:left; font-size:11px;
+    text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); font-weight:600;
+    padding:10px 14px; border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  tbody td{ padding:10px 14px; border-bottom:1px solid var(--line); font-size:13px; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover{ background:var(--surface-2); }
+  .num{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  .stock-cero{ color:var(--danger); font-weight:600; }
+
+  /* ---- lista de espera: cards ---- */
+  .waitlist{ display:flex; flex-direction:column; gap:10px; }
+  .wcard{
+    display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:center;
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:13px 16px; box-shadow:var(--shadow);
+  }
+  .wcard .avatar{
+    width:36px; height:36px; border-radius:999px; background:var(--steel); color:var(--surface);
+    display:flex; align-items:center; justify-content:center; font-family:var(--font-display);
+    font-weight:800; font-size:14px; flex:none;
+  }
+  .wcard .who{ font-weight:600; font-size:13.5px; }
+  .wcard .what{ color:var(--ink-soft); font-size:12.5px; margin-top:1px; }
+  .wcard .meta{ text-align:right; font-size:11px; color:var(--ink-faint); font-family:var(--font-mono); }
+
+  .status-pill{
+    display:inline-flex; align-items:center; padding:3px 10px; border-radius:999px;
+    font-size:11px; font-weight:600; white-space:nowrap;
+  }
+  .status-pill.pendiente{ background:var(--warn-bg); color:var(--warn); }
+  .status-pill.confirmado, .status-pill.entregado{ background:var(--ok-bg); color:var(--ok); }
+  .status-pill.cancelado{ background:var(--danger-bg); color:var(--danger); }
 </style>
 </head>
 <body>
@@ -155,8 +204,8 @@
       <path d="M104 78 L88 98 h10 L96 118 L118 94 h-14 Z" fill="#2B4562"/>
     </svg></span>
     <div>
-      <h1>Conversaciones</h1>
-      <div class="sub" id="quienSoy">Ventas-24 · datos en vivo</div>
+      <h1>Ventas-24</h1>
+      <div class="sub" id="quienSoy">CRM · datos en vivo</div>
     </div>
   </div>
   <div style="display:flex; align-items:center; gap:14px;">
@@ -164,6 +213,13 @@
     <a class="back" href="#" id="btnLogout">Cerrar sesión</a>
   </div>
 </div>
+
+<nav class="subnav" id="subnav" hidden>
+  <button data-tab="conversaciones" class="active" type="button">Conversaciones</button>
+  <button data-tab="catalogo" type="button">Catálogo</button>
+  <button data-tab="espera" type="button">Lista de espera</button>
+  <button data-tab="pedidos" type="button">Pedidos</button>
+</nav>
 
 <div id="convWrap" hidden>
   <div class="toolbar">
@@ -176,6 +232,34 @@
     <div class="main" id="convMain">
       <div class="empty">Elegí una conversación de la lista para verla acá.</div>
     </div>
+  </div>
+</div>
+
+<div id="catalogoWrap" hidden>
+  <div class="toolbar">
+    <input type="search" id="searchCatalogo" placeholder="Buscar por marca, modelo o producto…">
+    <span class="count" id="countCatalogo">0 productos</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Vehículo</th><th>Años</th><th>Producto</th><th>Precio</th><th>Stock</th></tr></thead>
+      <tbody id="catalogoBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="esperaWrap" hidden>
+  <div class="toolbar"><span class="count" id="countEspera">0 pendientes</span></div>
+  <div class="waitlist" id="esperaList"></div>
+</div>
+
+<div id="pedidosWrap" hidden>
+  <div class="toolbar"><span class="count" id="countPedidos">0 pedidos</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cant.</th><th>Total</th><th>Estado</th></tr></thead>
+      <tbody id="pedidosBody"></tbody>
+    </table>
   </div>
 </div>
 
@@ -208,10 +292,8 @@
       document.getElementById('linkMonitor').hidden = usuario.rol !== 'super_admin';
     } catch(e){ irALogin(); return; }
 
-    document.getElementById('convWrap').hidden = false;
-    cargarContactos();
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(cargarContactos, 20000);
+    document.getElementById('subnav').hidden = false;
+    activarTab('conversaciones');
   }
 
   document.getElementById('btnLogout').addEventListener('click', async (e) => {
@@ -219,6 +301,99 @@
     await api('/api/crm/logout', { method: 'POST' });
     irALogin();
   });
+
+  // -------- pestañas --------
+  const TABS = ['conversaciones', 'catalogo', 'espera', 'pedidos'];
+  function activarTab(tab){
+    if (pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+    TABS.forEach(t => document.getElementById(t === 'conversaciones' ? 'convWrap' : t + 'Wrap').hidden = (t !== tab));
+    document.querySelectorAll('#subnav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    if (tab === 'conversaciones'){
+      cargarContactos();
+      pollTimer = setInterval(cargarContactos, 20000);
+    } else if (tab === 'catalogo') cargarCatalogo();
+    else if (tab === 'espera') cargarEspera();
+    else if (tab === 'pedidos') cargarPedidos();
+  }
+  document.querySelectorAll('#subnav button').forEach(b => {
+    b.addEventListener('click', () => activarTab(b.dataset.tab));
+  });
+
+  let catalogo = [];
+  async function cargarCatalogo(){
+    const body = document.getElementById('catalogoBody');
+    try {
+      const r = await api('/api/crm/catalogo');
+      if (r.status === 401){ irALogin(); return; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      catalogo = await r.json();
+      renderCatalogo();
+    } catch(e){
+      body.innerHTML = `<tr><td colspan="5" class="error">No pude cargar el catálogo (${e.message}).</td></tr>`;
+    }
+  }
+  function renderCatalogo(){
+    const body = document.getElementById('catalogoBody');
+    const q = (document.getElementById('searchCatalogo').value || '').trim().toLowerCase();
+    const filtrado = catalogo.filter(p => !q || (p.marca+' '+p.modelo+' '+p.nombre).toLowerCase().includes(q));
+    document.getElementById('countCatalogo').textContent = filtrado.length + ' de ' + catalogo.length + ' productos';
+    body.innerHTML = filtrado.length ? filtrado.map(p => `
+      <tr>
+        <td>${p.marca} ${p.modelo}</td>
+        <td class="num">${p.anio_desde ? p.anio_desde + '–' + p.anio_hasta : '—'}</td>
+        <td>${p.nombre}</td>
+        <td class="num">$${Number(p.precio).toFixed(2)}</td>
+        <td class="num ${p.stock === 0 ? 'stock-cero' : ''}">${p.stock} u.</td>
+      </tr>
+    `).join('') : `<tr><td colspan="5" class="empty">Sin resultados.</td></tr>`;
+  }
+  document.getElementById('searchCatalogo').addEventListener('input', renderCatalogo);
+
+  async function cargarEspera(){
+    const list = document.getElementById('esperaList');
+    try {
+      const r = await api('/api/crm/espera');
+      if (r.status === 401){ irALogin(); return; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const espera = await r.json();
+      document.getElementById('countEspera').textContent = espera.length + ' pendientes';
+      list.innerHTML = espera.length ? espera.map(e => `
+        <div class="wcard">
+          <div class="avatar">${iniciales(e.nombre)}</div>
+          <div>
+            <div class="who">${e.nombre || 'Sin nombre'}</div>
+            <div class="what">${e.producto || '—'}</div>
+          </div>
+          <div class="meta">${(e.fecha||'').slice(0,16)}<br>${(e.telefono||'').replace('whatsapp:','')}</div>
+        </div>
+      `).join('') : `<div class="empty">Nadie en espera todavía.</div>`;
+    } catch(e){
+      list.innerHTML = `<div class="error">No pude cargar la lista de espera (${e.message}).</div>`;
+    }
+  }
+
+  async function cargarPedidos(){
+    const body = document.getElementById('pedidosBody');
+    try {
+      const r = await api('/api/crm/pedidos');
+      if (r.status === 401){ irALogin(); return; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const pedidos = await r.json();
+      document.getElementById('countPedidos').textContent = pedidos.length + ' pedidos';
+      body.innerHTML = pedidos.length ? pedidos.map(p => `
+        <tr>
+          <td class="num">${(p.fecha||'').slice(0,16)}</td>
+          <td>${p.nombre || p.telefono || '—'}</td>
+          <td>${p.producto}</td>
+          <td class="num">${p.cantidad}</td>
+          <td class="num">$${Number(p.total).toFixed(2)}</td>
+          <td><span class="status-pill ${p.estado}">${p.estado}</span></td>
+        </tr>
+      `).join('') : `<tr><td colspan="6" class="empty">Todavía no hay pedidos registrados.</td></tr>`;
+    } catch(e){
+      body.innerHTML = `<tr><td colspan="6" class="error">No pude cargar los pedidos (${e.message}).</td></tr>`;
+    }
+  }
 
   async function cargarContactos(){
     const list = document.getElementById('convList');

@@ -285,22 +285,37 @@ def registrar_pedido(contacto_id: int, producto: str, cantidad: int, precio_unit
     return total
 
 
-def listar_pedidos(contacto_id: int | None = None):
+def listar_pedidos(contacto_id: int | None = None, usuario: dict | None = None):
+    """Si `usuario` es un vendedor, solo pedidos de contactos asignados a él."""
+    where_rol = ""
+    params = []
+    if contacto_id:
+        where_rol = " WHERE pedidos.contacto_id = ?"
+        params.append(contacto_id)
+    elif usuario and usuario["rol"] == "vendedor":
+        where_rol = " WHERE contactos.asignado_a = ?"
+        params.append(usuario["id"])
+
     with conectar() as con:
-        if contacto_id:
-            filas = con.execute("SELECT * FROM pedidos WHERE contacto_id = ? ORDER BY fecha DESC", (contacto_id,)).fetchall()
-        else:
-            filas = con.execute("""
-                SELECT pedidos.*, contactos.nombre, contactos.telefono
-                FROM pedidos JOIN contactos ON contactos.id = pedidos.contacto_id
-                ORDER BY pedidos.fecha DESC
-            """).fetchall()
+        filas = con.execute(f"""
+            SELECT pedidos.*, contactos.nombre, contactos.telefono
+            FROM pedidos JOIN contactos ON contactos.id = pedidos.contacto_id
+            {where_rol}
+            ORDER BY pedidos.fecha DESC
+        """, params).fetchall()
         return [dict(f) for f in filas]
 
 
 # ---------------------------------------------------------------------
 # Catálogo
 # ---------------------------------------------------------------------
+
+def listar_catalogo_completo():
+    """Todo el catálogo con id, para la vista del dashboard (no la que usa el agente)."""
+    with conectar() as con:
+        filas = con.execute("SELECT * FROM catalogo ORDER BY marca, modelo, nombre").fetchall()
+        return [dict(f) for f in filas]
+
 
 def buscar_catalogo(marca=None, modelo=None, anio=None, nombre=None):
     with conectar() as con:
