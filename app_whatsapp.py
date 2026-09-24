@@ -254,6 +254,41 @@ def crm_modo_manual(contacto_id):
     return jsonify({"contacto_id": contacto_id, "modo_manual": bool(activo), "asignado_a": fila["asignado_a"] if fila else None})
 
 
+@app.route("/api/crm/enviar/<int:contacto_id>", methods=["POST"])
+@requiere_sesion()
+def crm_enviar(contacto_id):
+    """Manda una respuesta manual desde el CRM — un humano toma la
+    conversación: la marca en modo manual y (si era de un vendedor
+    libre) se la asigna a quien escribe, igual que el toggle."""
+    usuario = request.usuario
+    datos = request.get_json(silent=True) or {}
+    texto = (datos.get("texto") or "").strip()
+    if not texto:
+        return jsonify({"error": "falta el texto"}), 400
+
+    with db.conectar() as con:
+        fila = con.execute("SELECT * FROM contactos WHERE id = ?", (contacto_id,)).fetchone()
+    if not fila:
+        return jsonify({"error": "contacto no encontrado"}), 404
+    contacto = dict(fila)
+
+    if usuario["rol"] == "vendedor":
+        if not db.asignar_conversacion_si_libre(contacto_id, usuario["id"]):
+            return jsonify({"error": "esta conversación ya está asignada a otro vendedor"}), 403
+
+    try:
+        wecall.enviar_mensaje(contacto["telefono"], texto=texto)
+    except VentanaCerradaError:
+        return jsonify({"error": "la ventana de 24h está cerrada — hace falta una plantilla aprobada"}), 409
+    except EnvioFallidoError as e:
+        return jsonify({"error": f"Meta rechazó el envío: {e.detalle}"}), 502
+
+    db.actualizar_contacto(contacto_id, modo_manual=1)
+    db.registrar_interaccion(contacto_id, "assistant", texto)
+    eventos.registrar("envio_wecall", contacto["telefono"], f"manual por {usuario['nombre']}: {texto[:60]}")
+    return jsonify({"ok": True})
+
+
 @app.route("/debug/cargar-catalogo", methods=["POST"])
 def debug_cargar_catalogo():
     """DIAGNÓSTICO / ADMIN — recarga el catálogo desde
