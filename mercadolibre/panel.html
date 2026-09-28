@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ventas 24 · Mercado Libre</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --tx:#1d2330; --mut:#6b7280; --bd:#e3e6eb;
+          --ac:#2d5bd7; --ok:#15803d; --bad:#b91c1c; --warn:#b45309; --amar:#fff159; }
+  * { box-sizing:border-box }
+  body { margin:0; font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--tx) }
+  header { background:var(--amar); padding:14px 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap }
+  header h1 { font-size:18px; margin:0; flex:1 }
+  .chip { font-size:12px; padding:3px 9px; border-radius:99px; background:#fff; border:1px solid #0001 }
+  main { max-width:1000px; margin:0 auto; padding:16px; display:grid; gap:16px }
+  section { background:var(--card); border:1px solid var(--bd); border-radius:10px; padding:14px }
+  section h2 { font-size:15px; margin:0 0 10px; display:flex; gap:8px; align-items:center }
+  .n { background:var(--ac); color:#fff; font-size:12px; border-radius:99px; padding:1px 8px }
+  .item { border-top:1px solid var(--bd); padding:10px 0 }
+  .item:first-of-type { border-top:0 }
+  .mut { color:var(--mut); font-size:13px }
+  .motivo { color:var(--warn); font-size:13px }
+  textarea, input { width:100%; font:inherit; padding:7px 9px; border:1px solid var(--bd); border-radius:7px }
+  textarea { min-height:70px; resize:vertical }
+  .fila { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px }
+  .fila input { flex:1; min-width:140px }
+  button { font:inherit; font-size:14px; padding:6px 12px; border-radius:7px; border:1px solid var(--bd); background:#fff; cursor:pointer }
+  button.pri { background:var(--ac); border-color:var(--ac); color:#fff }
+  button.ok { background:var(--ok); border-color:var(--ok); color:#fff }
+  button.bad { color:var(--bad) }
+  table { width:100%; border-collapse:collapse; font-size:14px }
+  td, th { text-align:left; padding:7px 6px; border-top:1px solid var(--bd); vertical-align:top }
+  th { font-size:12px; color:var(--mut); border-top:0 }
+  .tabla { overflow-x:auto }
+  .conv { background:var(--bg); border-radius:8px; padding:10px; margin-top:8px; max-height:340px; overflow:auto }
+  .burb { max-width:85%; padding:6px 10px; border-radius:10px; margin:4px 0; white-space:pre-wrap }
+  .comprador { background:#fff; border:1px solid var(--bd) }
+  .vendedor { background:#dbe6ff; margin-left:auto }
+  #login { max-width:380px; margin:60px auto }
+  .vacio { color:var(--mut); font-size:14px }
+</style>
+</head>
+<body>
+<header><h1>Ventas 24 · Mercado Libre</h1><span id="conexion" class="chip">…</span><span id="modos" class="chip"></span></header>
+
+<div id="login" hidden>
+  <section>
+    <h2>Entrar al panel</h2>
+    <input id="tok" type="password" placeholder="MELI_PANEL_TOKEN">
+    <div class="fila"><button class="pri" onclick="guardarToken()">Entrar</button></div>
+  </section>
+</div>
+
+<main id="app" hidden>
+  <section><h2>💰 Pagos por verificar <span class="n" id="nPagos">0</span></h2><div id="pagos"></div></section>
+  <section><h2>✋ Esperando tu aprobación <span class="n" id="nPend">0</span></h2><div id="pend"></div></section>
+  <section><h2>🛒 Órdenes</h2><div class="tabla" id="ordenes"></div><div id="conv"></div></section>
+  <section><h2>❓ Últimas preguntas</h2><div class="tabla" id="preguntas"></div>
+    <div class="fila"><button onclick="sincronizar()">Buscar preguntas sin responder</button></div></section>
+  <section><h2>🧪 Probar una respuesta (no publica nada)</h2>
+    <div class="fila"><input id="pItem" placeholder="ID de la publicación, ej. MLV123456789"></div>
+    <div class="fila"><input id="pPreg" placeholder="Pregunta de prueba"></div>
+    <div class="fila"><button class="pri" onclick="probar()">Probar</button></div>
+    <div id="pRes" class="mut"></div></section>
+  <section><h2>🔔 Avisos recientes</h2><div id="avisos"></div></section>
+</main>
+
+<script>
+let TOKEN = "";
+try { TOKEN = localStorage.getItem("meliPanelToken") || ""; } catch (e) {}
+let ESTADOS = {};
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function fecha(s) { return s ? new Date(s).toLocaleString("es-VE", {dateStyle:"short", timeStyle:"short"}) : ""; }
+
+async function api(ruta, cuerpo) {
+  const r = await fetch("/meli/api/" + ruta, {
+    method: cuerpo === undefined ? "GET" : "POST",
+    headers: {"X-Panel-Token": TOKEN, "Content-Type": "application/json"},
+    body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+  });
+  if (r.status === 401) { mostrarLogin(); throw new Error("no autorizado"); }
+  const datos = await r.json();
+  if (!r.ok) { alert("Error: " + (datos.error || r.status)); throw new Error(datos.error); }
+  return datos;
+}
+
+function mostrarLogin() { document.getElementById("login").hidden = false; document.getElementById("app").hidden = true; }
+function guardarToken() {
+  TOKEN = document.getElementById("tok").value.trim();
+  try { localStorage.setItem("meliPanelToken", TOKEN); } catch (e) {}
+  document.getElementById("login").hidden = true; cargar();
+}
+
+async function cargar() {
+  const d = await api("estado");
+  document.getElementById("app").hidden = false;
+  ESTADOS = d.estados;
+  document.getElementById("conexion").textContent = d.conectado ? "✅ Cuenta conectada" : "⚠️ Cuenta sin conectar";
+  document.getElementById("modos").textContent = `Preguntas: ${d.modos.preguntas} · Postventa: ${d.modos.postventa}`;
+
+  document.getElementById("nPagos").textContent = d.pagos.length;
+  document.getElementById("pagos").innerHTML = d.pagos.length ? d.pagos.map(p => `
+    <div class="item">
+      <b>${esc(p.comprador_nombre || p.comprador_apodo)}</b> · orden ${esc(p.orden_id)} <span class="mut">${fecha(p.creado)}</span><br>
+      ${esc(p.detalle)} — <b>Total: ${esc(p.total)} ${esc(p.moneda)}</b><br>
+      Reporta: ${esc(p.metodo)} ${esc(p.banco || "")} · Ref. <b>${esc(p.referencia)}</b> · Monto <b>${esc(p.monto)}</b>
+      · Fecha ${esc(p.fecha_pago || "-")} · Titular ${esc(p.titular || "-")}
+      <div class="fila">
+        <button class="ok" onclick="confirmarPago(${p.id})">Confirmar pago</button>
+        <button class="bad" onclick="rechazarPago(${p.id})">No aparece</button>
+      </div>
+    </div>`).join("") : '<div class="vacio">Nada por verificar.</div>';
+
+  document.getElementById("nPend").textContent = d.pendientes.length;
+  document.getElementById("pend").innerHTML = d.pendientes.length ? d.pendientes.map(s => `
+    <div class="item">
+      <span class="mut">${s.tipo === "respuesta" ? "Respuesta a pregunta " + esc(s.referencia) : "Mensaje a comprador (orden " + esc(s.orden_id) + ")"} · ${fecha(s.creado)}</span>
+      ${s.motivo ? `<div class="motivo">${esc(s.motivo)}</div>` : ""}
+      ${s.error ? `<div class="motivo">Error al enviar: ${esc(s.error)}</div>` : ""}
+      <textarea id="s${s.id}">${esc(s.texto)}</textarea>
+      <div class="fila">
+        <button class="pri" onclick="enviar(${s.id})">Publicar</button>
+        <button class="bad" onclick="descartar(${s.id})">Descartar</button>
+      </div>
+    </div>`).join("") : '<div class="vacio">No hay nada esperando.</div>';
+
+  document.getElementById("ordenes").innerHTML = d.ordenes.length ? `<table>
+    <tr><th>Orden</th><th>Comprador</th><th>Productos</th><th>Estado</th><th></th></tr>
+    ${d.ordenes.map(o => `<tr>
+      <td>${esc(o.id)}<div class="mut">${fecha(o.creado)}</div></td>
+      <td>${esc(o.comprador_nombre || "")}<div class="mut">${esc(o.comprador_apodo)}</div></td>
+      <td>${esc(o.detalle)}<div class="mut">${esc(o.total)} ${esc(o.moneda)}</div></td>
+      <td>${esc(ESTADOS[o.estado] || o.estado)}${o.guia ? `<div class="mut">Guía: ${esc(o.guia)}</div>` : ""}
+          <div class="mut">Bot: ${o.bot_activo ? "activo" : "en pausa"}</div></td>
+      <td><button onclick="verConv('${esc(o.id)}')">Ver</button></td></tr>`).join("")}
+  </table>` : '<div class="vacio">Todavía no hay ventas registradas.</div>';
+
+  document.getElementById("preguntas").innerHTML = d.preguntas.length ? `<table>
+    <tr><th>Publicación</th><th>Pregunta</th><th>Respuesta</th></tr>
+    ${d.preguntas.map(q => `<tr><td>${esc(q.item_titulo)}<div class="mut">${fecha(q.creado)}</div></td>
+      <td>${esc(q.texto)}</td><td>${esc(q.respuesta || "")}<div class="mut">${esc(q.estado_respuesta || "")}</div></td></tr>`).join("")}
+  </table>` : '<div class="vacio">Sin preguntas todavía.</div>';
+
+  document.getElementById("avisos").innerHTML = d.avisos.length ? d.avisos.map(a => `
+    <div class="item"><span class="mut">${fecha(a.creado)} · ${esc(a.canal)}</span><div style="white-space:pre-wrap">${esc(a.texto)}</div></div>`).join("")
+    : '<div class="vacio">Sin avisos.</div>';
+}
+
+async function enviar(id) { await api(`salientes/${id}/enviar`, {texto: document.getElementById("s" + id).value}); cargar(); }
+async function descartar(id) { if (confirm("¿Descartar este texto?")) { await api(`salientes/${id}/descartar`, {}); cargar(); } }
+async function confirmarPago(id) {
+  if (!confirm("¿Confirmas que el pago llegó a tu cuenta? Se le avisará al comprador.")) return;
+  await api(`pagos/${id}/confirmar`, {}); cargar();
+}
+async function rechazarPago(id) {
+  const motivo = prompt("¿Qué le decimos? (ej. 'no coincide el monto'). Puedes dejarlo vacío.");
+  if (motivo === null) return;
+  await api(`pagos/${id}/rechazar`, {motivo}); cargar();
+}
+
+async function verConv(id) {
+  const d = await api(`ordenes/${id}/conversacion`);
+  const o = d.orden;
+  let envio = {}; try { envio = JSON.parse(o.datos_envio || "{}"); } catch (e) {}
+  document.getElementById("conv").innerHTML = `
+    <div class="item"><h2>Orden ${esc(o.id)} · ${esc(o.comprador_nombre || o.comprador_apodo)}</h2>
+      <div class="mut">Datos de envío: ${Object.keys(envio).length ? esc(Object.values(envio).join(" · ")) : "todavía no"}</div>
+      <div class="conv">${d.mensajes.map(m => `<div class="burb ${m.rol}">${esc(m.texto)}</div>`).join("") || '<div class="vacio">Sin mensajes.</div>'}</div>
+      <div class="fila"><input id="manual" placeholder="Escribir al comprador…"><button class="pri" onclick="manual('${esc(o.id)}')">Enviar</button></div>
+      <div class="fila"><input id="empresa" placeholder="Empresa (MRW, Zoom, Tealca…)"><input id="guia" placeholder="Número de guía">
+        <button class="ok" onclick="enviada('${esc(o.id)}')">Marcar como enviada</button></div>
+      <div class="fila"><button onclick="bot('${esc(o.id)}', ${o.bot_activo ? 0 : 1})">${o.bot_activo ? "Pausar bot en esta orden" : "Reactivar bot"}</button></div>
+    </div>`;
+}
+async function manual(id) { const t = document.getElementById("manual").value.trim(); if (!t) return; await api(`ordenes/${id}/mensaje`, {texto: t}); verConv(id); }
+async function enviada(id) {
+  await api(`ordenes/${id}/enviada`, {empresa: document.getElementById("empresa").value, guia: document.getElementById("guia").value});
+  cargar(); verConv(id);
+}
+async function bot(id, activo) { await api(`ordenes/${id}/bot`, {activo}); cargar(); verConv(id); }
+async function sincronizar() { const r = await api("sincronizar", {}); alert(`Sin responder: ${r.sin_responder}. Atendiendo ahora: ${r.procesando}.`); setTimeout(cargar, 4000); }
+async function probar() {
+  document.getElementById("pRes").textContent = "Pensando…";
+  const r = await api("probar-pregunta", {item_id: document.getElementById("pItem").value, pregunta: document.getElementById("pPreg").value});
+  document.getElementById("pRes").innerHTML = `<b>${esc(r.publicacion)}</b><br>${esc(r.texto)}<br>` +
+    (r.necesita_humano ? `<span class="motivo">Quedaría para revisar: ${esc(r.motivo)}</span>` : "✅ Se publicaría sola");
+}
+
+if (TOKEN) cargar().catch(() => {}); else mostrarLogin();
+setInterval(() => { if (TOKEN && !document.getElementById("app").hidden && !document.activeElement.matches("textarea,input")) cargar().catch(() => {}); }, 30000);
+</script>
+</body>
+</html>
