@@ -405,7 +405,8 @@ def procesar_mensaje_wecall(telefono: str, mensaje: dict):
             ).fetchone()
         ya_visto = fila["wecall_ultimo_id"] if fila else None
         if ya_visto is not None and ya_visto >= mensaje_id:
-            eventos.registrar("dedup_bloqueado", telefono, f"mensaje {mensaje_id} ya visto")
+            print(f"  ⏭️ (wecall) {telefono} descartado como ya visto (cursor={ya_visto}, mensaje_id={mensaje_id})")
+            eventos.registrar("dedup_bloqueado", telefono, f"mensaje {mensaje_id} ya visto (cursor={ya_visto})")
             return
         db.actualizar_contacto(contacto_id, wecall_ultimo_id=mensaje_id)
         if fila and fila["modo_manual"]:
@@ -496,6 +497,8 @@ def wecall_debug_test(telefono):
     """DIAGNÓSTICO TEMPORAL — no manda nada, solo corre la misma cadena de
     procesamiento de forma síncrona y devuelve el error real si lo hay,
     en vez de que se pierda en un hilo en segundo plano."""
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
     import traceback
     telefono = db.normalizar_telefono(telefono)
     salida = {"telefono": telefono}
@@ -539,6 +542,8 @@ def wecall_debug_reset_cursor(telefono):
     real que se indique (por query ?hasta=N), para que el polling y el
     webhook puedan volver a procesar mensajes reales que quedaron
     bloqueados por el chequeo de duplicados."""
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
     hasta = request.args.get("hasta", type=int)
     if hasta is None:
         return jsonify({"error": "falta ?hasta=<id>"}), 400
