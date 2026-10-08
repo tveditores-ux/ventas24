@@ -69,6 +69,28 @@ CREATE TABLE IF NOT EXISTS pedidos (
     fecha TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS comprobantes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido_id INTEGER REFERENCES pedidos(id),
+    contacto_id INTEGER NOT NULL REFERENCES contactos(id),
+    origen TEXT NOT NULL DEFAULT 'manual',      -- manual / whatsapp
+    banco TEXT,
+    referencia TEXT,
+    referencia_norm TEXT,
+    monto REAL,
+    moneda TEXT NOT NULL DEFAULT 'USD',         -- USD / VES
+    fecha_pago TEXT,                            -- YYYY-MM-DD
+    cuenta_destino TEXT,
+    semaforo TEXT NOT NULL DEFAULT 'amarillo',  -- verde / amarillo / rojo
+    alertas TEXT NOT NULL DEFAULT '[]',         -- JSON: lista de textos
+    estado TEXT NOT NULL DEFAULT 'pendiente',   -- pendiente / aceptado / rechazado
+    nota TEXT,
+    registrado_por INTEGER REFERENCES usuarios(id),
+    revisado_por INTEGER REFERENCES usuarios(id),
+    revisado_en TEXT,
+    fecha TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS catalogo (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre TEXT NOT NULL,
@@ -105,6 +127,16 @@ def inicializar():
             con.execute("ALTER TABLE contactos ADD COLUMN modo_manual INTEGER NOT NULL DEFAULT 0")
         if "asignado_a" not in columnas:
             con.execute("ALTER TABLE contactos ADD COLUMN asignado_a INTEGER REFERENCES usuarios(id)")
+        cols_pedidos = {f["name"] for f in con.execute("PRAGMA table_info(pedidos)")}
+        for col, ddl in (
+            ("estado_pago", "TEXT NOT NULL DEFAULT 'por_pagar'"),
+            ("pago_confirmado_por", "INTEGER REFERENCES usuarios(id)"),
+            ("pago_confirmado_en", "TEXT"),
+            ("despachado_por", "INTEGER REFERENCES usuarios(id)"),
+            ("despachado_en", "TEXT"),
+        ):
+            if col not in cols_pedidos:
+                con.execute(f"ALTER TABLE pedidos ADD COLUMN {col} {ddl}")
         # Los contactos migrados desde Twilio guardaban el prefijo "whatsapp:".
         # Se normaliza acá para que todos los canales compartan el mismo formato E.164.
         con.execute(
@@ -304,6 +336,175 @@ def listar_pedidos(contacto_id: int | None = None, usuario: dict | None = None):
             ORDER BY pedidos.fecha DESC
         """, params).fetchall()
         return [dict(f) for f in filas]
+
+
+def obtener_pedido(pedido_id: int):
+    with conectar() as con:
+        fila = con.execute(
+            "SELECT pedidos.*, contactos.nombre, contactos.telefono, contactos.asignado_a "
+            "FROM pedidos JOIN contactos ON contactos.id = pedidos.contacto_id WHERE pedidos.id = ?",
+            (pedido_id,),
+        ).fetchone()
+        return dict(fila) if fila else None
+
+
+def pedido_por_pagar_reciente(contacto_id: int):
+    """Último pedido del contacto que todavía espera pago (para atar un adjunto entrante)."""
+    with conectar() as con:
+        fila = con.execute(
+            "SELECT * FROM pedidos WHERE contacto_id = ? AND estado != 'cancelado' "
+            "AND estado_pago IN ('por_pagar', 'comprobante_recibido') ORDER BY id DESC LIMIT 1",
+            (contacto_id,),
+        ).fetchone()
+        return dict(fila) if fila else None
+
+
+def despachar_pedido(pedido_id: int, usuario_id: int):
+    """Compuerta de envío: solo se despacha un pedido con el pago confirmado
+    por un administrador. Devuelve (ok, motivo)."""
+    with conectar() as con:
+        fila = con.execute("SELECT estado, estado_pago FROM pedidos WHERE id = ?", (pedido_id,)).fetchone()
+        if not fila:
+            return False, "pedido no encontrado"
+        if fila["estado"] == "cancelado":
+            return False, "el pedido está cancelado"
+        if fila["estado"] == "entregado":
+            return False, "el pedido ya fue despachado"
+        if fila["estado_pago"] != "pago_confirmado":
+            return False, "el pago todavía no está confirmado por la administración"
+        con.execute(
+            "UPDATE pedidos SET estado = 'entregado', despachado_por = ?, despachado_en = CURRENT_TIMESTAMP WHERE id = ?",
+            (usuario_id, pedido_id),
+        )
+    return True, "despachado"
+
+
+# ---------------------------------------------------------------------
+# Comprobantes de pago
+# ---------------------------------------------------------------------
+
+def crear_comprobante(contacto_id: int, pedido_id, origen: str, datos: dict,
+                      semaforo: str, alertas: list, registrado_por=None) -> int:
+    import json
+    with conectar() as con:
+        cur = con.execute(
+            """INSERT INTO comprobantes
+               (pedido_id, contacto_id, origen, banco, referencia, referencia_norm, monto, moneda,
+                fecha_pago, cuenta_destino, semaforo, alertas, nota, registrado_por)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (pedido_id, contacto_id, origen, datos.get("banco"), datos.get("referencia"),
+             datos.get("referencia_norm"), datos.get("monto"), datos.get("moneda") or "USD",
+             datos.get("fecha_pago"), datos.get("cuenta_destino"), semaforo,
+             json.dumps(alertas, ensure_ascii=False), datos.get("nota"), registrado_por),
+        )
+        comprobante_id = cur.lastrowid
+        if pedido_id:
+            con.execute(
+                "UPDATE pedidos SET estado_pago = 'comprobante_recibido' "
+                "WHERE id = ? AND estado_pago = 'por_pagar'",
+                (pedido_id,),
+            )
+    return comprobante_id
+
+
+def actualizar_datos_comprobante(comprobante_id: int, datos: dict, semaforo: str, alertas: list):
+    import json
+    with conectar() as con:
+        con.execute(
+            """UPDATE comprobantes SET banco = ?, referencia = ?, referencia_norm = ?, monto = ?,
+               moneda = ?, fecha_pago = ?, cuenta_destino = ?, nota = COALESCE(?, nota),
+               semaforo = ?, alertas = ? WHERE id = ?""",
+            (datos.get("banco"), datos.get("referencia"), datos.get("referencia_norm"), datos.get("monto"),
+             datos.get("moneda") or "USD", datos.get("fecha_pago"), datos.get("cuenta_destino"),
+             datos.get("nota"), semaforo, json.dumps(alertas, ensure_ascii=False), comprobante_id),
+        )
+
+
+def obtener_comprobante(comprobante_id: int):
+    with conectar() as con:
+        fila = con.execute(
+            """SELECT comprobantes.*, contactos.nombre, contactos.telefono, contactos.asignado_a,
+                      pedidos.total AS pedido_total, pedidos.producto AS pedido_producto,
+                      pedidos.fecha AS pedido_fecha
+               FROM comprobantes
+               JOIN contactos ON contactos.id = comprobantes.contacto_id
+               LEFT JOIN pedidos ON pedidos.id = comprobantes.pedido_id
+               WHERE comprobantes.id = ?""",
+            (comprobante_id,),
+        ).fetchone()
+        return dict(fila) if fila else None
+
+
+def listar_comprobantes(usuario: dict | None = None):
+    import json
+    donde, params = "", []
+    if usuario and usuario["rol"] == "vendedor":
+        donde = " WHERE contactos.asignado_a = ?"
+        params.append(usuario["id"])
+    with conectar() as con:
+        filas = con.execute(f"""
+            SELECT comprobantes.*, contactos.nombre, contactos.telefono,
+                   pedidos.total AS pedido_total, pedidos.producto AS pedido_producto,
+                   revisor.nombre AS revisado_por_nombre
+            FROM comprobantes
+            JOIN contactos ON contactos.id = comprobantes.contacto_id
+            LEFT JOIN pedidos ON pedidos.id = comprobantes.pedido_id
+            LEFT JOIN usuarios revisor ON revisor.id = comprobantes.revisado_por
+            {donde}
+            ORDER BY (comprobantes.estado = 'pendiente') DESC, comprobantes.id DESC
+        """, params).fetchall()
+    resultado = []
+    for f in filas:
+        d = dict(f)
+        d["alertas"] = json.loads(d.get("alertas") or "[]")
+        resultado.append(d)
+    return resultado
+
+
+def referencias_usadas(excluir_comprobante_id=None):
+    """(comprobante_id, pedido_id, referencia_norm) de todos los comprobantes con referencia."""
+    with conectar() as con:
+        filas = con.execute(
+            "SELECT id, pedido_id, referencia_norm FROM comprobantes "
+            "WHERE referencia_norm IS NOT NULL AND referencia_norm != '' AND id != ?",
+            (excluir_comprobante_id or -1,),
+        ).fetchall()
+        return [(f["id"], f["pedido_id"], f["referencia_norm"]) for f in filas]
+
+
+def revisar_comprobante(comprobante_id: int, usuario_id: int, aceptar: bool, nota: str | None):
+    """Decisión de la administración. Aceptar confirma el pago del pedido;
+    rechazar lo devuelve a 'por_pagar' si no queda otro comprobante aceptado."""
+    with conectar() as con:
+        comp = con.execute("SELECT pedido_id, estado FROM comprobantes WHERE id = ?", (comprobante_id,)).fetchone()
+        if not comp:
+            return False, "comprobante no encontrado"
+        if comp["estado"] != "pendiente":
+            return False, "este comprobante ya fue revisado"
+        con.execute(
+            "UPDATE comprobantes SET estado = ?, revisado_por = ?, revisado_en = CURRENT_TIMESTAMP, "
+            "nota = COALESCE(?, nota) WHERE id = ?",
+            ("aceptado" if aceptar else "rechazado", usuario_id, nota, comprobante_id),
+        )
+        pid = comp["pedido_id"]
+        if pid and aceptar:
+            con.execute(
+                "UPDATE pedidos SET estado_pago = 'pago_confirmado', estado = CASE WHEN estado = 'pendiente' "
+                "THEN 'confirmado' ELSE estado END, pago_confirmado_por = ?, pago_confirmado_en = CURRENT_TIMESTAMP "
+                "WHERE id = ?",
+                (usuario_id, pid),
+            )
+        elif pid:
+            quedan = con.execute(
+                "SELECT COUNT(*) AS n FROM comprobantes WHERE pedido_id = ? AND estado IN ('pendiente', 'aceptado')",
+                (pid,),
+            ).fetchone()["n"]
+            if not quedan:
+                con.execute(
+                    "UPDATE pedidos SET estado_pago = 'por_pagar' WHERE id = ? AND estado_pago != 'pago_confirmado'",
+                    (pid,),
+                )
+    return True, "ok"
 
 
 # ---------------------------------------------------------------------

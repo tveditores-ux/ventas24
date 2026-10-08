@@ -195,6 +195,36 @@
   .wcard .what{ color:var(--ink-soft); font-size:12.5px; margin-top:1px; }
   .wcard .meta{ text-align:right; font-size:11px; color:var(--ink-faint); font-family:var(--font-mono); }
 
+  .badge{ display:inline-block; margin-left:6px; min-width:18px; padding:1px 6px; border-radius:999px; font-size:11px; background:var(--danger); color:#fff; text-align:center; }
+  .pago-pill{ display:inline-block; font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; white-space:nowrap; background:var(--surface-2); color:var(--ink-soft); }
+  .pago-pill.por_pagar{ background:var(--warn-bg); color:var(--warn); }
+  .pago-pill.comprobante_recibido{ background:var(--warn-bg); color:var(--warn); }
+  .pago-pill.pago_confirmado{ background:var(--ok-bg); color:var(--ok); }
+  .btn.sm{ padding:5px 10px; font-size:12px; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .comp-list{ display:flex; flex-direction:column; gap:12px; }
+  .comp{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px 18px; box-shadow:var(--shadow); display:grid; grid-template-columns:auto 1fr; gap:14px; min-width:0; }
+  .luz{ width:14px; height:14px; border-radius:50%; margin-top:4px; background:var(--ink-faint); }
+  .luz.verde{ background:var(--ok); } .luz.amarillo{ background:var(--warn); } .luz.rojo{ background:var(--danger); }
+  .comp h4{ margin:0 0 2px; font-size:15px; }
+  .comp .sub{ font-size:12px; color:var(--ink-soft); margin-bottom:10px; }
+  .comp .datos{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px 16px; font-size:13px; margin-bottom:10px; }
+  .comp .datos b{ display:block; font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; }
+  .comp .datos span{ overflow-wrap:anywhere; }
+  .comp ul{ margin:0 0 10px; padding-left:18px; font-size:13px; line-height:1.6; }
+  .comp .acciones{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .comp .acciones input{ flex:1; min-width:180px; font:inherit; font-size:13px; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); }
+  .comp .resuelto{ font-size:12px; color:var(--ink-soft); }
+  dialog{ border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--ink); padding:22px; width:min(480px, calc(100vw - 32px)); box-shadow:var(--shadow); }
+  dialog::backdrop{ background:rgba(0,0,0,.45); }
+  dialog h3{ margin:0 0 4px; font-size:18px; }
+  .dlg-sub{ margin:0 0 14px; font-size:13px; color:var(--ink-soft); }
+  .dlg-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .dlg-grid label{ display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft); min-width:0; }
+  .dlg-grid input, .dlg-grid select{ font:inherit; font-size:14px; text-transform:none; letter-spacing:0; font-weight:400; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); min-width:0; }
+  .dlg-error{ margin-top:10px; font-size:13px; color:var(--danger); }
+  .dlg-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+  @media (max-width:480px){ .dlg-grid{ grid-template-columns:1fr; } }
   .status-pill{
     display:inline-flex; align-items:center; padding:3px 10px; border-radius:999px;
     font-size:11px; font-weight:600; white-space:nowrap;
@@ -231,6 +261,7 @@
   <button data-tab="catalogo" type="button">Catálogo</button>
   <button data-tab="espera" type="button">Lista de espera</button>
   <button data-tab="pedidos" type="button">Pedidos</button>
+  <button data-tab="comprobantes" type="button">Pagos por revisar<span class="badge" id="badgeComp" hidden></span></button>
 </nav>
 
 <div id="convWrap" hidden>
@@ -269,11 +300,36 @@
   <div class="toolbar"><span class="count" id="countPedidos">0 pedidos</span></div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cant.</th><th>Total</th><th>Estado</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cant.</th><th>Total</th><th>Pago</th><th>Envío</th></tr></thead>
       <tbody id="pedidosBody"></tbody>
     </table>
   </div>
 </div>
+
+<div id="comprobantesWrap" hidden>
+  <div class="toolbar"><span class="count" id="countComp">0 comprobantes</span></div>
+  <div class="comp-list" id="compList"></div>
+</div>
+
+<dialog id="dlgComp">
+  <form id="formComp" method="dialog">
+    <h3 id="dlgCompTitulo">Cargar comprobante</h3>
+    <p class="dlg-sub" id="dlgCompSub"></p>
+    <div class="dlg-grid">
+      <label>Banco<input id="fcBanco" type="text" autocomplete="off"></label>
+      <label>Referencia<input id="fcReferencia" type="text" autocomplete="off"></label>
+      <label>Monto<input id="fcMonto" type="text" inputmode="decimal" autocomplete="off"></label>
+      <label>Moneda<select id="fcMoneda"><option value="USD">USD</option><option value="VES">Bs</option></select></label>
+      <label>Fecha del pago<input id="fcFecha" type="date"></label>
+      <label>Cuenta o teléfono destino<input id="fcDestino" type="text" autocomplete="off"></label>
+    </div>
+    <div class="dlg-error" id="fcError" hidden></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="fcCancelar">Cancelar</button>
+      <button type="submit" class="btn" id="fcEnviar">Revisar comprobante</button>
+    </div>
+  </form>
+</dialog>
 
 <script>
   let usuario = null;
@@ -315,7 +371,12 @@
   });
 
   // -------- pestañas --------
-  const TABS = ['conversaciones', 'catalogo', 'espera', 'pedidos'];
+  const TABS = ['conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes'];
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  const PAGO_LABEL = { por_pagar:'Por pagar', comprobante_recibido:'En validación', pago_confirmado:'Pago confirmado' };
+  const esAdmin = () => usuario && (usuario.rol === 'admin' || usuario.rol === 'super_admin');
   function activarTab(tab){
     if (pollTimer){ clearInterval(pollTimer); pollTimer = null; }
     TABS.forEach(t => document.getElementById(t === 'conversaciones' ? 'convWrap' : t + 'Wrap').hidden = (t !== tab));
@@ -326,6 +387,7 @@
     } else if (tab === 'catalogo') cargarCatalogo();
     else if (tab === 'espera') cargarEspera();
     else if (tab === 'pedidos') cargarPedidos();
+    else if (tab === 'comprobantes') cargarComprobantes();
   }
   document.querySelectorAll('#subnav button').forEach(b => {
     b.addEventListener('click', () => activarTab(b.dataset.tab));
@@ -392,20 +454,164 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const pedidos = await r.json();
       document.getElementById('countPedidos').textContent = pedidos.length + ' pedidos';
-      body.innerHTML = pedidos.length ? pedidos.map(p => `
+      body.innerHTML = pedidos.length ? pedidos.map(p => {
+        const despachado = p.estado === 'entregado';
+        const cancelado = p.estado === 'cancelado';
+        const pagoOk = p.estado_pago === 'pago_confirmado';
+        let pago = `<span class="pago-pill ${esc(p.estado_pago)}">${esc(PAGO_LABEL[p.estado_pago] || p.estado_pago)}</span>`;
+        if (!pagoOk && !cancelado && !despachado){
+          pago += ` <button class="btn ghost sm" type="button" data-cargar="${p.id}" data-info="${esc((p.nombre || p.telefono || '') + ' · $' + Number(p.total).toFixed(2))}">Cargar comprobante</button>`;
+        }
+        let envio;
+        if (despachado) envio = '<span class="status-pill entregado">Despachado</span>';
+        else if (cancelado) envio = '<span class="status-pill cancelado">Cancelado</span>';
+        else envio = `<button class="btn sm" type="button" data-despachar="${p.id}" ${pagoOk ? '' : 'disabled title="Falta que la administración confirme el pago"'}>Despachar</button>`;
+        return `
         <tr>
-          <td class="num">${(p.fecha||'').slice(0,16)}</td>
-          <td>${p.nombre || p.telefono || '—'}</td>
-          <td>${p.producto}</td>
-          <td class="num">${p.cantidad}</td>
+          <td class="num">${esc((p.fecha||'').slice(0,16))}</td>
+          <td>${esc(p.nombre || p.telefono || '—')}</td>
+          <td>${esc(p.producto)}</td>
+          <td class="num">${esc(p.cantidad)}</td>
           <td class="num">$${Number(p.total).toFixed(2)}</td>
-          <td><span class="status-pill ${p.estado}">${p.estado}</span></td>
-        </tr>
-      `).join('') : `<tr><td colspan="6" class="empty">Todavía no hay pedidos registrados.</td></tr>`;
+          <td>${pago}</td>
+          <td>${envio}</td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="7" class="empty">Todavía no hay pedidos registrados.</td></tr>`;
     } catch(e){
-      body.innerHTML = `<tr><td colspan="6" class="error">No pude cargar los pedidos (${e.message}).</td></tr>`;
+      body.innerHTML = `<tr><td colspan="7" class="error">No pude cargar los pedidos (${esc(e.message)}).</td></tr>`;
     }
   }
+
+  document.getElementById('pedidosBody').addEventListener('click', async (ev) => {
+    const cargar = ev.target.closest('[data-cargar]');
+    if (cargar){ abrirDialogo({ pedidoId: cargar.dataset.cargar, info: cargar.dataset.info }); return; }
+    const desp = ev.target.closest('[data-despachar]');
+    if (desp && !desp.disabled){
+      desp.disabled = true;
+      const r = await api(`/api/crm/pedidos/${desp.dataset.despachar}/despachar`, { method:'POST' });
+      if (!r.ok){ const d = await r.json().catch(()=>({})); alert(d.error || 'No se pudo despachar'); }
+      cargarPedidos();
+    }
+  });
+
+  // -------- comprobantes de pago --------
+  const dlg = document.getElementById('dlgComp');
+  let dlgCtx = null;
+  function abrirDialogo(ctx){
+    dlgCtx = ctx;
+    document.getElementById('formComp').reset();
+    document.getElementById('fcError').hidden = true;
+    document.getElementById('dlgCompSub').textContent = 'Pedido de ' + (ctx.info || '');
+    if (ctx.datos){
+      const d = ctx.datos;
+      document.getElementById('fcBanco').value = d.banco || '';
+      document.getElementById('fcReferencia').value = d.referencia || '';
+      document.getElementById('fcMonto').value = d.monto != null ? d.monto : '';
+      document.getElementById('fcMoneda').value = d.moneda || 'USD';
+      document.getElementById('fcFecha').value = d.fecha_pago || '';
+      document.getElementById('fcDestino').value = d.cuenta_destino || '';
+    }
+    dlg.showModal();
+  }
+  document.getElementById('fcCancelar').addEventListener('click', () => dlg.close());
+  document.getElementById('formComp').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const err = document.getElementById('fcError');
+    err.hidden = true;
+    const cuerpo = {
+      banco: document.getElementById('fcBanco').value,
+      referencia: document.getElementById('fcReferencia').value,
+      monto: document.getElementById('fcMonto').value,
+      moneda: document.getElementById('fcMoneda').value,
+      fecha_pago: document.getElementById('fcFecha').value,
+      cuenta_destino: document.getElementById('fcDestino').value,
+      comprobante_id: dlgCtx.comprobanteId || null,
+    };
+    const btn = document.getElementById('fcEnviar');
+    btn.disabled = true;
+    try {
+      const r = await api(`/api/crm/pedidos/${dlgCtx.pedidoId}/comprobante`, {
+        method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(cuerpo),
+      });
+      const d = await r.json().catch(()=>({}));
+      if (!r.ok){ err.textContent = d.error || 'No se pudo guardar'; err.hidden = false; return; }
+      dlg.close();
+      activarTab('comprobantes');
+    } finally { btn.disabled = false; }
+  });
+
+  async function cargarComprobantes(){
+    const lista = document.getElementById('compList');
+    try {
+      const r = await api('/api/crm/comprobantes');
+      if (r.status === 401){ irALogin(); return; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const comps = await r.json();
+      const pendientes = comps.filter(c => c.estado === 'pendiente').length;
+      document.getElementById('countComp').textContent = pendientes + ' por revisar · ' + comps.length + ' en total';
+      const badge = document.getElementById('badgeComp');
+      badge.hidden = !pendientes; badge.textContent = pendientes;
+      lista.innerHTML = comps.length ? comps.map(c => {
+        const pend = c.estado === 'pendiente';
+        const sinPedido = !c.pedido_id;
+        const alertas = (c.alertas || []).map(a => `<li>${esc(a)}</li>`).join('') || '<li>Sin alertas.</li>';
+        let pie;
+        if (!pend){
+          pie = `<div class="resuelto">${c.estado === 'aceptado' ? 'Confirmado' : 'Rechazado'} por ${esc(c.revisado_por_nombre || '—')} · ${esc((c.revisado_en||'').slice(0,16))}${c.nota ? ' · ' + esc(c.nota) : ''}</div>`;
+        } else {
+          const completar = !sinPedido ? `<button class="btn ghost sm" type="button" data-completar="${c.id}">Completar datos</button>` : '';
+          pie = esAdmin()
+            ? `<div class="acciones">
+                 ${completar}
+                 <input type="text" placeholder="Nota (obligatoria si hay alerta roja)" data-nota="${c.id}">
+                 <button class="btn sm" type="button" data-decidir="confirmar" data-id="${c.id}">Confirmar pago</button>
+                 <button class="btn ghost sm" type="button" data-decidir="rechazar" data-id="${c.id}">Rechazar</button>
+               </div>`
+            : `<div class="acciones">${completar}<span class="resuelto">Espera la confirmación de la administración.</span></div>`;
+        }
+        return `
+        <div class="comp" data-comp='${esc(JSON.stringify({id:c.id, pedido_id:c.pedido_id, info:(c.nombre||c.telefono||'') + ' · $' + Number(c.pedido_total||0).toFixed(2), banco:c.banco, referencia:c.referencia, monto:c.monto, moneda:c.moneda, fecha_pago:c.fecha_pago, cuenta_destino:c.cuenta_destino}))}'>
+          <div class="luz ${esc(c.semaforo)}" title="${esc(c.semaforo)}"></div>
+          <div style="min-width:0">
+            <h4>${esc(c.nombre || c.telefono || 'Cliente')} · pedido ${c.pedido_id ? '#' + c.pedido_id : 'sin asignar'}</h4>
+            <div class="sub">${esc(c.pedido_producto || '')} ${c.pedido_total != null ? '· total $' + Number(c.pedido_total).toFixed(2) : ''} · ${c.origen === 'whatsapp' ? 'llegó por WhatsApp' : 'cargado a mano'} · ${esc((c.fecha||'').slice(0,16))}</div>
+            <div class="datos">
+              <div><b>Banco</b><span>${esc(c.banco || '—')}</span></div>
+              <div><b>Referencia</b><span class="num">${esc(c.referencia || '—')}</span></div>
+              <div><b>Monto</b><span class="num">${c.monto != null ? esc(c.monto) + ' ' + (c.moneda === 'VES' ? 'Bs' : 'USD') : '—'}</span></div>
+              <div><b>Fecha del pago</b><span class="num">${esc(c.fecha_pago || '—')}</span></div>
+              <div><b>Destino</b><span>${esc(c.cuenta_destino || '—')}</span></div>
+            </div>
+            <ul>${alertas}</ul>
+            ${pie}
+          </div>
+        </div>`;
+      }).join('') : '<div class="empty">Todavía no hay comprobantes.</div>';
+    } catch(e){
+      lista.innerHTML = `<div class="error">No pude cargar los comprobantes (${esc(e.message)}).</div>`;
+    }
+  }
+
+  document.getElementById('compList').addEventListener('click', async (ev) => {
+    const completar = ev.target.closest('[data-completar]');
+    if (completar){
+      const d = JSON.parse(completar.closest('.comp').dataset.comp);
+      abrirDialogo({ pedidoId: d.pedido_id, comprobanteId: d.id, info: d.info, datos: d });
+      return;
+    }
+    const dec = ev.target.closest('[data-decidir]');
+    if (dec){
+      dec.disabled = true;
+      const id = dec.dataset.id;
+      const nota = (document.querySelector(`[data-nota="${id}"]`) || {}).value || '';
+      const r = await api(`/api/crm/comprobantes/${id}/revisar`, {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ decision: dec.dataset.decidir, nota }),
+      });
+      if (!r.ok){ const d = await r.json().catch(()=>({})); alert(d.error || 'No se pudo guardar la decisión'); }
+      cargarComprobantes();
+    }
+  });
 
   async function cargarContactos(){
     const list = document.getElementById('convList');

@@ -41,6 +41,7 @@ from functools import wraps
 
 import db
 import eventos
+import seguridad
 import wecall
 from wecall import VentanaCerradaError, EnvioFallidoError
 from agente import Agente
@@ -207,6 +208,93 @@ def crm_espera():
 @requiere_sesion()
 def crm_pedidos():
     return jsonify(db.listar_pedidos(usuario=request.usuario))
+
+
+ROLES_ADMIN = ["super_admin", "admin"]
+
+
+def _puede_ver_pedido(usuario, pedido):
+    return usuario["rol"] != "vendedor" or pedido.get("asignado_a") in (None, usuario["id"])
+
+
+@app.route("/api/crm/comprobantes", methods=["GET"])
+@requiere_sesion()
+def crm_comprobantes():
+    return jsonify(db.listar_comprobantes(usuario=request.usuario))
+
+
+@app.route("/api/crm/pedidos/<int:pedido_id>/comprobante", methods=["POST"])
+@requiere_sesion()
+def crm_cargar_comprobante(pedido_id):
+    """Carga los datos de un comprobante a mano y los pasa por el agente de seguridad.
+    Con `comprobante_id` completa uno que llegó por WhatsApp sin datos."""
+    pedido = db.obtener_pedido(pedido_id)
+    if not pedido:
+        return jsonify({"error": "pedido no encontrado"}), 404
+    if not _puede_ver_pedido(request.usuario, pedido):
+        return jsonify({"error": "este pedido es de otro vendedor"}), 403
+    if pedido["estado_pago"] == "pago_confirmado":
+        return jsonify({"error": "el pago de este pedido ya está confirmado"}), 409
+
+    crudo = request.get_json(silent=True) or {}
+    datos = seguridad.limpiar_datos(crudo)
+    comp_id = crudo.get("comprobante_id")
+    if comp_id:
+        existente = db.obtener_comprobante(int(comp_id))
+        if not existente or existente["estado"] != "pendiente" or existente["contacto_id"] != pedido["contacto_id"]:
+            return jsonify({"error": "comprobante no válido para este pedido"}), 400
+    semaforo, alertas = seguridad.evaluar(datos, pedido, excluir_comprobante_id=comp_id)
+    if comp_id:
+        db.actualizar_datos_comprobante(int(comp_id), datos, semaforo, alertas)
+    else:
+        comp_id = db.crear_comprobante(
+            pedido["contacto_id"], pedido_id, "manual", datos, semaforo, alertas, request.usuario["id"]
+        )
+    eventos.registrar("comprobante", pedido["telefono"], f"#{comp_id} {semaforo}: {'; '.join(alertas) or 'sin alertas'}",
+                      ok=semaforo != "rojo")
+    return jsonify({"id": comp_id, "semaforo": semaforo, "alertas": alertas})
+
+
+@app.route("/api/crm/comprobantes/<int:comprobante_id>/revisar", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def crm_revisar_comprobante(comprobante_id):
+    """Solo la administración confirma o rechaza. Confirmar un comprobante en
+    rojo o sin datos exige una nota que explique por qué."""
+    datos = request.get_json(silent=True) or {}
+    decision = datos.get("decision")
+    nota = (datos.get("nota") or "").strip() or None
+    if decision not in ("confirmar", "rechazar"):
+        return jsonify({"error": "decision debe ser 'confirmar' o 'rechazar'"}), 400
+    comp = db.obtener_comprobante(comprobante_id)
+    if not comp:
+        return jsonify({"error": "comprobante no encontrado"}), 404
+    if decision == "confirmar":
+        if not comp["pedido_id"]:
+            return jsonify({"error": "este comprobante no está atado a un pedido"}), 400
+        if (comp["semaforo"] == "rojo" or not comp["referencia_norm"]) and not nota:
+            return jsonify({"error": "este comprobante tiene alertas graves: escribe una nota que explique por qué lo confirmas"}), 400
+    ok, motivo = db.revisar_comprobante(comprobante_id, request.usuario["id"], decision == "confirmar", nota)
+    if not ok:
+        return jsonify({"error": motivo}), 409
+    eventos.registrar("pago_revisado", comp["telefono"],
+                      f"comprobante #{comprobante_id} {decision} por {request.usuario['nombre']}")
+    return jsonify({"ok": True})
+
+
+@app.route("/api/crm/pedidos/<int:pedido_id>/despachar", methods=["POST"])
+@requiere_sesion()
+def crm_despachar_pedido(pedido_id):
+    pedido = db.obtener_pedido(pedido_id)
+    if not pedido:
+        return jsonify({"error": "pedido no encontrado"}), 404
+    if not _puede_ver_pedido(request.usuario, pedido):
+        return jsonify({"error": "este pedido es de otro vendedor"}), 403
+    ok, motivo = db.despachar_pedido(pedido_id, request.usuario["id"])
+    if not ok:
+        eventos.registrar("despacho_bloqueado", pedido["telefono"], f"pedido {pedido_id}: {motivo}", ok=False)
+        return jsonify({"error": motivo}), 409
+    eventos.registrar("despacho", pedido["telefono"], f"pedido {pedido_id} despachado por {request.usuario['nombre']}")
+    return jsonify({"ok": True})
 
 
 @app.route("/api/crm/conversacion/<int:contacto_id>", methods=["GET"])
@@ -386,7 +474,7 @@ def procesar_mensaje_wecall(telefono: str, mensaje: dict):
     """Procesa un mensaje entrante de WeCall (llamado desde el webhook o el polling)."""
     mensaje_id = mensaje.get("id")
     texto_mensaje = (mensaje.get("texto") or "").strip()
-    if mensaje.get("direccion") != "entrante" or not texto_mensaje or mensaje_id is None:
+    if mensaje.get("direccion") != "entrante" or mensaje_id is None:
         return
 
     telefono = db.normalizar_telefono(telefono)
@@ -409,6 +497,25 @@ def procesar_mensaje_wecall(telefono: str, mensaje: dict):
             eventos.registrar("dedup_bloqueado", telefono, f"mensaje {mensaje_id} ya visto (cursor={ya_visto})")
             return
         db.actualizar_contacto(contacto_id, wecall_ultimo_id=mensaje_id)
+        if not texto_mensaje:
+            # Archivo sin texto (posible comprobante de pago): no lo lee el bot,
+            # queda en la cola de la administración para revisarlo a mano.
+            try:
+                comp_id, pedido = seguridad.registrar_adjunto_whatsapp(contacto_id)
+                eventos.registrar("adjunto_recibido", telefono, f"comprobante #{comp_id} pendiente de revisión")
+                if pedido and not (fila and fila["modo_manual"]):
+                    try:
+                        wecall.enviar_mensaje(
+                            telefono,
+                            texto="Recibimos tu comprobante. Lo estamos validando y te avisamos en cuanto esté confirmado.",
+                        )
+                    except (VentanaCerradaError, EnvioFallidoError) as e:
+                        eventos.registrar("envio_wecall", telefono, f"aviso de comprobante no enviado: {e}", ok=False)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                eventos.registrar("error", telefono, f"adjunto: {e}", ok=False)
+            return
         if fila and fila["modo_manual"]:
             # Un humano está llevando esta conversación desde WeCall — el
             # bot solo avanza el cursor para no acumular backlog, pero no
