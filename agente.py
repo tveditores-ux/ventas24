@@ -20,7 +20,7 @@ from anthropic import Anthropic
 import db
 import eventos
 
-MODELO = "claude-sonnet-4-6"
+MODELO = os.environ.get("CLAUDE_MODEL", "claude-haiku-5-5")
 
 # ---------------------------------------------------------------------
 # Núcleo de comportamiento, compartido por los dos vendedores (mayorista
