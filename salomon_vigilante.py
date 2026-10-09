@@ -52,6 +52,10 @@ _FILTRA_INTERNOS = re.compile(
 # Promete consultar al equipo: solo es cierto si llamó a pasar_a_humano, y en ese
 # caso la respuesta no llega a esta revisión. Si llega acá, es una promesa vacía.
 _PROMETE_CONSULTAR = re.compile(
+    # también el pasado: "ya le dejé tu consulta al equipo", "le pasé tu solicitud", "avisé al equipo"
+    r"(le |lo |la )?(dej[eé]|pas[eé]|envi[eé]|mand[eé]|notifiqu[eé]|anot[eé]|registr[eé]|trasladé|comuniqu[eé])\w*\s+"
+    r"(tu |la |su |esta |esa )?(consulta|solicitud|pedido|requerimiento|caso|petici[oó]n|inquietud)[^.]{0,50}(equipo|administraci)|"
+    r"(ya )?(le )?(avis[eé]|escrib[ií]|inform[eé]|notifiqu[eé]) al equipo|"
     r"lo consult\w* con|voy a consultar|consultar(le|lo)? (con )?(el|al|a la) equipo|"
     r"preguntar(le)? (al|a la|con el) equipo|lo (hablo|reviso) con (el|la) (equipo|administraci)",
     re.IGNORECASE,

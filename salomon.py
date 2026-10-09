@@ -354,7 +354,11 @@ class Salomon(base.Agente):
             if any(r["herramienta"] == "pasar_a_humano" for r in self._resultados):
                 return self._guardar(texto_usuario, texto or MENSAJE_DERIVACION)
 
-            equipo_avisado = any(r["herramienta"] == "solicitar_al_equipo" for r in self._resultados)
+            # Puede decir que avisó al equipo si lo hizo en este turno o si ya hay una solicitud abierta suya.
+            equipo_avisado = (
+                any(r["herramienta"] == "solicitar_al_equipo" for r in self._resultados)
+                or db.tiene_solicitud_abierta(self.contacto_id)
+            )
             veredicto = vigilante.revisar_reglas(texto, self._precios, self._registro_hecho, equipo_avisado)
             if veredicto.ok:
                 veredicto = vigilante.revisar_con_modelo(

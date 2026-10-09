@@ -898,6 +898,13 @@ def listar_solicitudes(usuario: dict | None = None):
         return [dict(f) for f in filas]
 
 
+def tiene_solicitud_abierta(contacto_id: int) -> bool:
+    with conectar() as con:
+        return con.execute(
+            "SELECT 1 FROM solicitudes_equipo WHERE contacto_id = ? AND estado = 'abierta' LIMIT 1", (contacto_id,)
+        ).fetchone() is not None
+
+
 def resolver_solicitud(solicitud_id: int, usuario_id: int) -> bool:
     with conectar() as con:
         cur = con.execute(
