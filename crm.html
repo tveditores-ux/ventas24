@@ -237,7 +237,15 @@
   .nota-erp code, .dlg-sub code{ font-family:var(--font-mono); font-size:11.5px; background:var(--surface-3); padding:1px 6px; border-radius:5px; }
   .dlg-grid textarea{ font:500 13px var(--font-mono); text-transform:none; letter-spacing:0; padding:10px 12px; border:1px solid var(--line-strong); border-radius:10px; background:var(--bg); color:var(--ink); resize:vertical; }
 
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow-sm); }
+  .dos-col{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+  .sel{ font:600 13px var(--font-body); padding:8px 12px; border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); color:var(--ink); margin-left:6px; }
+  .analista-fila{ display:flex; gap:10px; }
+  .analista-fila input{ flex:1; min-width:0; font:500 14px var(--font-body); padding:11px 14px; border:1px solid var(--line-strong); border-radius:10px; background:var(--bg); color:var(--ink); }
+  .an-resp{ margin-top:14px; padding:14px 16px; border-radius:12px; background:var(--primary-soft); color:var(--ink); font-size:14px; line-height:1.6; white-space:pre-wrap; }
+
   /* ---------- adaptable ---------- */
+  @media (max-width:900px){ .dos-col{ grid-template-columns:1fr; } }
   @media (max-width:900px){
     .app{ grid-template-columns:1fr; }
     .side{ position:sticky; z-index:30; height:auto; flex-direction:row; align-items:center; gap:10px; padding:10px 12px; overflow-x:auto; }
@@ -285,6 +293,7 @@
     <button data-tab="pedidos" type="button"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>Pedidos</button>
     <button data-tab="comprobantes" type="button"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>Pagos por revisar<span class="badge" id="badgeComp" hidden></span></button>
     <div class="nav-sec erp-solo" hidden>ERP</div>
+    <button class="erp-solo" data-tab="reportes" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Reportes</button>
     <button class="erp-solo" data-tab="inventario" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 9l9-5 9 5v9l-9 5-9-5z"/><path d="M3 9l9 5 9-5"/><path d="M12 14v9"/></svg>Inventario</button>
     <button class="erp-solo" data-tab="proveedores" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 6h11v10H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg>Proveedores</button>
     <button class="erp-solo" data-tab="compras" type="button" hidden><svg viewBox="0 0 24 24"><path d="M5 4h14v17H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>Compras</button>
@@ -343,6 +352,42 @@
   </div>
 </div>
 
+<div id="reportesWrap" hidden>
+  <div class="toolbar">
+    <label class="chk">Periodo
+      <select id="repDias" class="sel"><option value="7">Últimos 7 días</option><option value="30" selected>Últimos 30 días</option><option value="90">Últimos 90 días</option></select>
+    </label>
+  </div>
+  <div class="pend-resumen" id="repResumen"></div>
+  <h3 class="pend-h">Cobrado por día</h3>
+  <div class="panel" id="repDia"></div>
+  <div class="dos-col">
+    <div>
+      <h3 class="pend-h">Lo que más se vende</h3>
+      <div class="table-wrap"><table style="min-width:0"><thead><tr><th>Producto</th><th>Unid.</th><th>Ventas</th></tr></thead><tbody id="repTop"></tbody></table></div>
+    </div>
+    <div>
+      <h3 class="pend-h">Rotación y cobertura</h3>
+      <div class="table-wrap"><table style="min-width:0"><thead><tr><th>Producto</th><th>Vendido</th><th>Stock</th><th>Cobertura</th></tr></thead><tbody id="repRot"></tbody></table></div>
+    </div>
+  </div>
+  <h3 class="pend-h">Pedidos por estado</h3>
+  <div id="repEstados"></div>
+
+  <h3 class="pend-h">Pregúntale al analista</h3>
+  <div class="panel">
+    <p class="nota-erp" style="margin:0 0 10px">Responde con los números del negocio. Solo ve datos agregados, nunca datos personales de clientes.</p>
+    <div class="analista-fila">
+      <input type="text" id="anPregunta" placeholder="¿Qué producto me deja más margen? ¿Qué se me va a agotar?" autocomplete="off">
+      <button class="btn" id="anEnviar" type="button">Preguntar</button>
+    </div>
+    <div id="anRespuesta" class="an-resp" hidden></div>
+  </div>
+
+  <h3 class="pend-h">Qué han hecho los agentes</h3>
+  <div class="table-wrap" style="max-height:340px"><table style="min-width:0"><thead><tr><th>Cuándo</th><th>Agente</th><th>Herramienta</th><th>Con qué</th></tr></thead><tbody id="audBody"></tbody></table></div>
+</div>
+
 <div id="inventarioWrap" hidden>
   <div class="pend-resumen" id="invResumen"></div>
   <div class="toolbar" style="margin-top:14px">
@@ -372,7 +417,8 @@
 </div>
 
 <div id="comprasWrap" hidden>
-  <div class="toolbar"><button class="btn" id="btnNuevaOC" type="button">Nueva orden de compra</button></div>
+  <div class="toolbar"><button class="btn" id="btnNuevaOC" type="button">Nueva orden de compra</button>
+    <button class="btn ghost" id="btnBorradores" type="button">Armar borradores con lo que está bajo el mínimo</button></div>
   <div class="comp-list" id="sugeridosList"></div>
   <h3 class="pend-h">Órdenes de compra</h3>
   <div class="comp-list" id="comprasList"></div>
@@ -466,7 +512,7 @@
     document.getElementById('subnav').hidden = false;
     if (esAdmin()){
       document.querySelectorAll('.erp-solo').forEach(el => el.hidden = false);
-      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras();
+      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista();
     }
     activarTab('pendientes');
     setInterval(refrescarInsignia, 30000);
@@ -479,7 +525,7 @@
   });
 
   // -------- pestañas --------
-  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras'];
+  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes'];
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -495,6 +541,7 @@
     inventario: ['Inventario', 'Existencias reales, con historial de cada movimiento.'],
     proveedores: ['Proveedores', 'A quién le compras.'],
     compras: ['Compras', 'Órdenes de compra: de borrador a mercancía recibida.'],
+    reportes: ['Reportes', 'Cuánto se cobra, cuánto deja y qué se mueve.'],
   };
   function activarTab(tab){
     const v = VISTAS[tab] || ['', ''];
@@ -514,6 +561,7 @@
     else if (tab === 'inventario') cargarInventario();
     else if (tab === 'proveedores') cargarProveedores();
     else if (tab === 'compras') cargarCompras();
+    else if (tab === 'reportes'){ cargarReportes(); cargarAuditoria(); }
   }
   document.querySelectorAll('#subnav button').forEach(b => {
     b.addEventListener('click', () => activarTab(b.dataset.tab));
@@ -996,6 +1044,200 @@
     });
   }
 
+
+  // -------- ERP: reportes (JS base generado por el modelo local, revisado) --------
+  async function cargarReportes() {
+      const dias = document.getElementById('repDias').value;
+      try {
+          const res = await api(`/api/erp/reportes?dias=${dias}`);
+        
+          if (res.status === 401) {
+              irALogin();
+              return;
+          }
+
+          if (!res.ok) {
+              throw new Error(`HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          const v = data.ventas;
+
+          // 1. Resumen
+          const margenPctStr = v.margen_pct !== null ? ` · ${v.margen_pct.toFixed(1)}%` : '';
+          const margenVal = v.margen_pct !== null ? `$${v.margen.toFixed(2)}` : '—';
+          const margenLabel = v.margen_pct !== null ? 'margen bruto' : 'margen bruto (faltan costos)';
+
+          const resumenHTML = `
+              <div class="pend-card"><b>$${esc(v.cobrado.toFixed(2))}</b><span>cobrado en los últimos ${esc(dias)} días</span></div>
+              <div class="pend-card"><b>$${esc(v.por_cobrar.toFixed(2))}</b><span>por cobrar: pedidos con existencia confirmada sin pago validado</span></div>
+              <div class="pend-card"><b>$${esc(v.existencia_pendiente.toFixed(2))}</b><span>esperando confirmar existencia</span></div>
+              <div class="pend-card"><b>${esc(margenVal)}${esc(margenPctStr)}</b><span>${esc(margenLabel)}</span></div>
+              <div class="pend-card"><b>${esc(v.pedidos_cobrados)}</b><span>pedidos cobrados de ${esc(v.pedidos)}</span></div>
+              <div class="pend-card"><b>${esc(Math.round(v.cobertura_costo_pct))}%</b><span>de las ventas tienen costo cargado</span></div>
+          `;
+          document.getElementById('repResumen').innerHTML = resumenHTML;
+
+          // 2. Gráfico de barras
+          const porDia = data.por_dia || [];
+          const repDiaEl = document.getElementById('repDia');
+        
+          if (porDia.length === 0 || porDia.every(d => d.cobrado === 0)) {
+              repDiaEl.innerHTML = '<div class="empty">Todavía no hay pagos confirmados en este periodo.</div>';
+          } else {
+              const maxVal = Math.max(...porDia.map(d => d.cobrado));
+              let barsHTML = '<div style="display:flex;align-items:flex-end;gap:3px;height:120px">';
+            
+              porDia.forEach(d => {
+                  let heightPct = 0;
+                  if (d.cobrado > 0) {
+                      heightPct = Math.max((d.cobrado / maxVal) * 100, 2);
+                  }
+                
+                  barsHTML += `<div title="${esc(d.fecha)}: $${esc(d.cobrado.toFixed(2))}" style="flex:1;min-width:2px;min-height:1px;background:var(--primary);border-radius:3px 3px 0 0;height:${heightPct}%"></div>`;
+              });
+              barsHTML += '</div>';
+            
+              const firstDate = esc(porDia[0].fecha);
+              const lastDate = esc(porDia[porDia.length - 1].fecha);
+            
+              repDiaEl.innerHTML = barsHTML + `<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-faint);margin-top:6px"><span>${firstDate}</span><span>${lastDate}</span></div>`;
+          }
+
+          // 3. Top Productos
+          const repTopEl = document.getElementById('repTop');
+          const topProd = data.top_productos || [];
+          if (topProd.length === 0) {
+              repTopEl.innerHTML = `<tr><td colspan="3" class="empty">Sin ventas en el periodo.</td></tr>`;
+          } else {
+              let rows = '';
+              topProd.forEach(p => {
+                  const nombre = esc(String(p.producto).substring(0, 70));
+                  rows += `<tr>
+                      <td>${nombre}</td>
+                      <td class="num">${esc(p.unidades)}</td>
+                      <td class="num">$${esc(p.ventas.toFixed(2))}</td>
+                  </tr>`;
+              });
+              repTopEl.innerHTML = rows;
+          }
+
+          // 4. Rotación
+          const repRotEl = document.getElementById('repRot');
+          const rot = data.rotacion || [];
+          if (rot.length === 0) {
+              repRotEl.innerHTML = `<tr><td colspan="4" class="empty">Sin movimiento en el periodo.</td></tr>`;
+          } else {
+              let rows = '';
+              rot.forEach(r => {
+                  const nombre = esc(String(r.nombre).substring(0, 60));
+                  const codigo = esc(r.codigo);
+                  const vendido = esc(r.vendido);
+                  const stock = esc(r.stock);
+                
+                  let diasCobertura = '—';
+                  let dcClass = '';
+                  if (r.dias_cobertura !== null) {
+                      const dc = Math.round(r.dias_cobertura);
+                      diasCobertura = `${esc(dc)} d`;
+                      if (dc < 7) {
+                          dcClass = 'stock-cero';
+                      }
+                  }
+                
+                  rows += `<tr>
+                      <td>${codigo} ${nombre}</td>
+                      <td class="num">${vendido}</td>
+                      <td class="num">${stock}</td>
+                      <td class="num ${dcClass}">${diasCobertura}</td>
+                  </tr>`;
+              });
+              repRotEl.innerHTML = rows;
+          }
+
+          // 5. Estados
+          const repEstadosEl = document.getElementById('repEstados');
+          const estados = data.estados || [];
+          let pillsHTML = '';
+          const labels = {
+              'por_confirmar': 'Existencia por confirmar',
+              'por_pagar': 'Por pagar',
+              'comprobante_recibido': 'En validación',
+              'pago_confirmado': 'Pago confirmado'
+          };
+        
+          estados.forEach(e => {
+              const label = labels[e.estado] || esc(e.estado);
+              pillsHTML += `<span class="pago-pill ${esc(e.estado)}" style="margin:0 6px 6px 0">${label}: ${esc(e.pedidos)}</span>`;
+          });
+          repEstadosEl.innerHTML = pillsHTML;
+
+      } catch (err) {
+          document.getElementById('repResumen').innerHTML = `<div class="error">No pude cargar los reportes (${esc(err.message)}).</div>`;
+      }
+  }
+
+  function iniciarReportes() {
+      const select = document.getElementById('repDias');
+      select.addEventListener('change', () => {
+          cargarReportes();
+      });
+  }
+
+
+  // -------- ERP: analista, auditoría y compras automáticas --------
+  function iniciarAnalista(){
+    const entrada = document.getElementById('anPregunta');
+    const boton = document.getElementById('anEnviar');
+    const caja = document.getElementById('anRespuesta');
+    async function preguntar(){
+      const pregunta = entrada.value.trim();
+      if (pregunta.length < 3) return;
+      boton.disabled = true; caja.hidden = false; caja.textContent = 'Pensando…';
+      try {
+        const r = await api('/api/erp/analista', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ pregunta }) });
+        if (r.status === 401){ irALogin(); return; }
+        const d = await r.json().catch(() => ({}));
+        caja.textContent = r.ok ? d.respuesta : (d.error || 'No pude responder ahora.');
+        cargarAuditoria();
+      } catch(e){ caja.textContent = 'No pude conectar con el analista.'; }
+      finally { boton.disabled = false; }
+    }
+    boton.addEventListener('click', preguntar);
+    entrada.addEventListener('keydown', e => { if (e.key === 'Enter') preguntar(); });
+    document.getElementById('btnBorradores').addEventListener('click', async (ev) => {
+      ev.currentTarget.disabled = true;
+      try {
+        const r = await api('/api/erp/compras/borradores', { method:'POST' });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok){ alert(d.error || 'No se pudieron armar los borradores'); return; }
+        let msg = d.ordenes.length ? `Borradores creados: ${d.ordenes.length}. Revísalos y apruébalos.` : 'No hay nada nuevo que pedir.';
+        if (d.ya_en_orden) msg += `\nProductos que ya están en una orden abierta: ${d.ya_en_orden}.`;
+        if (d.sin_proveedor.length) msg += `\nSin proveedor habitual (se asigna al recibir una primera compra): ${d.sin_proveedor.slice(0, 8).join(', ')}.`;
+        alert(msg);
+        cargarCompras();
+      } finally { ev.currentTarget.disabled = false; }
+    });
+  }
+
+  async function cargarAuditoria(){
+    const body = document.getElementById('audBody');
+    try {
+      const r = await api('/api/erp/auditoria?limite=40');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const filas = await r.json();
+      body.innerHTML = filas.length ? filas.map(a => `
+        <tr>
+          <td class="num">${esc((a.fecha || '').slice(5, 16))}</td>
+          <td>${esc(a.agente)}</td>
+          <td>${esc(a.herramienta)}</td>
+          <td>${esc((a.entrada || '').slice(0, 90))}</td>
+        </tr>`).join('') : '<tr><td colspan="4" class="empty">Todavía no hay actividad de agentes.</td></tr>';
+    } catch(e){
+      body.innerHTML = `<tr><td colspan="4" class="error">No pude cargar la actividad (${esc(e.message)}).</td></tr>`;
+    }
+  }
+
   // -------- por atender --------
   async function refrescarInsignia(){
     try {
@@ -1021,7 +1263,8 @@
       <button type="button" class="pend-card" data-ir="pedidos"><b>${c.existencia_por_confirmar}</b><span>pedidos esperando confirmar existencia</span></button>
       <button type="button" class="pend-card" data-ir="comprobantes"><b>${c.comprobantes_pendientes}</b><span>comprobantes por revisar</span></button>
       <div class="pend-card"><b>${c.solicitudes_abiertas}</b><span>solicitudes abiertas</span></div>
-      <div class="pend-card"><b>${c.conversaciones_derivadas}</b><span>conversaciones en manos de una persona</span></div>`;
+      <div class="pend-card"><b>${c.conversaciones_derivadas}</b><span>conversaciones en manos de una persona</span></div>
+      ${c.stock_bajo !== undefined ? `<button type="button" class="pend-card" data-ir="inventario"><b>${c.stock_bajo}</b><span>productos bajo su mínimo${c.compras_borrador ? ' · ' + c.compras_borrador + ' compras en borrador' : ''}</span></button>` : ''}`;
     document.getElementById('pendSolicitudes').innerHTML = d.solicitudes.length ? d.solicitudes.map(x => `
       <div class="comp"><div class="luz amarillo"></div><div style="min-width:0">
         <h4>${esc(x.asunto)}</h4>

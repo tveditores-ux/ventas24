@@ -338,6 +338,7 @@ class Salomon(base.Agente):
                 resultados = []
                 for b in bloques:
                     resultado = self._ejecutar_herramienta(b.name, b.input)
+                    db.registrar_accion("Salomón", self.contacto_id, b.name, b.input, resultado)
                     self._resultados.append({"herramienta": b.name, "resultado": resultado})
                     eventos.registrar("herramienta", self.telefono, b.name, agente_tipo=self.tipo)
                     resultados.append({

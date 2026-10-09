@@ -40,6 +40,7 @@ def inventario(q: str | None = None, solo_bajo: bool = False, limite: int = 200)
             "stock": p["stock"], "verificado": bool(p["stock_verificado"]), "minimo": p["stock_minimo"],
             "costo": p["costo"], "precio": p["precio"], "precio_mayor": p["precio_mayor"],
             "bajo": bool(p["stock_minimo"] > 0 and p["stock_verificado"] and p["stock"] <= p["stock_minimo"]),
+            "proveedor_id": p["proveedor_id"],
         })
     salida.sort(key=lambda x: (not x["bajo"], x["nombre"]))
     return salida[:limite], len(salida)
@@ -262,7 +263,7 @@ def recibir_orden(orden_id: int, usuario_id: int, recibidos: dict | None = None)
     sin él se recibe todo lo pedido. Devuelve los productos repuestos."""
     repuestos = []
     with db.conectar() as con:
-        o = con.execute("SELECT estado FROM erp_ordenes_compra WHERE id = ?", (orden_id,)).fetchone()
+        o = con.execute("SELECT estado, proveedor_id FROM erp_ordenes_compra WHERE id = ?", (orden_id,)).fetchone()
         if not o:
             raise ValueError("orden no encontrada")
         if o["estado"] != "aprobada":
@@ -278,8 +279,8 @@ def recibir_orden(orden_id: int, usuario_id: int, recibidos: dict | None = None)
             antes = p["stock"] if p["stock_verificado"] else 0
             con.execute(
                 "UPDATE catalogo SET stock = ?, stock_verificado = 1, stock_prueba = 0, "
-                "costo = COALESCE(?, costo) WHERE id = ?",
-                (antes + cant, l["costo_unitario"], l["catalogo_id"]),
+                "costo = COALESCE(?, costo), proveedor_id = ? WHERE id = ?",
+                (antes + cant, l["costo_unitario"], o["proveedor_id"], l["catalogo_id"]),
             )
             con.execute("UPDATE erp_oc_lineas SET recibido = ? WHERE id = ?", (cant, l["id"]))
             db.registrar_movimiento(con, l["catalogo_id"], "recepcion", cant, referencia=f"compra #{orden_id}",
@@ -299,3 +300,111 @@ def sugerir_reposicion():
     """Productos con inventario real en o bajo su mínimo, con la cantidad que falta para duplicar el mínimo."""
     productos, _ = inventario(solo_bajo=True, limite=500)
     return [dict(p, sugerido=max(p["minimo"] * 2 - p["stock"], 1)) for p in productos]
+
+
+# ---------------------------------------------------------------------
+# Compras automáticas (agente de compras: propone, una persona aprueba)
+# ---------------------------------------------------------------------
+
+def borradores_reposicion(usuario_id=None):
+    """Arma órdenes de compra EN BORRADOR con lo que está bajo el mínimo, una por proveedor habitual.
+    No aprueba ni compra nada. Se salta productos que ya están en una orden abierta."""
+    sugeridos = sugerir_reposicion()
+    with db.conectar() as con:
+        abiertos = {r["catalogo_id"] for r in con.execute(
+            "SELECT l.catalogo_id FROM erp_oc_lineas l JOIN erp_ordenes_compra o ON o.id = l.orden_id "
+            "WHERE o.estado IN ('borrador', 'aprobada') AND l.recibido = 0"
+        ).fetchall()}
+    por_proveedor, sin_proveedor, ya_en_orden = {}, [], 0
+    for p in sugeridos:
+        if p["id"] in abiertos:
+            ya_en_orden += 1
+        elif p["proveedor_id"]:
+            por_proveedor.setdefault(p["proveedor_id"], []).append(p)
+        else:
+            sin_proveedor.append(p["codigo"] or p["nombre"][:30])
+    ordenes = []
+    for prov_id, items in por_proveedor.items():
+        ordenes.append(crear_orden_compra(
+            prov_id, [{"catalogo_id": i["id"], "cantidad": i["sugerido"]} for i in items],
+            "Borrador automático por stock bajo", usuario_id,
+        ))
+    return {"ordenes": ordenes, "sin_proveedor": sin_proveedor, "ya_en_orden": ya_en_orden}
+
+
+# ---------------------------------------------------------------------
+# Reportes (solo datos agregados: nada de datos personales de clientes)
+# ---------------------------------------------------------------------
+
+def reportes(dias: int = 30):
+    from datetime import date, timedelta
+    dias = max(1, min(int(dias), 365))
+    desde = f"-{dias} days"
+    with db.conectar() as con:
+        cob = con.execute(
+            "SELECT COALESCE(SUM(p.total), 0) AS total, COUNT(DISTINCT COALESCE(p.orden, 'p' || p.id)) AS pedidos, "
+            "COALESCE(SUM(CASE WHEN c.costo IS NOT NULL THEN p.total - p.cantidad * c.costo ELSE 0 END), 0) AS margen, "
+            "COALESCE(SUM(CASE WHEN c.costo IS NOT NULL THEN p.total ELSE 0 END), 0) AS con_costo "
+            "FROM pedidos p LEFT JOIN catalogo c ON c.id = p.catalogo_id "
+            "WHERE p.estado_pago = 'pago_confirmado' AND p.estado != 'cancelado' AND p.pago_confirmado_en >= datetime('now', ?)",
+            (desde,),
+        ).fetchone()
+
+        def suma(estados):
+            marcas = ",".join("?" * len(estados))
+            return con.execute(
+                f"SELECT COALESCE(SUM(total), 0) AS t FROM pedidos WHERE estado != 'cancelado' AND estado_pago IN ({marcas})",
+                estados,
+            ).fetchone()["t"]
+
+        creados = con.execute(
+            "SELECT COUNT(DISTINCT COALESCE(orden, 'p' || id)) AS n FROM pedidos WHERE estado != 'cancelado' AND fecha >= datetime('now', ?)",
+            (desde,),
+        ).fetchone()["n"]
+        por_dia_db = {r["f"]: r["t"] for r in con.execute(
+            "SELECT date(pago_confirmado_en) AS f, SUM(total) AS t FROM pedidos "
+            "WHERE estado_pago = 'pago_confirmado' AND estado != 'cancelado' AND pago_confirmado_en >= datetime('now', ?) GROUP BY f",
+            (desde,),
+        ).fetchall()}
+        top = con.execute(
+            "SELECT producto, SUM(cantidad) AS unidades, SUM(total) AS ventas FROM pedidos "
+            "WHERE estado_pago = 'pago_confirmado' AND estado != 'cancelado' AND pago_confirmado_en >= datetime('now', ?) "
+            "GROUP BY producto ORDER BY ventas DESC LIMIT 10",
+            (desde,),
+        ).fetchall()
+        rot = con.execute(
+            "SELECT c.codigo, c.nombre, c.stock, c.stock_verificado, "
+            "-SUM(CASE WHEN m.tipo IN ('reserva', 'liberacion') THEN m.cantidad ELSE 0 END) AS vendido "
+            "FROM erp_movimientos m JOIN catalogo c ON c.id = m.catalogo_id "
+            "WHERE m.fecha >= datetime('now', ?) GROUP BY m.catalogo_id HAVING vendido > 0 ORDER BY vendido DESC LIMIT 10",
+            (desde,),
+        ).fetchall()
+        estados = con.execute(
+            "SELECT estado_pago AS estado, COUNT(DISTINCT COALESCE(orden, 'p' || id)) AS pedidos FROM pedidos "
+            "WHERE estado != 'cancelado' GROUP BY estado_pago ORDER BY pedidos DESC"
+        ).fetchall()
+        por_cobrar = suma(("por_pagar", "comprobante_recibido"))
+        pendiente = suma(("por_confirmar",))
+
+    hoy = date.today()
+    por_dia = []
+    for i in range(dias - 1, -1, -1):
+        f = (hoy - timedelta(days=i)).isoformat()
+        por_dia.append({"fecha": f, "cobrado": round(por_dia_db.get(f, 0) or 0, 2)})
+    total = cob["total"] or 0
+    return {
+        "dias": dias,
+        "ventas": {
+            "cobrado": round(total, 2), "por_cobrar": round(por_cobrar, 2), "existencia_pendiente": round(pendiente, 2),
+            "pedidos": creados, "pedidos_cobrados": cob["pedidos"], "margen": round(cob["margen"], 2),
+            "margen_pct": round(cob["margen"] / cob["con_costo"] * 100, 1) if cob["con_costo"] else None,
+            "cobertura_costo_pct": round(cob["con_costo"] / total * 100, 1) if total else 0.0,
+        },
+        "por_dia": por_dia,
+        "top_productos": [{"producto": r["producto"], "unidades": r["unidades"], "ventas": round(r["ventas"], 2)} for r in top],
+        "rotacion": [{
+            "codigo": r["codigo"], "nombre": r["nombre"], "vendido": r["vendido"], "stock": r["stock"],
+            "dias_cobertura": round(r["stock"] / (r["vendido"] / dias), 1) if r["stock_verificado"] and r["vendido"] else None,
+        } for r in rot],
+        "estados": [dict(r) for r in estados],
+    }

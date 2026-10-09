@@ -174,32 +174,45 @@ def aviso_despacho(pedido_id: int, nota: str | None = None):
 # ---------------------------------------------------------------------
 
 def procesar_eventos():
-    """stock.repuesto: avisa a quien estaba en la lista de espera de ese producto y lo marca atendido.
-    Devuelve un resumen. Un aviso que no sale (ventana de 24 h cerrada) no se marca atendido, para
-    que alguien lo vea en la lista de espera y escriba desde WeCall."""
+    """Reacciona a los eventos que dejó el ERP en eventos_outbox.
+    - stock.repuesto: avisa a quien esperaba ese producto y lo marca atendido. Un aviso que no sale
+      (ventana de 24 h cerrada) no se marca atendido, para que alguien escriba desde WeCall.
+    - stock.bajo: el agente de compras arma borradores de orden de compra (nunca aprueba ni compra).
+    Devuelve un resumen."""
     import json
-    resumen = {"avisados": 0, "sin_aviso": 0, "eventos": 0}
+    import erp
+    resumen = {"avisados": 0, "sin_aviso": 0, "eventos": 0, "borradores": 0}
     with db.conectar() as con:
         pendientes = con.execute(
-            "SELECT * FROM eventos_outbox WHERE estado = 'pendiente' AND tipo = 'stock.repuesto' ORDER BY id"
+            "SELECT * FROM eventos_outbox WHERE estado = 'pendiente' ORDER BY id"
         ).fetchall()
+    bajo_visto = False
     for ev in pendientes:
         datos = json.loads(ev["payload"] or "{}")
-        codigo = (datos.get("codigo") or "").strip().lower()
         estado = "procesado"
         try:
-            esperando = [e for e in db.listar_espera(solo_pendientes=True) if codigo and codigo in (e["producto"] or "").lower()]
-            for e in esperando:
-                texto = (
-                    f"{_saludo({'nombre': e.get('nombre')})}buenas noticias: ya tenemos disponible "
-                    f"{e['producto'][:90]}. ¿Te lo aparto? Dime cuántas unidades necesitas."
-                )
-                ok, motivo = notificar_cliente(e["contacto_id"], texto)
-                if ok:
-                    db.marcar_espera_atendida(e["id"])
-                    resumen["avisados"] += 1
-                else:
-                    resumen["sin_aviso"] += 1
+            if ev["tipo"] == "stock.repuesto":
+                codigo = (datos.get("codigo") or "").strip().lower()
+                esperando = [e for e in db.listar_espera(solo_pendientes=True) if codigo and codigo in (e["producto"] or "").lower()]
+                for e in esperando:
+                    texto = (
+                        f"{_saludo({'nombre': e.get('nombre')})}buenas noticias: ya tenemos disponible "
+                        f"{e['producto'][:90]}. ¿Te lo aparto? Dime cuántas unidades necesitas."
+                    )
+                    ok, motivo = notificar_cliente(e["contacto_id"], texto)
+                    if ok:
+                        db.marcar_espera_atendida(e["id"])
+                        resumen["avisados"] += 1
+                    else:
+                        resumen["sin_aviso"] += 1
+            elif ev["tipo"] == "stock.bajo":
+                if not bajo_visto:   # varios productos bajos en el mismo ciclo = un solo juego de borradores
+                    hecho = erp.borradores_reposicion(None)
+                    resumen["borradores"] += len(hecho["ordenes"])
+                    db.registrar_accion("Compras", None, "borradores_reposicion", datos, hecho)
+                    bajo_visto = True
+            else:
+                estado = "fallido"
         except Exception as exc:
             eventos.registrar("evento_fallido", "-", f"{ev['tipo']}: {exc}", ok=False)
             estado = "fallido"

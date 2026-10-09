@@ -40,6 +40,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
 
 import db
+import analista
 import ciclo
 import erp
 import eventos
@@ -275,6 +276,41 @@ def erp_movimientos():
     return jsonify(erp.movimientos(request.args.get("producto", type=int)))
 
 
+@app.route("/api/erp/reportes", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_reportes():
+    return jsonify(erp.reportes(request.args.get("dias", default=30, type=int)))
+
+
+@app.route("/api/erp/compras/borradores", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_borradores():
+    """El agente de compras arma borradores con lo que está bajo el mínimo. Aprobarlos sigue siendo humano."""
+    hecho = erp.borradores_reposicion(request.usuario["id"])
+    db.registrar_accion("Compras", None, "borradores_reposicion", {"usuario": request.usuario["nombre"]}, hecho)
+    return jsonify(hecho)
+
+
+@app.route("/api/erp/auditoria", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_auditoria():
+    return jsonify(db.listar_acciones(request.args.get("limite", default=100, type=int)))
+
+
+@app.route("/api/erp/analista", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_analista():
+    pregunta = ((request.get_json(silent=True) or {}).get("pregunta") or "").strip()
+    if len(pregunta) < 3:
+        return jsonify({"error": "escribe una pregunta"}), 400
+    try:
+        respuesta = analista.preguntar(pregunta[:800], request.usuario["nombre"])
+    except Exception as e:
+        eventos.registrar("error", "-", f"analista: {e}", ok=False)
+        return jsonify({"error": "El analista no pudo responder ahora. Intenta de nuevo en un momento."}), 502
+    return jsonify({"respuesta": respuesta})
+
+
 @app.route("/api/erp/proveedores", methods=["GET", "POST"])
 @requiere_sesion(roles=ROLES_ADMIN)
 def erp_proveedores():
@@ -437,8 +473,13 @@ def crm_existencia(pedido_id):
 @requiere_sesion()
 def crm_pendientes():
     usuario = request.usuario
+    conteos = db.contar_pendientes(usuario)
+    if usuario["rol"] in ROLES_ADMIN:
+        r = erp.resumen_inventario()
+        conteos["stock_bajo"] = r["bajos"]
+        conteos["compras_borrador"] = r["compras_borrador"]
     return jsonify({
-        "conteos": db.contar_pendientes(usuario),
+        "conteos": conteos,
         "solicitudes": db.listar_solicitudes(usuario),
         "derivadas": db.listar_derivadas(usuario),
     })
@@ -957,6 +998,7 @@ def _loop_polling_wecall():
                         if mid is not None:
                             with wecall_lock:
                                 db.actualizar_contacto(c["id"], wecall_ultimo_id=mid)
+            ciclo.procesar_eventos()   # reintenta avisos y compras automáticas pendientes
         except Exception as e:
             print(f"  (wecall-poll) error en el ciclo: {e}")
 

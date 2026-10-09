@@ -69,6 +69,17 @@ CREATE TABLE IF NOT EXISTS pedidos (
     fecha TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Rastro de lo que hace cada agente: qué herramienta usó, con qué datos y qué obtuvo.
+CREATE TABLE IF NOT EXISTS agente_acciones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha TEXT DEFAULT CURRENT_TIMESTAMP,
+    agente TEXT NOT NULL,
+    contacto_id INTEGER,
+    herramienta TEXT NOT NULL,
+    entrada TEXT,
+    resultado TEXT
+);
+
 CREATE TABLE IF NOT EXISTS erp_proveedores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre TEXT NOT NULL UNIQUE,
@@ -229,6 +240,7 @@ def inicializar():
             ("stock_verificado", "INTEGER NOT NULL DEFAULT 1"),  # 0 = existencia por confirmar
             ("stock_prueba", "INTEGER NOT NULL DEFAULT 0"),      # 1 = cantidad ficticia de prueba
             ("costo", "REAL"),                                    # último costo de compra
+            ("proveedor_id", "INTEGER"),                          # proveedor habitual (el último que surtió)
             ("stock_minimo", "INTEGER NOT NULL DEFAULT 0"),       # por debajo de esto hay que reponer
         ):
             if col not in cols_catalogo:
@@ -506,6 +518,36 @@ def registrar_movimiento(con, catalogo_id: int, tipo: str, cantidad: int, refere
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (catalogo_id, tipo, cantidad, fila["stock"] if fila else 0, costo, referencia, nota, usuario_id),
     )
+    if fila and cantidad < 0:
+        p = con.execute("SELECT codigo, nombre, stock_minimo, stock_verificado FROM catalogo WHERE id = ?", (catalogo_id,)).fetchone()
+        antes = fila["stock"] - cantidad   # cantidad es negativa
+        if p["stock_verificado"] and p["stock_minimo"] > 0 and antes > p["stock_minimo"] >= fila["stock"]:
+            emitir_evento(con, "stock.bajo", {"catalogo_id": catalogo_id, "codigo": p["codigo"], "nombre": p["nombre"],
+                                              "stock": fila["stock"], "minimo": p["stock_minimo"]})
+
+
+def registrar_accion(agente: str, contacto_id, herramienta: str, entrada, resultado):
+    """Deja constancia de una acción de un agente. Nunca debe romper la conversación."""
+    import json
+    try:
+        def txt(x):
+            return (x if isinstance(x, str) else json.dumps(x, ensure_ascii=False, default=str))[:600]
+        with conectar() as con:
+            con.execute(
+                "INSERT INTO agente_acciones (agente, contacto_id, herramienta, entrada, resultado) VALUES (?, ?, ?, ?, ?)",
+                (agente, contacto_id, herramienta, txt(entrada), txt(resultado)),
+            )
+    except Exception as e:
+        print(f"  (auditoría) no pude registrar la acción: {e}")
+
+
+def listar_acciones(limite: int = 100):
+    with conectar() as con:
+        filas = con.execute(
+            "SELECT a.*, c.nombre, c.telefono FROM agente_acciones a LEFT JOIN contactos c ON c.id = a.contacto_id "
+            "ORDER BY a.id DESC LIMIT ?", (limite,)
+        ).fetchall()
+    return [dict(f) for f in filas]
 
 
 def emitir_evento(con, tipo: str, payload: dict):

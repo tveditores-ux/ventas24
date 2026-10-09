@@ -314,6 +314,7 @@ class Agente:
             for bloque in bloques_herramienta:
                 params = bloque.input
                 resultado = self._ejecutar_herramienta(bloque.name, params)
+                db.registrar_accion("Vendedor", self.contacto_id, bloque.name, params, resultado)
                 eventos.registrar("herramienta", self.telefono, bloque.name, agente_tipo=self.tipo)
                 resultados_herramienta.append({
                     "type": "tool_result",
