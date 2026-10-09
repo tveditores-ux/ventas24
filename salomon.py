@@ -49,10 +49,11 @@ HERRAMIENTA_PEDIDO = {
                     "properties": {
                         "nombre": {"type": "string", "description": "Nombre del producto tal como lo devolvió el catálogo"},
                         "marca": {"type": "string", "description": "Marca tal como la devolvió el catálogo"},
-                        "modelo": {"type": "string", "description": "Modelo tal como lo devolvió el catálogo"},
+                        "modelo": {"type": "string", "description": "Modelo tal como lo devolvió el catálogo (vacío si no trae)"},
+                        "codigo": {"type": "string", "description": "Código del producto, si el catálogo lo devolvió (preferido para identificarlo)"},
                         "cantidad": {"type": "integer", "description": "Unidades, mínimo 1"},
                     },
-                    "required": ["nombre", "marca", "modelo", "cantidad"],
+                    "required": ["nombre", "marca", "cantidad"],
                 },
             },
         },
@@ -154,22 +155,33 @@ class Salomon(base.Agente):
             if not isinstance(cantidad, int) or isinstance(cantidad, bool) or cantidad < 1:
                 return {"error": f"Línea {i}: la cantidad debe ser un entero de al menos 1."}
             with db.conectar() as con:
-                fila = con.execute(
-                    "SELECT nombre, marca, modelo, precio, stock FROM catalogo "
-                    "WHERE lower(nombre) = lower(?) AND lower(marca) = lower(?) AND lower(modelo) = lower(?)",
-                    (linea.get("nombre", ""), linea.get("marca", ""), linea.get("modelo", "")),
-                ).fetchone()
+                fila = None
+                if linea.get("codigo"):
+                    fila = con.execute(
+                        "SELECT * FROM catalogo WHERE lower(codigo) = lower(?) AND lower(marca) = lower(?)",
+                        (linea["codigo"], linea.get("marca", "")),
+                    ).fetchone()
+                if not fila:
+                    fila = con.execute(
+                        "SELECT * FROM catalogo WHERE lower(nombre) = lower(?) AND lower(marca) = lower(?) "
+                        "AND lower(modelo) = lower(?)",
+                        (linea.get("nombre", ""), linea.get("marca", ""), linea.get("modelo") or ""),
+                    ).fetchone()
             if not fila:
                 return {"error": f"Línea {i}: ese producto no existe en el catálogo. Búscalo con buscar_catalogo y usa sus datos exactos."}
             if fila["stock"] < cantidad:
                 return {"error": f"Línea {i} ({fila['nombre']}): solo hay {fila['stock']} unidad(es) en stock."}
-            if fila["precio"] <= 0:
+            precio = db.precio_para(fila, self.tipo)
+            if not precio or precio <= 0:
                 return {"error": f"Línea {i} ({fila['nombre']}): aún no tiene precio cargado. Pasa a una persona del equipo."}
-            validadas.append((fila, cantidad))
+            validadas.append((fila, cantidad, precio))
 
         registradas, total_general = [], 0.0
-        for fila, cantidad in validadas:
-            producto = f'{fila["nombre"]} - {fila["marca"]} {fila["modelo"]}'
+        for fila, cantidad, precio in validadas:
+            if fila["codigo"]:
+                producto = f'[{fila["codigo"]}] {fila["nombre"][:80]} ({fila["marca"]})'
+            else:
+                producto = f'{fila["nombre"]} - {fila["marca"]} {fila["modelo"]}'.strip()
             with db.conectar() as con:
                 repetido = con.execute(
                     "SELECT total FROM pedidos WHERE contacto_id = ? AND producto = ? AND cantidad = ? "
@@ -179,12 +191,13 @@ class Salomon(base.Agente):
             if repetido:
                 total = repetido["total"]
             else:
-                total = db.registrar_pedido(self.contacto_id, producto, cantidad, fila["precio"])
+                total = db.registrar_pedido(self.contacto_id, producto, cantidad, precio)
             total_general += total
-            self._precios.update({fila["precio"], total})
+            self._precios.update({precio, total})
             registradas.append({
                 "producto": producto, "cantidad": cantidad,
-                "precio_unitario_usd": fila["precio"], "total_usd": total,
+                "precio_unitario_usd": precio, "total_usd": total,
+                "existencia": "por confirmar" if not fila["stock_verificado"] else "confirmada",
             })
             print(f"  🧾 [Salomón] pedido pendiente: {producto} x{cantidad} total=${total} ({self.telefono})")
 

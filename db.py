@@ -137,6 +137,14 @@ def inicializar():
         ):
             if col not in cols_pedidos:
                 con.execute(f"ALTER TABLE pedidos ADD COLUMN {col} {ddl}")
+        cols_catalogo = {f["name"] for f in con.execute("PRAGMA table_info(catalogo)")}
+        for col, ddl in (
+            ("codigo", "TEXT"),
+            ("precio_mayor", "REAL"),                       # NULL = usa `precio` para todos
+            ("stock_verificado", "INTEGER NOT NULL DEFAULT 1"),  # 0 = existencia por confirmar
+        ):
+            if col not in cols_catalogo:
+                con.execute(f"ALTER TABLE catalogo ADD COLUMN {col} {ddl}")
         # Los contactos migrados desde Twilio guardaban el prefijo "whatsapp:".
         # Se normaliza acá para que todos los canales compartan el mismo formato E.164.
         con.execute(
@@ -518,12 +526,44 @@ def listar_catalogo_completo():
         return [dict(f) for f in filas]
 
 
-def buscar_catalogo(marca=None, modelo=None, anio=None, nombre=None):
+_ALIAS_VEHICULO = {
+    "toyota": "toy", "chevrolet": "chev", "hyundai": "hyu", "nissan": "nis", "mitsubishi": "mit",
+    "honda": "hon", "mazda": "maz", "renault": "ren", "dodge": "dod", "volkswagen": "vw",
+    "daewoo": "dae", "isuzu": "isu", "suzuki": "suz", "peugeot": "peu",
+}
+_PALABRAS_VACIAS = {"de", "del", "la", "el", "los", "las", "para", "y", "un", "una", "con", "en"}
+
+
+def _normalizar(texto: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFD", str(texto or "").lower())
+    return "".join(c for c in t if unicodedata.category(c) != "Mn")
+
+
+def precio_para(fila, tipo: str | None):
+    """Mayoristas pagan `precio_mayor` si el producto lo tiene; el resto, `precio`."""
+    mayor = fila["precio_mayor"] if "precio_mayor" in fila.keys() else None
+    return mayor if (tipo == "mayorista" and mayor) else fila["precio"]
+
+
+def buscar_catalogo(marca=None, modelo=None, anio=None, nombre=None, texto=None, tipo=None, limite=15):
     with conectar() as con:
         productos = con.execute("SELECT * FROM catalogo").fetchall()
 
-    resultados = []
+    # Palabras clave para los productos de la lista (descripción libre).
+    crudas = " ".join(str(x) for x in (texto, marca, modelo, nombre) if x)
+    tokens = [t for t in _normalizar(crudas).replace("/", " ").replace(",", " ").split() if t not in _PALABRAS_VACIAS]
+
+    resultados, de_lista = [], []
     for p in productos:
+        if p["codigo"]:
+            if not tokens:
+                continue
+            pajar = _normalizar(f'{p["nombre"]} {p["codigo"]} {p["marca"]}')
+            if all(_coincide(t, pajar) for t in tokens):
+                de_lista.append(p)
+            continue
+
         marca_ok = not marca or p["marca"].lower() == marca.lower() or p["marca"] == "Universal"
         modelo_ok = not modelo or p["modelo"].lower() == modelo.lower() or p["modelo"] == "Universal"
         anio_ok = (
@@ -534,15 +574,44 @@ def buscar_catalogo(marca=None, modelo=None, anio=None, nombre=None):
         nombre_ok = not nombre or nombre.lower() in p["nombre"].lower()
 
         if marca_ok and modelo_ok and anio_ok and nombre_ok:
-            resultados.append({
-                "nombre": p["nombre"],
-                "marca": p["marca"],
-                "modelo": p["modelo"],
-                "precio_usd": p["precio"],
-                "stock": p["stock"],
-            })
+            resultados.append(_ficha(p, tipo))
 
+    # Lo más corto primero: suele ser la descripción más genérica del producto.
+    primero = tokens[0] if tokens else ""
+    de_lista.sort(key=lambda p: (not _normalizar(p["nombre"]).startswith(primero), len(p["nombre"])))
+    resultados.extend(_ficha(p, tipo) for p in de_lista[:limite])
     return resultados
+
+
+def _coincide(token, pajar):
+    alias = _ALIAS_VEHICULO.get(token)
+    return token in pajar or (alias is not None and alias in pajar.split())
+
+
+def _ficha(p, tipo):
+    return {
+        "codigo": p["codigo"],
+        "nombre": p["nombre"],
+        "marca": p["marca"],
+        "modelo": p["modelo"],
+        "precio_usd": precio_para(p, tipo),
+        "stock": p["stock"] if p["stock_verificado"] else "por confirmar",
+    }
+
+
+def reemplazar_catalogo(filas: list, stock: int = 999):
+    """Respalda el catálogo actual en `catalogo_respaldo` y lo reemplaza por `filas`
+    (dicts con codigo, nombre, marca, precio, precio_mayor). Todo en una transacción."""
+    with conectar() as con:
+        con.execute("DROP TABLE IF EXISTS catalogo_respaldo")
+        con.execute("CREATE TABLE catalogo_respaldo AS SELECT * FROM catalogo")
+        con.execute("DELETE FROM catalogo")
+        con.executemany(
+            "INSERT INTO catalogo (codigo, nombre, marca, modelo, precio, precio_mayor, stock, stock_verificado) "
+            "VALUES (?, ?, ?, '', ?, ?, ?, 0)",
+            [(f["codigo"], f["nombre"], f["marca"], f["precio"], f["precio_mayor"], stock) for f in filas],
+        )
+    return len(filas)
 
 
 def insertar_producto(nombre, marca, modelo, anio_desde, anio_hasta, precio, stock):

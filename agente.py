@@ -90,7 +90,7 @@ hablar de precio o disponibilidad.
 modelo y año del vehículo si no los tenés, pero llamá a la herramienta \
 con lo que ya tengas si alcanza para buscar.
 - Si no hay resultados o el stock es 0, decilo con transparencia y \
-ofrecé la lista de espera, o una alternativa si existe.
+ofrecé la lista de espera, o una alternativa si existe. Si el stock dice "por confirmar", cotizá el precio normal y aclará que la existencia se confirma con el equipo antes del pago; nunca inventes una cantidad.
 - Para anotar en la lista de espera SOLO pedí el nombre del cliente (el \
 teléfono ya lo tenés, no lo pidas) y usá anotar_lista_espera en cuanto \
 tengas producto + nombre. No digas "te anoto" sin llamar a la herramienta.
@@ -164,6 +164,15 @@ HERRAMIENTA_CATALOGO = {
             "modelo": {"type": "string", "description": "Modelo del vehículo, ej. Corolla"},
             "anio": {"type": "integer", "description": "Año del vehículo"},
             "nombre": {"type": "string", "description": "Tipo de producto, ej. filtro de aceite"},
+            "texto": {
+                "type": "string",
+                "description": (
+                    "Palabras clave o código del producto, ej. 'filtro aceite corolla' o 'U5132'. "
+                    "La lista de partes escribe los vehículos abreviados: TOY=Toyota, CHEV=Chevrolet, "
+                    "HYU=Hyundai, NIS=Nissan, MIT=Mitsubishi, HON=Honda, MAZ=Mazda, REN=Renault, "
+                    "DOD=Dodge, VW=Volkswagen, MTR=motor. Usa pocas palabras y busca de nuevo con otras si no hay resultados."
+                ),
+            },
         },
     },
 }
@@ -307,6 +316,8 @@ class Agente:
                 modelo=params.get("modelo"),
                 anio=params.get("anio"),
                 nombre=params.get("nombre"),
+                texto=params.get("texto"),
+                tipo=self.tipo,
             )
             print(f"  🔎 buscar_catalogo({params}) → {len(resultado)} resultado(s)")
             return resultado if resultado else {"mensaje": "sin resultados"}

@@ -399,6 +399,39 @@ def debug_cargar_catalogo():
     return jsonify({"productos_antes": antes, "productos_despues": despues})
 
 
+@app.route("/debug/cargar-lista", methods=["POST"])
+def debug_cargar_lista():
+    """ADMIN — reemplaza el catálogo por una lista de precios enviada como CSV en el
+    cuerpo (columnas: codigo,descripcion,marca,precio_full,precio_mayor). Respalda el
+    catálogo anterior en la tabla catalogo_respaldo. Exige ?reemplazar=1 y el token.
+    La existencia queda 'por confirmar'; ?stock=N fija la cantidad interna (def. 999)."""
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    if request.args.get("reemplazar") != "1":
+        return jsonify({"error": "esto reemplaza todo el catálogo: agrega ?reemplazar=1"}), 400
+    import csv
+    import io
+    texto = request.get_data().decode("utf-8-sig", errors="replace")
+    filas, descartadas = [], 0
+    for r in csv.DictReader(io.StringIO(texto)):
+        try:
+            precio = float(r["precio_full"])
+            mayor = float(r["precio_mayor"]) if r.get("precio_mayor") else None
+        except (KeyError, ValueError):
+            descartadas += 1
+            continue
+        nombre, codigo = (r.get("descripcion") or "").strip(), (r.get("codigo") or "").strip()
+        if not nombre or not codigo or precio <= 0:
+            descartadas += 1
+            continue
+        filas.append({"codigo": codigo, "nombre": nombre, "marca": (r.get("marca") or "").strip(),
+                      "precio": precio, "precio_mayor": mayor})
+    if len(filas) < 100:
+        return jsonify({"error": f"solo {len(filas)} filas válidas; no reemplazo el catálogo", "descartadas": descartadas}), 400
+    cargadas = db.reemplazar_catalogo(filas, stock=request.args.get("stock", default=999, type=int))
+    return jsonify({"cargadas": cargadas, "descartadas": descartadas, "respaldo": "tabla catalogo_respaldo"})
+
+
 @app.route("/debug/version", methods=["GET"])
 def debug_version():
     return jsonify({"commit": os.environ.get("RAILWAY_GIT_COMMIT_SHA", "desconocido")})
