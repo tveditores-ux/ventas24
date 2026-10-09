@@ -82,6 +82,8 @@ def evaluar(datos: dict, pedido: dict | None, excluir_comprobante_id=None):
 
     if not pedido:
         alerta("amarillo", "No está atado a ningún pedido.")
+    elif pedido.get("estado_pago") == "por_confirmar":
+        alerta("amarillo", "El pedido todavía no tiene la existencia confirmada: aún no se le enviaron los datos de pago.")
 
     # --- referencia -------------------------------------------------
     ref = datos.get("referencia_norm")
@@ -106,7 +108,7 @@ def evaluar(datos: dict, pedido: dict | None, excluir_comprobante_id=None):
     if monto is None or monto <= 0:
         alerta("amarillo", "Falta el monto o no es válido.")
     elif pedido:
-        total = float(pedido["total"] or 0)
+        total = float(pedido.get("total_orden") or pedido["total"] or 0)
         if moneda == "VES":
             tasa = _tasa()
             if tasa:
@@ -164,6 +166,8 @@ def registrar_adjunto_whatsapp(contacto_id: int):
     alertas = ["Adjunto recibido por WhatsApp: abre la conversación, mira la imagen y completa los datos."]
     if not pedido:
         alertas.append("El cliente no tiene un pedido por pagar: puede no ser un comprobante.")
+    elif pedido["estado_pago"] == "por_confirmar":
+        alertas.append("El pedido todavía no tiene la existencia confirmada: no se le han enviado los datos de pago.")
     comp_id = db.crear_comprobante(
         contacto_id, pedido["id"] if pedido else None, "whatsapp", {}, "amarillo", alertas
     )

@@ -40,6 +40,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
 
 import db
+import ciclo
 import eventos
 import seguridad
 import wecall
@@ -278,7 +279,8 @@ def crm_revisar_comprobante(comprobante_id):
         return jsonify({"error": motivo}), 409
     eventos.registrar("pago_revisado", comp["telefono"],
                       f"comprobante #{comprobante_id} {decision} por {request.usuario['nombre']}")
-    return jsonify({"ok": True})
+    aviso = ciclo.aviso_pago_confirmado(comprobante_id) if decision == "confirmar" else ciclo.aviso_pago_rechazado(comprobante_id)
+    return jsonify({"ok": True, **aviso})
 
 
 @app.route("/api/crm/pedidos/<int:pedido_id>/despachar", methods=["POST"])
@@ -289,11 +291,55 @@ def crm_despachar_pedido(pedido_id):
         return jsonify({"error": "pedido no encontrado"}), 404
     if not _puede_ver_pedido(request.usuario, pedido):
         return jsonify({"error": "este pedido es de otro vendedor"}), 403
-    ok, motivo = db.despachar_pedido(pedido_id, request.usuario["id"])
+    nota = ((request.get_json(silent=True) or {}).get("nota") or "").strip() or None
+    ok, motivo = db.despachar_pedido(pedido_id, request.usuario["id"], nota)
     if not ok:
         eventos.registrar("despacho_bloqueado", pedido["telefono"], f"pedido {pedido_id}: {motivo}", ok=False)
         return jsonify({"error": motivo}), 409
     eventos.registrar("despacho", pedido["telefono"], f"pedido {pedido_id} despachado por {request.usuario['nombre']}")
+    return jsonify({"ok": True, **ciclo.aviso_despacho(pedido_id, nota)})
+
+
+@app.route("/api/crm/pedidos/<int:pedido_id>/existencia", methods=["POST"])
+@requiere_sesion()
+def crm_existencia(pedido_id):
+    """Paso 'existencia': la persona verificó el inventario. 'confirmar' pasa la orden a por_pagar
+    y le manda el total y los datos de pago al cliente; 'sin_existencia' la cancela y lo anota en espera."""
+    pedido = db.obtener_pedido(pedido_id)
+    if not pedido:
+        return jsonify({"error": "pedido no encontrado"}), 404
+    if not _puede_ver_pedido(request.usuario, pedido):
+        return jsonify({"error": "este pedido es de otro vendedor"}), 403
+    datos = request.get_json(silent=True) or {}
+    decision = datos.get("decision")
+    if decision == "confirmar":
+        res = ciclo.confirmar_existencia(pedido_id)
+    elif decision == "sin_existencia":
+        res = ciclo.sin_existencia(pedido_id, (datos.get("nota") or "").strip() or None)
+    else:
+        return jsonify({"error": "decision debe ser 'confirmar' o 'sin_existencia'"}), 400
+    if not res.get("ok"):
+        return jsonify({"error": res.get("error", "no se pudo")}), 409
+    eventos.registrar("existencia", pedido["telefono"], f"pedido {pedido_id}: {decision} por {request.usuario['nombre']}")
+    return jsonify(res)
+
+
+@app.route("/api/crm/pendientes", methods=["GET"])
+@requiere_sesion()
+def crm_pendientes():
+    usuario = request.usuario
+    return jsonify({
+        "conteos": db.contar_pendientes(usuario),
+        "solicitudes": db.listar_solicitudes(usuario),
+        "derivadas": db.listar_derivadas(usuario),
+    })
+
+
+@app.route("/api/crm/solicitudes/<int:solicitud_id>/resolver", methods=["POST"])
+@requiere_sesion()
+def crm_resolver_solicitud(solicitud_id):
+    if not db.resolver_solicitud(solicitud_id, request.usuario["id"]):
+        return jsonify({"error": "la solicitud no existe o ya estaba resuelta"}), 409
     return jsonify({"ok": True})
 
 

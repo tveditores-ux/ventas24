@@ -57,6 +57,23 @@ _PROMETE_CONSULTAR = re.compile(
     re.IGNORECASE,
 )
 
+# Dar un pago por recibido o prometer salida: solo lo hace el sistema, tras la validación humana.
+_DA_PAGO_POR_BUENO = re.compile(
+    r"pago (ya )?(est[aá]|fue|qued[oó]|se)?\s*(aprobad|confirmad|recibid|acreditad|validad|verificad)|"
+    r"(ya )?(recib[ií]|recibimos|acredit\w+|valid\w+) (tu|el) pago|"
+    r"(sale|se despacha|te lo (enviamos|despachamos|mandamos)|lo despachamos) (hoy|ma[nñ]ana|ya)|"
+    r"ya (puedes|pueden) (retirar|pasar a buscar)",
+    re.IGNORECASE,
+)
+
+# Frases que desmienten que existe un canal con el equipo, o que rompen el personaje.
+_SIN_CANAL = re.compile(
+    r"no tengo (un )?(canal|forma|manera|acceso)|no puedo (contactar|comunicarme|escribirle|avisar)[^.]{0,30}equipo|"
+    r"no (te )?puedo asegurar que (te )?(contacten|escriban|respondan)|te soy sincero|"
+    r"no tengo respuestas? de ellos",
+    re.IGNORECASE,
+)
+
 _NUMERO_LARGO = re.compile(r"\d{9,}")
 
 
@@ -111,7 +128,7 @@ def _monto_justificado(monto: float, precios: set) -> bool:
     return False
 
 
-def revisar_reglas(texto: str, precios_validos: set, registro_hecho: bool) -> Veredicto:
+def revisar_reglas(texto: str, precios_validos: set, registro_hecho: bool, equipo_avisado: bool = False) -> Veredicto:
     if not texto.strip():
         return Veredicto(False, "La respuesta está vacía.", "reglas")
 
@@ -124,11 +141,28 @@ def revisar_reglas(texto: str, precios_validos: set, registro_hecho: bool) -> Ve
     if _PROMESAS.search(texto):
         return Veredicto(False, "No prometas garantías ni tiempos de entrega que no constan en el sistema.", "reglas")
 
-    if _PROMETE_CONSULTAR.search(texto):
+    if _DA_PAGO_POR_BUENO.search(texto):
         return Veredicto(
             False,
-            "Dices que vas a consultar con el equipo pero no llamaste a pasar_a_humano. "
-            "Si de verdad hace falta una persona, llama a pasar_a_humano; si no, responde tú con lo que sí sabes "
+            "No des un pago por recibido ni prometas salida o retiro: lo valida la administración y el sistema "
+            "avisa al cliente. Dile en qué paso va su pedido y qué sigue.",
+            "reglas",
+        )
+
+    if _SIN_CANAL.search(texto):
+        return Veredicto(
+            False,
+            "Sí tienes canal con el equipo: es la herramienta solicitar_al_equipo (o pasar_a_humano). "
+            "Nunca digas que no puedes contactarlo ni que no sabes si responderán; úsala y dile al cliente "
+            "que el equipo le escribe por este mismo chat.",
+            "reglas",
+        )
+
+    if _PROMETE_CONSULTAR.search(texto) and not equipo_avisado:
+        return Veredicto(
+            False,
+            "Dices que vas a consultar con el equipo pero no llamaste a solicitar_al_equipo en este turno. "
+            "Llámala (o a pasar_a_humano si es un reclamo); si no hace falta, responde tú con lo que sí sabes "
             "y hazle una pregunta al cliente.",
             "reglas",
         )

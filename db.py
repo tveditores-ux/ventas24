@@ -69,6 +69,18 @@ CREATE TABLE IF NOT EXISTS pedidos (
     fecha TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS solicitudes_equipo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contacto_id INTEGER NOT NULL REFERENCES contactos(id),
+    tipo TEXT NOT NULL DEFAULT 'otro',          -- condiciones / pago / existencia / otro
+    asunto TEXT NOT NULL,
+    detalle TEXT,
+    estado TEXT NOT NULL DEFAULT 'abierta',     -- abierta / resuelta
+    creada_en TEXT DEFAULT CURRENT_TIMESTAMP,
+    resuelta_por INTEGER REFERENCES usuarios(id),
+    resuelta_en TEXT
+);
+
 CREATE TABLE IF NOT EXISTS comprobantes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pedido_id INTEGER REFERENCES pedidos(id),
@@ -134,6 +146,8 @@ def inicializar():
             ("pago_confirmado_en", "TEXT"),
             ("despachado_por", "INTEGER REFERENCES usuarios(id)"),
             ("despachado_en", "TEXT"),
+            ("orden", "TEXT"),            # agrupa las líneas de un mismo pedido
+            ("nota_despacho", "TEXT"),
         ):
             if col not in cols_pedidos:
                 con.execute(f"ALTER TABLE pedidos ADD COLUMN {col} {ddl}")
@@ -315,12 +329,15 @@ def listar_espera(solo_pendientes: bool = True):
 # Pedidos
 # ---------------------------------------------------------------------
 
-def registrar_pedido(contacto_id: int, producto: str, cantidad: int, precio_unitario: float):
+def registrar_pedido(contacto_id: int, producto: str, cantidad: int, precio_unitario: float,
+                     estado_pago: str = "por_confirmar", orden: str | None = None):
+    """Todo pedido nace 'por_confirmar': una persona verifica la existencia antes de cobrar."""
     total = round(cantidad * precio_unitario, 2)
     with conectar() as con:
         con.execute(
-            "INSERT INTO pedidos (contacto_id, producto, cantidad, precio_unitario, total) VALUES (?, ?, ?, ?, ?)",
-            (contacto_id, producto, cantidad, precio_unitario, total),
+            "INSERT INTO pedidos (contacto_id, producto, cantidad, precio_unitario, total, estado_pago, orden) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (contacto_id, producto, cantidad, precio_unitario, total, estado_pago, orden),
         )
     return total
 
@@ -346,6 +363,19 @@ def listar_pedidos(contacto_id: int | None = None, usuario: dict | None = None):
         return [dict(f) for f in filas]
 
 
+def lineas_de_orden(pedido_id: int):
+    """Todas las líneas de la orden a la que pertenece este pedido (o solo él si no tiene orden)."""
+    with conectar() as con:
+        fila = con.execute("SELECT orden FROM pedidos WHERE id = ?", (pedido_id,)).fetchone()
+        if not fila:
+            return []
+        if fila["orden"]:
+            filas = con.execute("SELECT * FROM pedidos WHERE orden = ? ORDER BY id", (fila["orden"],)).fetchall()
+        else:
+            filas = con.execute("SELECT * FROM pedidos WHERE id = ?", (pedido_id,)).fetchall()
+        return [dict(f) for f in filas]
+
+
 def obtener_pedido(pedido_id: int):
     with conectar() as con:
         fila = con.execute(
@@ -353,7 +383,31 @@ def obtener_pedido(pedido_id: int):
             "FROM pedidos JOIN contactos ON contactos.id = pedidos.contacto_id WHERE pedidos.id = ?",
             (pedido_id,),
         ).fetchone()
-        return dict(fila) if fila else None
+    if not fila:
+        return None
+    pedido = dict(fila)
+    pedido["total_orden"] = round(sum(l["total"] or 0 for l in lineas_de_orden(pedido_id)), 2)
+    return pedido
+
+
+def cambiar_estado_pago_orden(pedido_id: int, desde: tuple, hacia: str):
+    """Mueve todas las líneas de la orden que estén en alguno de los estados `desde`. Devuelve cuántas."""
+    ids = [l["id"] for l in lineas_de_orden(pedido_id) if l["estado_pago"] in desde and l["estado"] != "cancelado"]
+    if not ids:
+        return 0
+    with conectar() as con:
+        con.execute(
+            f"UPDATE pedidos SET estado_pago = ? WHERE id IN ({','.join('?' * len(ids))})", (hacia, *ids)
+        )
+    return len(ids)
+
+
+def cancelar_orden(pedido_id: int):
+    ids = [l["id"] for l in lineas_de_orden(pedido_id) if l["estado"] not in ("entregado", "cancelado")]
+    if ids:
+        with conectar() as con:
+            con.execute(f"UPDATE pedidos SET estado = 'cancelado' WHERE id IN ({','.join('?' * len(ids))})", ids)
+    return len(ids)
 
 
 def pedido_por_pagar_reciente(contacto_id: int):
@@ -361,28 +415,28 @@ def pedido_por_pagar_reciente(contacto_id: int):
     with conectar() as con:
         fila = con.execute(
             "SELECT * FROM pedidos WHERE contacto_id = ? AND estado != 'cancelado' "
-            "AND estado_pago IN ('por_pagar', 'comprobante_recibido') ORDER BY id DESC LIMIT 1",
+            "AND estado_pago IN ('por_confirmar', 'por_pagar', 'comprobante_recibido') ORDER BY id DESC LIMIT 1",
             (contacto_id,),
         ).fetchone()
         return dict(fila) if fila else None
 
 
-def despachar_pedido(pedido_id: int, usuario_id: int):
-    """Compuerta de envío: solo se despacha un pedido con el pago confirmado
-    por un administrador. Devuelve (ok, motivo)."""
+def despachar_pedido(pedido_id: int, usuario_id: int, nota: str | None = None):
+    """Compuerta de envío: solo se despacha una orden con el pago confirmado
+    por un administrador. Aplica a todas sus líneas. Devuelve (ok, motivo)."""
+    lineas = [l for l in lineas_de_orden(pedido_id) if l["estado"] != "cancelado"]
+    if not lineas:
+        return False, "pedido no encontrado o cancelado"
+    if all(l["estado"] == "entregado" for l in lineas):
+        return False, "el pedido ya fue despachado"
+    if any(l["estado_pago"] != "pago_confirmado" for l in lineas):
+        return False, "el pago todavía no está confirmado por la administración"
+    ids = [l["id"] for l in lineas if l["estado"] != "entregado"]
     with conectar() as con:
-        fila = con.execute("SELECT estado, estado_pago FROM pedidos WHERE id = ?", (pedido_id,)).fetchone()
-        if not fila:
-            return False, "pedido no encontrado"
-        if fila["estado"] == "cancelado":
-            return False, "el pedido está cancelado"
-        if fila["estado"] == "entregado":
-            return False, "el pedido ya fue despachado"
-        if fila["estado_pago"] != "pago_confirmado":
-            return False, "el pago todavía no está confirmado por la administración"
         con.execute(
-            "UPDATE pedidos SET estado = 'entregado', despachado_por = ?, despachado_en = CURRENT_TIMESTAMP WHERE id = ?",
-            (usuario_id, pedido_id),
+            f"UPDATE pedidos SET estado = 'entregado', despachado_por = ?, despachado_en = CURRENT_TIMESTAMP, "
+            f"nota_despacho = ? WHERE id IN ({','.join('?' * len(ids))})",
+            (usuario_id, nota, *ids),
         )
     return True, "despachado"
 
@@ -406,12 +460,8 @@ def crear_comprobante(contacto_id: int, pedido_id, origen: str, datos: dict,
              json.dumps(alertas, ensure_ascii=False), datos.get("nota"), registrado_por),
         )
         comprobante_id = cur.lastrowid
-        if pedido_id:
-            con.execute(
-                "UPDATE pedidos SET estado_pago = 'comprobante_recibido' "
-                "WHERE id = ? AND estado_pago = 'por_pagar'",
-                (pedido_id,),
-            )
+    if pedido_id:
+        cambiar_estado_pago_orden(pedido_id, ("por_pagar",), "comprobante_recibido")
     return comprobante_id
 
 
@@ -496,11 +546,12 @@ def revisar_comprobante(comprobante_id: int, usuario_id: int, aceptar: bool, not
         )
         pid = comp["pedido_id"]
         if pid and aceptar:
+            ids = [l["id"] for l in lineas_de_orden(pid) if l["estado"] != "cancelado"]
             con.execute(
                 "UPDATE pedidos SET estado_pago = 'pago_confirmado', estado = CASE WHEN estado = 'pendiente' "
                 "THEN 'confirmado' ELSE estado END, pago_confirmado_por = ?, pago_confirmado_en = CURRENT_TIMESTAMP "
-                "WHERE id = ?",
-                (usuario_id, pid),
+                f"WHERE id IN ({','.join('?' * len(ids))})",
+                (usuario_id, *ids),
             )
         elif pid:
             quedan = con.execute(
@@ -508,10 +559,11 @@ def revisar_comprobante(comprobante_id: int, usuario_id: int, aceptar: bool, not
                 (pid,),
             ).fetchone()["n"]
             if not quedan:
-                con.execute(
-                    "UPDATE pedidos SET estado_pago = 'por_pagar' WHERE id = ? AND estado_pago != 'pago_confirmado'",
-                    (pid,),
-                )
+                ids = [l["id"] for l in lineas_de_orden(pid) if l["estado_pago"] == "comprobante_recibido"]
+                if ids:
+                    con.execute(
+                        f"UPDATE pedidos SET estado_pago = 'por_pagar' WHERE id IN ({','.join('?' * len(ids))})", ids
+                    )
     return True, "ok"
 
 
@@ -670,3 +722,89 @@ def actualizar_usuario(usuario_id: int, **campos):
 
 
 inicializar()
+
+
+# ---------------------------------------------------------------------
+# Solicitudes al equipo y pendientes
+# ---------------------------------------------------------------------
+
+def crear_solicitud(contacto_id: int, tipo: str, asunto: str, detalle: str | None = None) -> int:
+    """Pide algo a una persona del equipo sin apagar al bot. Si ya hay una abierta
+    del mismo tipo para este contacto, la actualiza en vez de duplicarla."""
+    with conectar() as con:
+        previa = con.execute(
+            "SELECT id FROM solicitudes_equipo WHERE contacto_id = ? AND tipo = ? AND estado = 'abierta'",
+            (contacto_id, tipo),
+        ).fetchone()
+        if previa:
+            con.execute(
+                "UPDATE solicitudes_equipo SET asunto = ?, detalle = ? WHERE id = ?", (asunto, detalle, previa["id"])
+            )
+            return previa["id"]
+        cur = con.execute(
+            "INSERT INTO solicitudes_equipo (contacto_id, tipo, asunto, detalle) VALUES (?, ?, ?, ?)",
+            (contacto_id, tipo, asunto, detalle),
+        )
+        return cur.lastrowid
+
+
+def _filtro_vendedor(usuario, columna="contactos.asignado_a"):
+    if usuario and usuario["rol"] == "vendedor":
+        return f" AND ({columna} IS NULL OR {columna} = ?)", [usuario["id"]]
+    return "", []
+
+
+def listar_solicitudes(usuario: dict | None = None):
+    extra, params = _filtro_vendedor(usuario)
+    with conectar() as con:
+        filas = con.execute(
+            "SELECT s.*, contactos.nombre, contactos.telefono FROM solicitudes_equipo s "
+            "JOIN contactos ON contactos.id = s.contacto_id "
+            f"WHERE s.estado = 'abierta'{extra} ORDER BY s.id DESC",
+            params,
+        ).fetchall()
+        return [dict(f) for f in filas]
+
+
+def resolver_solicitud(solicitud_id: int, usuario_id: int) -> bool:
+    with conectar() as con:
+        cur = con.execute(
+            "UPDATE solicitudes_equipo SET estado = 'resuelta', resuelta_por = ?, resuelta_en = CURRENT_TIMESTAMP "
+            "WHERE id = ? AND estado = 'abierta'",
+            (usuario_id, solicitud_id),
+        )
+        return cur.rowcount > 0
+
+
+def listar_derivadas(usuario: dict | None = None):
+    """Conversaciones que el bot pasó a una persona (modo manual activado)."""
+    extra, params = _filtro_vendedor(usuario)
+    with conectar() as con:
+        filas = con.execute(
+            "SELECT id, nombre, telefono, notas, fecha_ultimo_contacto FROM contactos "
+            f"WHERE modo_manual = 1{extra} ORDER BY fecha_ultimo_contacto DESC",
+            params,
+        ).fetchall()
+        return [dict(f) for f in filas]
+
+
+def contar_pendientes(usuario: dict | None = None) -> dict:
+    extra, params = _filtro_vendedor(usuario)
+    with conectar() as con:
+        por_confirmar = con.execute(
+            "SELECT COUNT(DISTINCT COALESCE(pedidos.orden, 'p' || pedidos.id)) AS n FROM pedidos "
+            "JOIN contactos ON contactos.id = pedidos.contacto_id "
+            f"WHERE pedidos.estado_pago = 'por_confirmar' AND pedidos.estado != 'cancelado'{extra}",
+            params,
+        ).fetchone()["n"]
+        comprobantes = con.execute(
+            "SELECT COUNT(*) AS n FROM comprobantes JOIN contactos ON contactos.id = comprobantes.contacto_id "
+            f"WHERE comprobantes.estado = 'pendiente'{extra}",
+            params,
+        ).fetchone()["n"]
+    return {
+        "existencia_por_confirmar": por_confirmar,
+        "comprobantes_pendientes": comprobantes,
+        "solicitudes_abiertas": len(listar_solicitudes(usuario)),
+        "conversaciones_derivadas": len(listar_derivadas(usuario)),
+    }

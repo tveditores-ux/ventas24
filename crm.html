@@ -225,6 +225,16 @@
   .dlg-error{ margin-top:10px; font-size:13px; color:var(--danger); }
   .dlg-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
   @media (max-width:480px){ .dlg-grid{ grid-template-columns:1fr; } }
+  .pend-resumen{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px; margin-bottom:6px; }
+  .pend-card{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px 16px; text-align:left; font:inherit; color:var(--ink); display:flex; flex-direction:column; gap:2px; }
+  button.pend-card{ cursor:pointer; }
+  button.pend-card:hover{ background:var(--surface-2); }
+  .pend-card b{ font-family:var(--font-display); font-size:30px; line-height:1; color:var(--steel); }
+  .pend-card span{ font-size:12.5px; color:var(--ink-soft); }
+  .pend-h{ margin:22px 0 10px; font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); font-weight:600; }
+  .acciones-td{ white-space:nowrap; }
+  .acciones-td .btn + .btn{ margin-left:6px; }
+  .pago-pill.por_confirmar{ background:var(--danger-bg); color:var(--danger); }
   .status-pill{
     display:inline-flex; align-items:center; padding:3px 10px; border-radius:999px;
     font-size:11px; font-weight:600; white-space:nowrap;
@@ -257,6 +267,7 @@
 </div>
 
 <nav class="subnav" id="subnav" hidden>
+  <button data-tab="pendientes" type="button">Por atender<span class="badge" id="badgePend" hidden></span></button>
   <button data-tab="conversaciones" class="active" type="button">Conversaciones</button>
   <button data-tab="catalogo" type="button">Catálogo</button>
   <button data-tab="espera" type="button">Lista de espera</button>
@@ -300,10 +311,19 @@
   <div class="toolbar"><span class="count" id="countPedidos">0 pedidos</span></div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cant.</th><th>Total</th><th>Pago</th><th>Envío</th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Productos</th><th>Total</th><th>Estado</th><th>Siguiente paso</th></tr></thead>
       <tbody id="pedidosBody"></tbody>
     </table>
   </div>
+</div>
+
+<div id="pendientesWrap" hidden>
+  <div class="toolbar"><span class="count" id="countPend">Lo que espera a una persona del equipo</span></div>
+  <div class="pend-resumen" id="pendResumen"></div>
+  <h3 class="pend-h">Solicitudes al equipo</h3>
+  <div class="comp-list" id="pendSolicitudes"></div>
+  <h3 class="pend-h">Conversaciones que el bot pasó a una persona</h3>
+  <div class="comp-list" id="pendDerivadas"></div>
 </div>
 
 <div id="comprobantesWrap" hidden>
@@ -361,7 +381,8 @@
     } catch(e){ irALogin(); return; }
 
     document.getElementById('subnav').hidden = false;
-    activarTab('conversaciones');
+    activarTab('pendientes');
+    setInterval(refrescarInsignia, 30000);
   }
 
   document.getElementById('btnLogout').addEventListener('click', async (e) => {
@@ -371,7 +392,7 @@
   });
 
   // -------- pestañas --------
-  const TABS = ['conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes'];
+  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes'];
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -388,6 +409,7 @@
     else if (tab === 'espera') cargarEspera();
     else if (tab === 'pedidos') cargarPedidos();
     else if (tab === 'comprobantes') cargarComprobantes();
+    else if (tab === 'pendientes') cargarPendientes();
   }
   document.querySelectorAll('#subnav button').forEach(b => {
     b.addEventListener('click', () => activarTab(b.dataset.tab));
@@ -448,51 +470,154 @@
     }
   }
 
+  const GRUPO_ESTADO = {
+    por_confirmar: 'Existencia por confirmar', por_pagar: 'Por pagar',
+    comprobante_recibido: 'En validación', pago_confirmado: 'Pago confirmado',
+  };
   async function cargarPedidos(){
     const body = document.getElementById('pedidosBody');
     try {
       const r = await api('/api/crm/pedidos');
       if (r.status === 401){ irALogin(); return; }
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      const pedidos = await r.json();
-      document.getElementById('countPedidos').textContent = pedidos.length + ' pedidos';
-      body.innerHTML = pedidos.length ? pedidos.map(p => {
-        const despachado = p.estado === 'entregado';
-        const cancelado = p.estado === 'cancelado';
-        const pagoOk = p.estado_pago === 'pago_confirmado';
-        let pago = `<span class="pago-pill ${esc(p.estado_pago)}">${esc(PAGO_LABEL[p.estado_pago] || p.estado_pago)}</span>`;
-        if (!pagoOk && !cancelado && !despachado){
-          pago += ` <button class="btn ghost sm" type="button" data-cargar="${p.id}" data-info="${esc((p.nombre || p.telefono || '') + ' · $' + Number(p.total).toFixed(2))}">Cargar comprobante</button>`;
+      const lineas = await r.json();
+      const grupos = new Map();
+      lineas.forEach(l => {
+        const k = l.orden || ('p' + l.id);
+        if (!grupos.has(k)) grupos.set(k, []);
+        grupos.get(k).push(l);
+      });
+      document.getElementById('countPedidos').textContent = grupos.size + ' pedidos';
+      body.innerHTML = grupos.size ? [...grupos.values()].map(ls => {
+        const activas = ls.filter(l => l.estado !== 'cancelado');
+        const cancelado = activas.length === 0;
+        const despachado = !cancelado && activas.every(l => l.estado === 'entregado');
+        const ref = ls[0];
+        const estadoPago = (activas[0] || ref).estado_pago;
+        const total = activas.reduce((a, l) => a + Number(l.total || 0), 0);
+        let estado, accion;
+        if (cancelado){ estado = '<span class="status-pill cancelado">Cancelado</span>'; accion = ''; }
+        else if (despachado){
+          estado = '<span class="status-pill entregado">Despachado</span>';
+          accion = activas[0].nota_despacho ? `<span class="resuelto">${esc(activas[0].nota_despacho)}</span>` : '';
+        } else {
+          estado = `<span class="pago-pill ${esc(estadoPago)}">${esc(GRUPO_ESTADO[estadoPago] || estadoPago)}</span>`;
+          if (estadoPago === 'por_confirmar'){
+            accion = `<button class="btn sm" type="button" data-exis="confirmar" data-id="${ref.id}">Hay existencia</button>
+                      <button class="btn ghost sm" type="button" data-exis="sin_existencia" data-id="${ref.id}">Sin existencia</button>`;
+          } else if (estadoPago === 'pago_confirmado'){
+            accion = `<button class="btn sm" type="button" data-despachar="${ref.id}">Despachar</button>`;
+          } else {
+            accion = `<button class="btn ghost sm" type="button" data-cargar="${ref.id}" data-info="${esc((ref.nombre || ref.telefono || '') + ' · $' + total.toFixed(2))}">Cargar comprobante</button>`;
+          }
         }
-        let envio;
-        if (despachado) envio = '<span class="status-pill entregado">Despachado</span>';
-        else if (cancelado) envio = '<span class="status-pill cancelado">Cancelado</span>';
-        else envio = `<button class="btn sm" type="button" data-despachar="${p.id}" ${pagoOk ? '' : 'disabled title="Falta que la administración confirme el pago"'}>Despachar</button>`;
+        const items = activas.length ? activas : ls;
         return `
         <tr>
-          <td class="num">${esc((p.fecha||'').slice(0,16))}</td>
-          <td>${esc(p.nombre || p.telefono || '—')}</td>
-          <td>${esc(p.producto)}</td>
-          <td class="num">${esc(p.cantidad)}</td>
-          <td class="num">$${Number(p.total).toFixed(2)}</td>
-          <td>${pago}</td>
-          <td>${envio}</td>
+          <td class="num">${esc((ref.fecha||'').slice(0,16))}</td>
+          <td>${esc(ref.nombre || ref.telefono || '—')}</td>
+          <td>${items.map(l => `${esc(l.cantidad)} × ${esc(l.producto.slice(0, 70))}`).join('<br>')}</td>
+          <td class="num">$${total.toFixed(2)}</td>
+          <td>${estado}</td>
+          <td class="acciones-td">${accion}</td>
         </tr>`;
-      }).join('') : `<tr><td colspan="7" class="empty">Todavía no hay pedidos registrados.</td></tr>`;
+      }).join('') : `<tr><td colspan="6" class="empty">Todavía no hay pedidos registrados.</td></tr>`;
     } catch(e){
-      body.innerHTML = `<tr><td colspan="7" class="error">No pude cargar los pedidos (${esc(e.message)}).</td></tr>`;
+      body.innerHTML = `<tr><td colspan="6" class="error">No pude cargar los pedidos (${esc(e.message)}).</td></tr>`;
     }
+  }
+
+  function avisoTexto(d){
+    if (d && d.aviso_ok === false) return 'Hecho, pero NO se pudo avisar al cliente: ' + d.aviso;
+    return null;
   }
 
   document.getElementById('pedidosBody').addEventListener('click', async (ev) => {
     const cargar = ev.target.closest('[data-cargar]');
     if (cargar){ abrirDialogo({ pedidoId: cargar.dataset.cargar, info: cargar.dataset.info }); return; }
+    const exis = ev.target.closest('[data-exis]');
+    if (exis){
+      const sin = exis.dataset.exis === 'sin_existencia';
+      if (sin && !confirm('Se cancela el pedido, el cliente queda en lista de espera y se le avisa. ¿Seguro?')) return;
+      exis.disabled = true;
+      const r = await api(`/api/crm/pedidos/${exis.dataset.id}/existencia`, {
+        method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ decision: exis.dataset.exis }),
+      });
+      const d = await r.json().catch(()=>({}));
+      if (!r.ok) alert(d.error || 'No se pudo guardar');
+      else if (avisoTexto(d)) alert(avisoTexto(d));
+      cargarPedidos(); refrescarInsignia();
+      return;
+    }
     const desp = ev.target.closest('[data-despachar]');
     if (desp && !desp.disabled){
+      const nota = prompt('Nota para el cliente (guía, hora de retiro, ruta…). Puede quedar vacía.', '');
+      if (nota === null) return;
       desp.disabled = true;
-      const r = await api(`/api/crm/pedidos/${desp.dataset.despachar}/despachar`, { method:'POST' });
-      if (!r.ok){ const d = await r.json().catch(()=>({})); alert(d.error || 'No se pudo despachar'); }
+      const r = await api(`/api/crm/pedidos/${desp.dataset.despachar}/despachar`, {
+        method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ nota }),
+      });
+      const d = await r.json().catch(()=>({}));
+      if (!r.ok) alert(d.error || 'No se pudo despachar');
+      else if (avisoTexto(d)) alert(avisoTexto(d));
       cargarPedidos();
+    }
+  });
+
+  // -------- por atender --------
+  async function refrescarInsignia(){
+    try {
+      const r = await api('/api/crm/pendientes');
+      if (!r.ok) return null;
+      const d = await r.json();
+      const c = d.conteos;
+      const total = c.existencia_por_confirmar + c.comprobantes_pendientes + c.solicitudes_abiertas + c.conversaciones_derivadas;
+      const b = document.getElementById('badgePend');
+      b.hidden = !total; b.textContent = total;
+      const bc = document.getElementById('badgeComp');
+      bc.hidden = !c.comprobantes_pendientes; bc.textContent = c.comprobantes_pendientes;
+      return d;
+    } catch(e){ return null; }
+  }
+
+  async function cargarPendientes(){
+    const d = await refrescarInsignia();
+    const resumen = document.getElementById('pendResumen');
+    if (!d){ resumen.innerHTML = '<div class="error">No pude cargar lo pendiente.</div>'; return; }
+    const c = d.conteos;
+    resumen.innerHTML = `
+      <button type="button" class="pend-card" data-ir="pedidos"><b>${c.existencia_por_confirmar}</b><span>pedidos esperando confirmar existencia</span></button>
+      <button type="button" class="pend-card" data-ir="comprobantes"><b>${c.comprobantes_pendientes}</b><span>comprobantes por revisar</span></button>
+      <div class="pend-card"><b>${c.solicitudes_abiertas}</b><span>solicitudes abiertas</span></div>
+      <div class="pend-card"><b>${c.conversaciones_derivadas}</b><span>conversaciones en manos de una persona</span></div>`;
+    document.getElementById('pendSolicitudes').innerHTML = d.solicitudes.length ? d.solicitudes.map(x => `
+      <div class="comp"><div class="luz amarillo"></div><div style="min-width:0">
+        <h4>${esc(x.asunto)}</h4>
+        <div class="sub">${esc(x.nombre || x.telefono)} · ${esc(x.tipo)} · ${esc((x.creada_en||'').slice(0,16))}</div>
+        <div class="datos"><span>${esc(x.detalle || '')}</span></div>
+        <div class="acciones">
+          <button class="btn ghost sm" type="button" data-chat="${x.contacto_id}">Abrir conversación</button>
+          <button class="btn sm" type="button" data-resolver="${x.id}">Marcar resuelta</button>
+        </div></div></div>`).join('') : '<div class="empty">No hay solicitudes abiertas.</div>';
+    document.getElementById('pendDerivadas').innerHTML = d.derivadas.length ? d.derivadas.map(x => `
+      <div class="comp"><div class="luz rojo"></div><div style="min-width:0">
+        <h4>${esc(x.nombre || x.telefono)}</h4>
+        <div class="sub">${esc(x.telefono)} · último contacto ${esc((x.fecha_ultimo_contacto||'').slice(0,16))}</div>
+        <div class="datos"><span>${esc((x.notas || '').split('\n').filter(Boolean).slice(-1)[0] || 'En modo manual')}</span></div>
+        <div class="acciones"><button class="btn ghost sm" type="button" data-chat="${x.id}">Abrir conversación</button></div>
+      </div></div>`).join('') : '<div class="empty">Ninguna.</div>';
+  }
+
+  document.getElementById('pendientesWrap').addEventListener('click', async (ev) => {
+    const ir = ev.target.closest('[data-ir]');
+    if (ir){ activarTab(ir.dataset.ir); return; }
+    const chat = ev.target.closest('[data-chat]');
+    if (chat){ activoId = Number(chat.dataset.chat); activarTab('conversaciones'); return; }
+    const res = ev.target.closest('[data-resolver]');
+    if (res){
+      res.disabled = true;
+      await api(`/api/crm/solicitudes/${res.dataset.resolver}/resolver`, { method:'POST' });
+      cargarPendientes();
     }
   });
 
@@ -610,8 +735,10 @@
         method:'POST', headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({ decision: dec.dataset.decidir, nota }),
       });
-      if (!r.ok){ const d = await r.json().catch(()=>({})); alert(d.error || 'No se pudo guardar la decisión'); }
-      cargarComprobantes();
+      const d = await r.json().catch(()=>({}));
+      if (!r.ok) alert(d.error || 'No se pudo guardar la decisión');
+      else if (avisoTexto(d)) alert(avisoTexto(d));
+      cargarComprobantes(); refrescarInsignia();
     }
   });
 

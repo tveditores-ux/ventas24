@@ -16,6 +16,7 @@ el pago y solo entonces se despacha.
 
 import json
 import os
+import uuid
 
 import agente as base
 import db
@@ -68,6 +69,25 @@ HERRAMIENTA_MIS_PEDIDOS = {
         "Úsala para proponer reposición o repetir una compra anterior."
     ),
     "input_schema": {"type": "object", "properties": {}},
+}
+
+HERRAMIENTA_EQUIPO = {
+    "name": "solicitar_al_equipo",
+    "description": (
+        "Deja una solicitud para una persona del equipo SIN detener la conversación: la persona "
+        "la ve en el CRM y responde en este mismo chat. Úsala para condiciones por volumen, "
+        "descuentos, crédito, o cualquier cosa que no puedas resolver tú pero que no sea un "
+        "reclamo (para reclamos o clientes molestos usa pasar_a_humano)."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "tipo": {"type": "string", "enum": ["condiciones", "existencia", "pago", "otro"]},
+            "asunto": {"type": "string", "description": "Qué se necesita, en una frase"},
+            "detalle": {"type": "string", "description": "Lo que el equipo debe saber: producto, cantidades, tipo de negocio, lo que pidió el cliente"},
+        },
+        "required": ["tipo", "asunto", "detalle"],
+    },
 }
 
 HERRAMIENTA_HUMANO = {
@@ -137,6 +157,14 @@ class Salomon(base.Agente):
                 for p in pedidos
             ] or {"mensaje": "Este cliente todavía no tiene pedidos"}
 
+        if nombre == "solicitar_al_equipo":
+            solicitud = db.crear_solicitud(
+                self.contacto_id, params.get("tipo", "otro"), params.get("asunto", "Solicitud"), params.get("detalle")
+            )
+            eventos.registrar("solicitud_equipo", self.telefono, params.get("asunto", "")[:80], agente_tipo=self.tipo)
+            return {"mensaje": "Solicitud registrada. Una persona del equipo la verá en el CRM y le escribirá al cliente "
+                               "en este mismo chat. No prometas tiempos.", "solicitud": solicitud}
+
         if nombre == "pasar_a_humano":
             self._derivar(params.get("motivo", "sin motivo"))
             return {"mensaje": "Conversación pasada a una persona del equipo"}
@@ -177,6 +205,8 @@ class Salomon(base.Agente):
             validadas.append((fila, cantidad, precio))
 
         registradas, total_general = [], 0.0
+        orden = uuid.uuid4().hex[:10]
+        estado_pago = "por_confirmar" if any(not f["stock_verificado"] for f, _, _ in validadas) else "por_pagar"
         for fila, cantidad, precio in validadas:
             if fila["codigo"]:
                 producto = f'[{fila["codigo"]}] {fila["nombre"][:80]} ({fila["marca"]})'
@@ -191,7 +221,7 @@ class Salomon(base.Agente):
             if repetido:
                 total = repetido["total"]
             else:
-                total = db.registrar_pedido(self.contacto_id, producto, cantidad, precio)
+                total = db.registrar_pedido(self.contacto_id, producto, cantidad, precio, estado_pago, orden)
             total_general += total
             self._precios.update({precio, total})
             registradas.append({
@@ -206,7 +236,13 @@ class Salomon(base.Agente):
         self._precios.add(total_general)
         self._registro_hecho = True
         return {
-            "mensaje": "Pedido registrado como PENDIENTE DE PAGO. La administración confirma el pago y luego se coordina el despacho.",
+            "mensaje": (
+                "Pedido registrado. Siguen estos pasos, en este orden: 1) el equipo confirma la existencia; "
+                "2) el cliente recibe por este chat el total final y los datos de pago; 3) el cliente envía el "
+                "comprobante por aquí; 4) la administración valida el pago; 5) se despacha y se le avisa."
+                if estado_pago == "por_confirmar" else
+                "Pedido registrado. Sigue el pago: el cliente recibirá los datos y enviará el comprobante por este chat."
+            ),
             "lineas": registradas,
             "total_general_usd": total_general,
         }
@@ -234,7 +270,7 @@ class Salomon(base.Agente):
 
         herramientas = [
             base.HERRAMIENTA_CATALOGO, base.HERRAMIENTA_LISTA_ESPERA,
-            HERRAMIENTA_PEDIDO, HERRAMIENTA_MIS_PEDIDOS, HERRAMIENTA_HUMANO,
+            HERRAMIENTA_PEDIDO, HERRAMIENTA_MIS_PEDIDOS, HERRAMIENTA_EQUIPO, HERRAMIENTA_HUMANO,
         ]
         reintentos = 0
 
@@ -270,7 +306,8 @@ class Salomon(base.Agente):
             if any(r["herramienta"] == "pasar_a_humano" for r in self._resultados):
                 return self._guardar(texto_usuario, texto or MENSAJE_DERIVACION)
 
-            veredicto = vigilante.revisar_reglas(texto, self._precios, self._registro_hecho)
+            equipo_avisado = any(r["herramienta"] == "solicitar_al_equipo" for r in self._resultados)
+            veredicto = vigilante.revisar_reglas(texto, self._precios, self._registro_hecho, equipo_avisado)
             if veredicto.ok:
                 veredicto = vigilante.revisar_con_modelo(
                     self.client, self.modelo_vigilante, texto, historial, self._resultados
