@@ -167,3 +167,43 @@ def aviso_despacho(pedido_id: int, nota: str | None = None):
         texto += f"\n\n{nota}"
     ok, motivo = notificar_cliente(contacto["id"], texto)
     return {"aviso": motivo if not ok else "enviado", "aviso_ok": ok}
+
+
+# ---------------------------------------------------------------------
+# Eventos del ERP que el CRM atiende
+# ---------------------------------------------------------------------
+
+def procesar_eventos():
+    """stock.repuesto: avisa a quien estaba en la lista de espera de ese producto y lo marca atendido.
+    Devuelve un resumen. Un aviso que no sale (ventana de 24 h cerrada) no se marca atendido, para
+    que alguien lo vea en la lista de espera y escriba desde WeCall."""
+    import json
+    resumen = {"avisados": 0, "sin_aviso": 0, "eventos": 0}
+    with db.conectar() as con:
+        pendientes = con.execute(
+            "SELECT * FROM eventos_outbox WHERE estado = 'pendiente' AND tipo = 'stock.repuesto' ORDER BY id"
+        ).fetchall()
+    for ev in pendientes:
+        datos = json.loads(ev["payload"] or "{}")
+        codigo = (datos.get("codigo") or "").strip().lower()
+        estado = "procesado"
+        try:
+            esperando = [e for e in db.listar_espera(solo_pendientes=True) if codigo and codigo in (e["producto"] or "").lower()]
+            for e in esperando:
+                texto = (
+                    f"{_saludo({'nombre': e.get('nombre')})}buenas noticias: ya tenemos disponible "
+                    f"{e['producto'][:90]}. ¿Te lo aparto? Dime cuántas unidades necesitas."
+                )
+                ok, motivo = notificar_cliente(e["contacto_id"], texto)
+                if ok:
+                    db.marcar_espera_atendida(e["id"])
+                    resumen["avisados"] += 1
+                else:
+                    resumen["sin_aviso"] += 1
+        except Exception as exc:
+            eventos.registrar("evento_fallido", "-", f"{ev['tipo']}: {exc}", ok=False)
+            estado = "fallido"
+        with db.conectar() as con:
+            con.execute("UPDATE eventos_outbox SET estado = ?, procesado_en = CURRENT_TIMESTAMP WHERE id = ?", (estado, ev["id"]))
+        resumen["eventos"] += 1
+    return resumen

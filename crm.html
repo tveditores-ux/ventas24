@@ -229,6 +229,14 @@
   .dlg-error{ margin-top:12px; font-size:13px; color:var(--danger); }
   .dlg-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
 
+  /* ---------- ERP ---------- */
+  .nav-sec{ margin:14px 12px 4px; font-size:10.5px; font-weight:800; letter-spacing:.12em; color:var(--side-ink); opacity:.55; text-transform:uppercase; }
+  .chk{ display:inline-flex; align-items:center; gap:7px; font-size:13px; color:var(--ink-soft); font-weight:600; cursor:pointer; }
+  tr.fila-baja td{ background:color-mix(in srgb, var(--danger-bg) 55%, transparent); }
+  .nota-erp{ font-size:12px; color:var(--ink-faint); margin:12px 4px 0; }
+  .nota-erp code, .dlg-sub code{ font-family:var(--font-mono); font-size:11.5px; background:var(--surface-3); padding:1px 6px; border-radius:5px; }
+  .dlg-grid textarea{ font:500 13px var(--font-mono); text-transform:none; letter-spacing:0; padding:10px 12px; border:1px solid var(--line-strong); border-radius:10px; background:var(--bg); color:var(--ink); resize:vertical; }
+
   /* ---------- adaptable ---------- */
   @media (max-width:900px){
     .app{ grid-template-columns:1fr; }
@@ -276,6 +284,10 @@
     <button data-tab="espera" type="button"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Lista de espera</button>
     <button data-tab="pedidos" type="button"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>Pedidos</button>
     <button data-tab="comprobantes" type="button"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>Pagos por revisar<span class="badge" id="badgeComp" hidden></span></button>
+    <div class="nav-sec erp-solo" hidden>ERP</div>
+    <button class="erp-solo" data-tab="inventario" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 9l9-5 9 5v9l-9 5-9-5z"/><path d="M3 9l9 5 9-5"/><path d="M12 14v9"/></svg>Inventario</button>
+    <button class="erp-solo" data-tab="proveedores" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 6h11v10H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg>Proveedores</button>
+    <button class="erp-solo" data-tab="compras" type="button" hidden><svg viewBox="0 0 24 24"><path d="M5 4h14v17H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>Compras</button>
   </nav>
   <div class="side-foot">
     <div class="user">
@@ -331,6 +343,41 @@
   </div>
 </div>
 
+<div id="inventarioWrap" hidden>
+  <div class="pend-resumen" id="invResumen"></div>
+  <div class="toolbar" style="margin-top:14px">
+    <input type="search" id="invSearch" placeholder="Buscar por código, nombre o marca…">
+    <label class="chk"><input type="checkbox" id="invBajo"> Solo stock bajo</label>
+    <button class="btn ghost" id="btnCarga" type="button">Cargar inventario (CSV)</button>
+    <input type="file" id="archivoCarga" accept=".csv,text/csv,text/plain" hidden>
+    <span class="count" id="invCount"></span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Producto</th><th>Marca</th><th>Existencia</th><th>Mínimo</th><th>Costo</th><th></th></tr></thead>
+      <tbody id="invBody"></tbody>
+    </table>
+  </div>
+  <p class="nota-erp">Columnas del CSV: <code>codigo,cantidad</code> y opcionales <code>marca,costo,minimo</code>. Cada carga queda en el historial de movimientos.</p>
+</div>
+
+<div id="proveedoresWrap" hidden>
+  <div class="toolbar"><button class="btn" id="btnNuevoProv" type="button">Nuevo proveedor</button></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Proveedor</th><th>Contacto</th><th>Teléfono</th><th>Órdenes</th></tr></thead>
+      <tbody id="provBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="comprasWrap" hidden>
+  <div class="toolbar"><button class="btn" id="btnNuevaOC" type="button">Nueva orden de compra</button></div>
+  <div class="comp-list" id="sugeridosList"></div>
+  <h3 class="pend-h">Órdenes de compra</h3>
+  <div class="comp-list" id="comprasList"></div>
+</div>
+
 <div id="pendientesWrap" hidden>
   <span id="countPend" hidden></span>
   <div class="pend-resumen" id="pendResumen"></div>
@@ -347,6 +394,23 @@
 
 </main>
 </div>
+
+<dialog id="dlgOC">
+  <form id="formOC" method="dialog">
+    <h3>Nueva orden de compra</h3>
+    <p class="dlg-sub">Queda en borrador hasta que la apruebes. Una línea por producto: <code>codigo,cantidad,costo</code> (el costo es opcional).</p>
+    <div class="dlg-grid" style="grid-template-columns:1fr">
+      <label>Proveedor<select id="ocProveedor"></select></label>
+      <label>Productos<textarea id="ocLineas" rows="6" placeholder="VL-3387,50,2.40&#10;U5132,5"></textarea></label>
+      <label>Nota<input id="ocNota" type="text" autocomplete="off"></label>
+    </div>
+    <div class="dlg-error" id="ocError" hidden></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="ocCancelar">Cancelar</button>
+      <button type="submit" class="btn" id="ocEnviar">Crear orden</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="dlgComp">
   <form id="formComp" method="dialog">
@@ -400,6 +464,10 @@
     } catch(e){ irALogin(); return; }
 
     document.getElementById('subnav').hidden = false;
+    if (esAdmin()){
+      document.querySelectorAll('.erp-solo').forEach(el => el.hidden = false);
+      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras();
+    }
     activarTab('pendientes');
     setInterval(refrescarInsignia, 30000);
   }
@@ -411,7 +479,7 @@
   });
 
   // -------- pestañas --------
-  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes'];
+  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras'];
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -424,6 +492,9 @@
     espera: ['Lista de espera', 'Clientes que esperan un producto sin existencia.'],
     pedidos: ['Pedidos', 'Desde la existencia hasta el despacho.'],
     comprobantes: ['Pagos por revisar', 'Comprobantes con su semáforo de seguridad.'],
+    inventario: ['Inventario', 'Existencias reales, con historial de cada movimiento.'],
+    proveedores: ['Proveedores', 'A quién le compras.'],
+    compras: ['Compras', 'Órdenes de compra: de borrador a mercancía recibida.'],
   };
   function activarTab(tab){
     const v = VISTAS[tab] || ['', ''];
@@ -440,6 +511,9 @@
     else if (tab === 'pedidos') cargarPedidos();
     else if (tab === 'comprobantes') cargarComprobantes();
     else if (tab === 'pendientes') cargarPendientes();
+    else if (tab === 'inventario') cargarInventario();
+    else if (tab === 'proveedores') cargarProveedores();
+    else if (tab === 'compras') cargarCompras();
   }
   document.querySelectorAll('#subnav button').forEach(b => {
     b.addEventListener('click', () => activarTab(b.dataset.tab));
@@ -594,6 +668,333 @@
       cargarPedidos();
     }
   });
+
+  // -------- ERP: inventario, proveedores y compras (JS base generado por el modelo local, revisado) --------
+  async function cargarInventario() {
+    try {
+      const q = document.getElementById('invSearch').value;
+      const bajo = document.getElementById('invBajo').checked;
+      const res = await api(`/api/erp/inventario?q=${encodeURIComponent(q)}&bajo=${bajo ? 1 : 0}`);
+      if (res.status === 401) { irALogin(); return; }
+      if (!res.ok) throw new Error('Error de red');
+      const data = await res.json();
+    
+      // Resumen
+      const resResumen = await api('/api/erp/resumen');
+      if (resResumen.status === 401) { irALogin(); return; }
+      const resumen = await resResumen.json();
+    
+      const invResumen = document.getElementById('invResumen');
+      invResumen.innerHTML = `
+        <div class="pend-card"><b>${esc(resumen.con_inventario)}</b><span>productos con inventario real</span></div>
+        <div class="pend-card"><b>${esc(resumen.bajos)}</b><span>con stock bajo</span></div>
+        <div class="pend-card"><b>$${(resumen.valor_a_costo || 0).toFixed(2)}</b><span>valor del inventario a costo</span></div>
+        <div class="pend-card"><b>${esc(resumen.compras_por_recibir)}</b><span>compras por recibir</span></div>
+      `;
+
+      // Tabla
+      const tbody = document.getElementById('invBody');
+      tbody.innerHTML = '';
+      const productos = data.productos || [];
+      document.getElementById('invCount').textContent = `${productos.length} de ${data.total} productos`;
+
+      if (productos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="empty">No hay productos.</td></tr>`;
+        return;
+      }
+
+      productos.forEach(p => {
+        const tr = document.createElement('tr');
+        if (p.bajo) tr.classList.add('fila-baja');
+      
+        const stockDisplay = p.verificado ? p.stock : 'por confirmar';
+        const minDisplay = p.minimo > 0 ? p.minimo : '—';
+        const costDisplay = p.costo !== null ? `$${p.costo.toFixed(2)}` : '—';
+        const nombreDisplay = p.nombre.length > 70 ? p.nombre.substring(0, 70) + '...' : p.nombre;
+
+        tr.innerHTML = `
+          <td>${esc(p.codigo)}<br>${esc(nombreDisplay)}</td>
+          <td>${esc(p.marca)}</td>
+          <td class="num">${esc(stockDisplay)}</td>
+          <td class="num">${esc(minDisplay)}</td>
+          <td class="num">${esc(costDisplay)}</td>
+          <td><button class="btn ghost sm" data-contar="${p.id}" data-nombre="${esc(p.nombre)}">Contar</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+    } catch (e) {
+      document.getElementById('invBody').innerHTML = `<tr><td colspan="6" class="error">No pude cargar el inventario (${esc(e.message)}).</td></tr>`;
+    }
+  }
+
+  function iniciarInventario() {
+    const searchInput = document.getElementById('invSearch');
+    const bajoInput = document.getElementById('invBajo');
+    let timeout = null;
+
+    searchInput.addEventListener('input', () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(cargarInventario, 300);
+    });
+
+    bajoInput.addEventListener('change', cargarInventario);
+
+    document.getElementById('invBody').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-contar]');
+      if (!btn) return;
+    
+      const id = btn.dataset.contar;
+      const nombre = btn.dataset.nombre;
+    
+      const cantidadStr = prompt(`Existencia real de ${nombre}:`);
+      if (cantidadStr === null) return;
+      const cantidad = parseInt(cantidadStr, 10);
+      if (isNaN(cantidad) || cantidad < 0) return;
+
+      const minimoStr = prompt('Stock mínimo (vacío = no cambiar):');
+      const minimo = minimoStr ? parseInt(minimoStr, 10) : NaN;
+
+      const payload = { cantidad };
+      if (!isNaN(minimo) && minimo >= 0) payload.minimo = minimo;
+
+      const res = await api(`/api/erp/inventario/${id}/conteo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.status === 401) { irALogin(); return; }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'No se pudo completar la acción');
+      } else {
+        cargarInventario();
+      }
+    });
+  }
+
+  async function cargarProveedores() {
+    try {
+      const res = await api('/api/erp/proveedores');
+      if (res.status === 401) { irALogin(); return; }
+      if (!res.ok) throw new Error('Error de red');
+      const data = await res.json();
+    
+      const tbody = document.getElementById('provBody');
+      tbody.innerHTML = '';
+
+      if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="empty">Todavía no hay proveedores.</td></tr>`;
+        return;
+      }
+
+      data.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${esc(p.nombre)}</td>
+          <td>${esc(p.contacto)}</td>
+          <td>${esc(p.telefono)}</td>
+          <td class="num">${esc(p.ordenes)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    } catch (e) {
+      document.getElementById('provBody').innerHTML = `<tr><td colspan="4" class="error">No pude cargar los proveedores (${esc(e.message)}).</td></tr>`;
+    }
+  }
+
+  function iniciarProveedores() {
+    document.getElementById('btnNuevoProv').addEventListener('click', async () => {
+      const nombre = prompt('Nombre del proveedor (obligatorio):');
+      if (!nombre) return;
+      const contacto = prompt('Contacto:');
+      const telefono = prompt('Teléfono:');
+
+      const res = await api('/api/erp/proveedores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, contacto, telefono })
+      });
+
+      if (res.status === 401) { irALogin(); return; }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'No se pudo completar la acción');
+      } else {
+        cargarProveedores();
+      }
+    });
+  }
+
+  async function cargarCompras() {
+    try {
+      const res = await api('/api/erp/compras');
+      if (res.status === 401) { irALogin(); return; }
+      if (!res.ok) throw new Error('Error de red');
+      const data = await res.json();
+
+      // Render Orders
+      const comprasList = document.getElementById('comprasList');
+      comprasList.innerHTML = '';
+    
+      if (!data.ordenes || data.ordenes.length === 0) {
+        comprasList.innerHTML = `<div class="empty">Todavía no hay órdenes de compra.</div>`;
+      } else {
+        data.ordenes.forEach(o => {
+          const div = document.createElement('div');
+          div.className = 'comp';
+        
+          let luzClass = 'gris';
+          if (o.estado === 'borrador') luzClass = 'amarillo';
+          else if (o.estado === 'aprobada') luzClass = 'amarillo';
+          else if (o.estado === 'recibida') luzClass = 'verde';
+          else if (o.estado === 'cancelada') luzClass = 'rojo';
+
+          const fecha = o.creada_en ? o.creada_en.substring(0, 10) : '';
+        
+          let html = `
+            <div class="luz ${luzClass}"></div>
+            <div style="min-width:0">
+              <h4>Orden #${esc(o.id)} · ${esc(o.proveedor)}</h4>
+              <div class="sub">${esc(o.estado)} · $${(o.total || 0).toFixed(2)} · ${esc(fecha)}</div>
+              <ul>
+          `;
+        
+          if (o.lineas) {
+            o.lineas.forEach(l => {
+              const nombre = l.nombre.length > 60 ? l.nombre.substring(0, 60) + '...' : l.nombre;
+              html += `<li>${esc(l.cantidad)} × ${esc(l.codigo)} ${esc(nombre)} a $${(l.costo_unitario || 0).toFixed(2)}</li>`;
+            });
+          }
+        
+          html += `</ul><div class="acciones">`;
+        
+          if (o.estado === 'borrador') {
+            html += `<button class="btn sm" data-oc="aprobar" data-id="${o.id}">Aprobar</button>`;
+            html += `<button class="btn ghost sm" data-oc="cancelar" data-id="${o.id}">Cancelar</button>`;
+          } else if (o.estado === 'aprobada') {
+            html += `<button class="btn sm" data-oc="recibir" data-id="${o.id}">Recibir mercancía</button>`;
+            html += `<button class="btn ghost sm" data-oc="cancelar" data-id="${o.id}">Cancelar</button>`;
+          }
+        
+          html += `</div></div>`;
+          div.innerHTML = html;
+          comprasList.appendChild(div);
+        });
+      }
+
+      // Render Sugeridos
+      const sugeridosList = document.getElementById('sugeridosList');
+      sugeridosList.innerHTML = '';
+    
+      if (data.sugeridos && data.sugeridos.length > 0) {
+        const div = document.createElement('div');
+        div.className = 'comp';
+        div.innerHTML = `
+          <div class="luz amarillo"></div>
+          <div>
+            <h4>Por reponer</h4>
+            <ul>
+              ${data.sugeridos.map(s => {
+                const nombre = s.nombre.length > 60 ? s.nombre.substring(0, 60) + '...' : s.nombre;
+                return `<li>${esc(s.codigo)} ${esc(nombre)} — stock ${esc(s.stock)}, mínimo ${esc(s.minimo)}, sugerido pedir ${esc(s.sugerido)}</li>`;
+              }).join('')}
+            </ul>
+          </div>
+        `;
+        sugeridosList.appendChild(div);
+      }
+
+    } catch (e) {
+      document.getElementById('comprasList').innerHTML = `<div class="error">${esc(e.message)}</div>`;
+    }
+  }
+
+  function iniciarCompras() {
+    document.getElementById('comprasList').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-oc]');
+      if (!btn) return;
+
+      const accion = btn.dataset.oc;
+      const id = btn.dataset.id;
+
+      if (accion === 'cancelar') {
+        if (!confirm('¿Cancelar la orden?')) return;
+      }
+
+      const res = await api(`/api/erp/compras/${id}/${accion}`, { method: 'POST' });
+      if (res.status === 401) { irALogin(); return; }
+    
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'No se pudo completar la acción');
+      } else {
+        if (accion === 'recibir') {
+          const d = await res.json();
+          alert(`Mercancía recibida. Productos repuestos: ${d.repuestos.length}. Clientes avisados de la lista de espera: ${d.lista_de_espera.avisados}.`);
+        }
+        cargarCompras();
+      }
+    });
+  }
+
+
+  // -------- ERP: carga por CSV y nueva orden de compra --------
+  function iniciarErpExtras(){
+    const archivo = document.getElementById('archivoCarga');
+    document.getElementById('btnCarga').addEventListener('click', () => archivo.click());
+    archivo.addEventListener('change', async () => {
+      const f = archivo.files[0];
+      if (!f) return;
+      const texto = await f.text();
+      archivo.value = '';
+      const r = await api('/api/erp/inventario/carga', { method:'POST', headers:{ 'Content-Type':'text/csv' }, body: texto });
+      if (r.status === 401){ irALogin(); return; }
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok){ alert(d.error || 'No se pudo cargar el archivo'); return; }
+      let msg = `Productos actualizados: ${d.actualizados}.`;
+      if (d.no_encontrados && d.no_encontrados.length) msg += `\nNo encontrados: ${d.no_encontrados.slice(0, 10).join(', ')}${d.no_encontrados.length > 10 ? '…' : ''}`;
+      if (d.codigos_ambiguos && d.codigos_ambiguos.length) msg += `\nCódigo repetido en varias marcas (agrega la columna marca): ${d.codigos_ambiguos.slice(0, 10).join(', ')}`;
+      if (d.filas_invalidas) msg += `\nFilas inválidas: ${d.filas_invalidas}`;
+      alert(msg);
+      cargarInventario();
+    });
+
+    const dlgOC = document.getElementById('dlgOC');
+    document.getElementById('ocCancelar').addEventListener('click', () => dlgOC.close());
+    document.getElementById('btnNuevaOC').addEventListener('click', async () => {
+      const r = await api('/api/erp/proveedores');
+      const provs = r.ok ? await r.json() : [];
+      if (!provs.length){ alert('Primero crea un proveedor en la sección Proveedores.'); return; }
+      document.getElementById('ocProveedor').innerHTML = provs.map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join('');
+      document.getElementById('ocLineas').value = '';
+      document.getElementById('ocNota').value = '';
+      document.getElementById('ocError').hidden = true;
+      dlgOC.showModal();
+    });
+    document.getElementById('formOC').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const err = document.getElementById('ocError');
+      err.hidden = true;
+      const lineas = document.getElementById('ocLineas').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+        const [codigo, cantidad, costo] = l.split(/[,;\t]/).map(x => x.trim());
+        return { codigo, cantidad, costo };
+      });
+      const btn = document.getElementById('ocEnviar');
+      btn.disabled = true;
+      try {
+        const r = await api('/api/erp/compras', {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ proveedor_id: document.getElementById('ocProveedor').value, nota: document.getElementById('ocNota').value, lineas }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok){ err.textContent = d.error || 'No se pudo crear la orden'; err.hidden = false; return; }
+        dlgOC.close();
+        cargarCompras();
+      } finally { btn.disabled = false; }
+    });
+  }
 
   // -------- por atender --------
   async function refrescarInsignia(){

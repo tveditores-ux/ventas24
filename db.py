@@ -69,6 +69,63 @@ CREATE TABLE IF NOT EXISTS pedidos (
     fecha TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS erp_proveedores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre TEXT NOT NULL UNIQUE,
+    contacto TEXT,
+    telefono TEXT,
+    notas TEXT,
+    activo INTEGER NOT NULL DEFAULT 1,
+    creado_en TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS erp_ordenes_compra (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proveedor_id INTEGER NOT NULL REFERENCES erp_proveedores(id),
+    estado TEXT NOT NULL DEFAULT 'borrador',    -- borrador / aprobada / recibida / cancelada
+    nota TEXT,
+    creada_por INTEGER REFERENCES usuarios(id),
+    aprobada_por INTEGER REFERENCES usuarios(id),
+    aprobada_en TEXT,
+    recibida_por INTEGER REFERENCES usuarios(id),
+    recibida_en TEXT,
+    creada_en TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS erp_oc_lineas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    orden_id INTEGER NOT NULL REFERENCES erp_ordenes_compra(id),
+    catalogo_id INTEGER NOT NULL REFERENCES catalogo(id),
+    cantidad INTEGER NOT NULL,
+    costo_unitario REAL,
+    recibido INTEGER NOT NULL DEFAULT 0
+);
+
+-- Historial de existencias: cada cambio de stock deja una fila. Nada se edita a mano.
+CREATE TABLE IF NOT EXISTS erp_movimientos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    catalogo_id INTEGER NOT NULL REFERENCES catalogo(id),
+    tipo TEXT NOT NULL,          -- conteo / recepcion / reserva / liberacion / ajuste
+    cantidad INTEGER NOT NULL,   -- positivo entra, negativo sale
+    stock_despues INTEGER NOT NULL,
+    costo_unitario REAL,
+    referencia TEXT,
+    nota TEXT,
+    usuario_id INTEGER REFERENCES usuarios(id),
+    fecha TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_erp_mov_producto ON erp_movimientos(catalogo_id, id);
+
+-- Avisos entre módulos (CRM <-> ERP): quien los produce los deja aquí, quien reacciona los marca procesados.
+CREATE TABLE IF NOT EXISTS eventos_outbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo TEXT NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}',
+    estado TEXT NOT NULL DEFAULT 'pendiente',   -- pendiente / procesado / fallido
+    creado_en TEXT DEFAULT CURRENT_TIMESTAMP,
+    procesado_en TEXT
+);
+
 CREATE TABLE IF NOT EXISTS consultas_catalogo (
     contacto_id INTEGER NOT NULL,
     codigo TEXT NOT NULL,
@@ -171,6 +228,8 @@ def inicializar():
             ("precio_mayor", "REAL"),                       # NULL = usa `precio` para todos
             ("stock_verificado", "INTEGER NOT NULL DEFAULT 1"),  # 0 = existencia por confirmar
             ("stock_prueba", "INTEGER NOT NULL DEFAULT 0"),      # 1 = cantidad ficticia de prueba
+            ("costo", "REAL"),                                    # último costo de compra
+            ("stock_minimo", "INTEGER NOT NULL DEFAULT 0"),       # por debajo de esto hay que reponer
         ):
             if col not in cols_catalogo:
                 con.execute(f"ALTER TABLE catalogo ADD COLUMN {col} {ddl}")
@@ -327,6 +386,11 @@ def registrar_espera(contacto_id: int, producto: str):
         )
 
 
+def marcar_espera_atendida(espera_id: int):
+    with conectar() as con:
+        con.execute("UPDATE solicitudes_espera SET atendido = 1 WHERE id = ?", (espera_id,))
+
+
 def listar_espera(solo_pendientes: bool = True):
     with conectar() as con:
         query = """
@@ -425,11 +489,28 @@ def cancelar_orden(pedido_id: int):
             for l in lineas:
                 if l["reservado"] and l["catalogo_id"]:
                     con.execute("UPDATE catalogo SET stock = stock + ? WHERE id = ?", (l["reservado"], l["catalogo_id"]))
+                    registrar_movimiento(con, l["catalogo_id"], "liberacion", l["reservado"], referencia=f"pedido {l['id']} cancelado")
             ids = [l["id"] for l in lineas]
             con.execute(
                 f"UPDATE pedidos SET estado = 'cancelado', reservado = 0 WHERE id IN ({','.join('?' * len(ids))})", ids
             )
     return len(lineas)
+
+
+def registrar_movimiento(con, catalogo_id: int, tipo: str, cantidad: int, referencia=None, nota=None,
+                         usuario_id=None, costo=None):
+    """Anota un cambio de stock en el historial (el stock ya fue actualizado por quien llama)."""
+    fila = con.execute("SELECT stock FROM catalogo WHERE id = ?", (catalogo_id,)).fetchone()
+    con.execute(
+        "INSERT INTO erp_movimientos (catalogo_id, tipo, cantidad, stock_despues, costo_unitario, referencia, nota, usuario_id) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (catalogo_id, tipo, cantidad, fila["stock"] if fila else 0, costo, referencia, nota, usuario_id),
+    )
+
+
+def emitir_evento(con, tipo: str, payload: dict):
+    import json
+    con.execute("INSERT INTO eventos_outbox (tipo, payload) VALUES (?, ?)", (tipo, json.dumps(payload, ensure_ascii=False)))
 
 
 def crear_orden(contacto_id: int, orden: str, lineas: list, estado_pago: str, confirmado_por: str | None = None):
@@ -448,6 +529,7 @@ def crear_orden(contacto_id: int, orden: str, lineas: list, estado_pago: str, co
                 if cur.rowcount == 0:
                     raise ValueError(f"ya no alcanza el stock de {l['producto'][:50]}")
                 reservado = l["cantidad"]
+                registrar_movimiento(con, l["catalogo_id"], "reserva", -l["cantidad"], referencia=f"orden {orden}")
             total = round(l["cantidad"] * l["precio"], 2)
             con.execute(
                 "INSERT INTO pedidos (contacto_id, producto, cantidad, precio_unitario, total, estado_pago, orden, "

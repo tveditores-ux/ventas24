@@ -41,6 +41,7 @@ from functools import wraps
 
 import db
 import ciclo
+import erp
 import eventos
 import seguridad
 import wecall
@@ -212,6 +213,114 @@ def crm_pedidos():
 
 
 ROLES_ADMIN = ["super_admin", "admin"]
+
+
+# ---------------------------------------------------------------------
+# ERP: inventario, proveedores y compras (solo administración)
+# ---------------------------------------------------------------------
+
+def _erp(funcion, *args, **kwargs):
+    """Ejecuta una operación del ERP y convierte sus errores de validación en respuestas 400."""
+    try:
+        return jsonify(funcion(*args, **kwargs))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/erp/resumen", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_resumen():
+    return jsonify(erp.resumen_inventario())
+
+
+@app.route("/api/erp/inventario", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_inventario():
+    productos, total = erp.inventario(request.args.get("q"), request.args.get("bajo") == "1")
+    return jsonify({"productos": productos, "total": total})
+
+
+@app.route("/api/erp/inventario/<int:catalogo_id>/conteo", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_conteo(catalogo_id):
+    d = request.get_json(silent=True) or {}
+    try:
+        cantidad = int(d.get("cantidad"))
+        minimo = int(d["minimo"]) if str(d.get("minimo", "")).strip() != "" else None
+        costo = float(str(d["costo"]).replace(",", ".")) if str(d.get("costo", "")).strip() != "" else None
+    except (TypeError, ValueError):
+        return jsonify({"error": "cantidad, mínimo y costo deben ser números"}), 400
+    return _erp(erp.contar, catalogo_id, cantidad, request.usuario["id"], (d.get("nota") or "").strip() or None, minimo, costo)
+
+
+@app.route("/api/erp/inventario/carga", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_carga():
+    """CSV en el cuerpo con columnas codigo,cantidad y opcionales marca,costo,minimo."""
+    import csv
+    import io
+    texto = request.get_data().decode("utf-8-sig", errors="replace")
+    muestra = texto[:2000]
+    delimitador = ";" if muestra.count(";") > muestra.count(",") else ","
+    filas = list(csv.DictReader(io.StringIO(texto), delimiter=delimitador))
+    if not filas or "codigo" not in (filas[0].keys() if filas else []) or "cantidad" not in filas[0].keys():
+        return jsonify({"error": "el CSV necesita las columnas codigo y cantidad (opcionales: marca, costo, minimo)"}), 400
+    resultado = erp.cargar_conteo([{k.strip().lower(): v for k, v in f.items() if k} for f in filas], request.usuario["id"])
+    return jsonify(resultado)
+
+
+@app.route("/api/erp/movimientos", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_movimientos():
+    return jsonify(erp.movimientos(request.args.get("producto", type=int)))
+
+
+@app.route("/api/erp/proveedores", methods=["GET", "POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_proveedores():
+    if request.method == "GET":
+        return jsonify(erp.listar_proveedores())
+    d = request.get_json(silent=True) or {}
+    try:
+        nuevo = erp.crear_proveedor(d.get("nombre"), d.get("contacto"), d.get("telefono"), d.get("notas"))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"id": nuevo})
+
+
+@app.route("/api/erp/compras", methods=["GET", "POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_compras():
+    if request.method == "GET":
+        return jsonify({"ordenes": erp.listar_ordenes(request.args.get("estado")), "sugeridos": erp.sugerir_reposicion()})
+    d = request.get_json(silent=True) or {}
+    try:
+        orden = erp.crear_orden_compra(int(d.get("proveedor_id")), d.get("lineas") or [], (d.get("nota") or "").strip() or None,
+                                       request.usuario["id"])
+    except (TypeError, ValueError) as e:
+        return jsonify({"error": str(e) if isinstance(e, ValueError) and str(e) else "proveedor inválido"}), 400
+    return jsonify({"id": orden})
+
+
+@app.route("/api/erp/compras/<int:orden_id>/<accion>", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_compra_accion(orden_id, accion):
+    try:
+        if accion == "aprobar":
+            erp.aprobar_orden(orden_id, request.usuario["id"])
+            return jsonify({"ok": True})
+        if accion == "cancelar":
+            erp.cancelar_orden(orden_id)
+            return jsonify({"ok": True})
+        if accion == "recibir":
+            recibidos = (request.get_json(silent=True) or {}).get("recibidos")
+            repuestos = erp.recibir_orden(orden_id, request.usuario["id"], recibidos)
+            avisos = ciclo.procesar_eventos() if repuestos else {"avisados": 0, "sin_aviso": 0, "eventos": 0}
+            eventos.registrar("compra_recibida", "-", f"orden #{orden_id} recibida por {request.usuario['nombre']}")
+            return jsonify({"ok": True, "repuestos": repuestos, "lista_de_espera": avisos})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+    return jsonify({"error": "acción desconocida"}), 404
 
 
 def _puede_ver_pedido(usuario, pedido):
