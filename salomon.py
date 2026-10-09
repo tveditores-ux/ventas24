@@ -365,6 +365,11 @@ class Salomon(base.Agente):
 
             reintentos += 1
             eventos.registrar("vigilante", self.telefono, f"objeción ({veredicto.capa}): {veredicto.motivo}", ok=False, agente_tipo=self.tipo)
+            if reintentos > self.perfil.max_reintentos and veredicto.capa == "modelo":
+                # Las reglas duras ya pasaron; solo el revisor con modelo sigue dudando. Mejor responder al
+                # cliente que dejarlo en silencio: se envía el último borrador y queda en la bitácora.
+                _bitacora(self.contacto_id, veredicto.capa, veredicto.motivo, texto, "enviado pese a objeción del revisor")
+                return self._guardar(texto_usuario, texto)
             if reintentos > self.perfil.max_reintentos:
                 _bitacora(self.contacto_id, veredicto.capa, veredicto.motivo, texto, "derivado a humano")
                 self._derivar("el vigilante rechazó la respuesta varias veces: " + veredicto.motivo)

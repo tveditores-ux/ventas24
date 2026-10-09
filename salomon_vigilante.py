@@ -201,6 +201,12 @@ condiciones que no aparece en los resultados de herramientas mostrados.
 - Responde a una queja, reclamo o petición de hablar con una persona sin \
 ofrecer pasar a una persona del equipo.
 
+REGLA DE ORO: rechaza solo si el borrador CONTRADICE de forma clara algo que aparece en la \
+conversación o en los resultados mostrados. Si no puedes comprobar algo con lo que ves, \
+NO lo rechaces: lo más probable es que venga de una parte de la conversación que no se muestra. \
+Una referencia a algo que el cliente pidió antes es válida si aparece en la conversación. \
+Revisa las cuentas con cuidado antes de decir que una suma está mal.
+
 No rechaces por estilo, longitud ni por detalles menores. Responde ÚNICAMENTE \
 con JSON: {"ok": true|false, "motivo": "una frase breve dirigida a Salomón"}.
 """
@@ -211,14 +217,15 @@ def revisar_con_modelo(client, modelo: str, borrador: str, historial: list, resu
         return Veredicto(True, "", "modelo-apagado")
 
     ultimos = []
-    for msg in historial[-6:]:
+    for msg in historial[-60:]:
         contenido = msg["content"]
         if isinstance(contenido, str):
-            ultimos.append(f'{msg["role"]}: {contenido}')
+            ultimos.append(f'{msg["role"]}: {contenido[:500]}')
     contexto = (
-        "CONVERSACIÓN RECIENTE:\n" + "\n".join(ultimos[-6:])
+        "CONVERSACIÓN COMPLETA (lo más antiguo primero; el cliente y el vendedor ya hablaron de esto):\n"
+        + "\n".join(ultimos[-40:])
         + "\n\nRESULTADOS DE HERRAMIENTAS EN ESTE TURNO:\n"
-        + (json.dumps(resultados_herramientas, ensure_ascii=False)[:3000] or "[]")
+        + (json.dumps(resultados_herramientas, ensure_ascii=False)[:6000] or "[]")
         + f"\n\nBORRADOR DE SALOMÓN:\n{borrador}"
     )
     try:
