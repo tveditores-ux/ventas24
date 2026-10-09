@@ -49,6 +49,14 @@ _FILTRA_INTERNOS = re.compile(
     re.IGNORECASE,
 )
 
+# Promete consultar al equipo: solo es cierto si llamó a pasar_a_humano, y en ese
+# caso la respuesta no llega a esta revisión. Si llega acá, es una promesa vacía.
+_PROMETE_CONSULTAR = re.compile(
+    r"lo consult\w* con|voy a consultar|consultar(le|lo)? (con )?(el|al|a la) equipo|"
+    r"preguntar(le)? (al|a la|con el) equipo|lo (hablo|reviso) con (el|la) (equipo|administraci)",
+    re.IGNORECASE,
+)
+
 _NUMERO_LARGO = re.compile(r"\d{9,}")
 
 
@@ -115,6 +123,15 @@ def revisar_reglas(texto: str, precios_validos: set, registro_hecho: bool) -> Ve
 
     if _PROMESAS.search(texto):
         return Veredicto(False, "No prometas garantías ni tiempos de entrega que no constan en el sistema.", "reglas")
+
+    if _PROMETE_CONSULTAR.search(texto):
+        return Veredicto(
+            False,
+            "Dices que vas a consultar con el equipo pero no llamaste a pasar_a_humano. "
+            "Si de verdad hace falta una persona, llama a pasar_a_humano; si no, responde tú con lo que sí sabes "
+            "y hazle una pregunta al cliente.",
+            "reglas",
+        )
 
     if _NUMERO_LARGO.search(texto):
         return Veredicto(False, "No des números de cuenta ni teléfonos: el pago lo coordina una persona del equipo.", "reglas")
