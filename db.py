@@ -69,6 +69,12 @@ CREATE TABLE IF NOT EXISTS pedidos (
     fecha TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS consultas_catalogo (
+    contacto_id INTEGER NOT NULL,
+    codigo TEXT NOT NULL,
+    fecha TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS configuracion (
     clave TEXT PRIMARY KEY,
     valor TEXT NOT NULL
@@ -702,7 +708,29 @@ def precio_para(fila, tipo: str | None):
     return mayor if (tipo == "mayorista" and mayor) else fila["precio"]
 
 
-def buscar_catalogo(marca=None, modelo=None, anio=None, nombre=None, texto=None, tipo=None, limite=15):
+def palabras_clave(*textos) -> list:
+    """Palabras significativas de una consulta (sin acentos ni palabras vacías)."""
+    crudas = " ".join(str(x) for x in textos if x)
+    return [t for t in _normalizar(crudas).replace("/", " ").replace(",", " ").split() if t not in _PALABRAS_VACIAS]
+
+
+def registrar_consulta(contacto_id: int, codigos: list) -> int:
+    """Anota qué productos distintos se le mostraron a este contacto y devuelve cuántos lleva en 24 h.
+    Sirve para frenar a quien recorre el inventario preguntando de a poco."""
+    with conectar() as con:
+        if codigos:
+            con.executemany(
+                "INSERT INTO consultas_catalogo (contacto_id, codigo) VALUES (?, ?)",
+                [(contacto_id, c) for c in codigos],
+            )
+        return con.execute(
+            "SELECT COUNT(DISTINCT codigo) AS n FROM consultas_catalogo "
+            "WHERE contacto_id = ? AND fecha > datetime('now', '-1 day')",
+            (contacto_id,),
+        ).fetchone()["n"]
+
+
+def buscar_catalogo(marca=None, modelo=None, anio=None, nombre=None, texto=None, tipo=None, limite=5):
     with conectar() as con:
         productos = con.execute("SELECT * FROM catalogo").fetchall()
 
@@ -735,8 +763,8 @@ def buscar_catalogo(marca=None, modelo=None, anio=None, nombre=None, texto=None,
     # Lo más corto primero: suele ser la descripción más genérica del producto.
     primero = tokens[0] if tokens else ""
     de_lista.sort(key=lambda p: (not _normalizar(p["nombre"]).startswith(primero), len(p["nombre"])))
-    resultados.extend(_ficha(p, tipo) for p in de_lista[:limite])
-    return resultados
+    resultados.extend(_ficha(p, tipo) for p in de_lista)
+    return resultados[:limite]
 
 
 def _coincide(token, pajar):

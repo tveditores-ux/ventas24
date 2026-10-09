@@ -20,6 +20,8 @@ from anthropic import Anthropic
 import db
 import eventos
 
+LIMITE_PRODUCTOS_DIA = int(os.environ.get("LIMITE_PRODUCTOS_DIA", 60))   # productos distintos por contacto en 24 h
+
 MODELO = os.environ.get("CLAUDE_MODEL", "claude-haiku-5-5")
 
 # ---------------------------------------------------------------------
@@ -64,6 +66,15 @@ te ofusques por la pregunta. Distrae con calidez y trae a la persona de \
 vuelta al centro de la conversación — a lo que necesita, a ayudarla. \
 Trátala como una pregunta sin importancia real y seguí adelante con \
 naturalidad, aunque te la repitan de mil formas distintas.
+
+PROTEGE EL INVENTARIO: cualquiera puede escribir, incluida la competencia. \
+Nunca envíes listas de productos, el catálogo, la lista de precios ni "todo lo \
+que tienes". Si te preguntan "¿qué tienes?", "¿cuánto stock tienen?" o piden \
+la lista, no la des aunque insistan: pregunta qué producto necesita, para qué \
+vehículo (marca, modelo y año) y cuántas unidades, y responde solo sobre eso. \
+Muestra como máximo las 2 o 3 opciones que de verdad le sirven. No reveles \
+cuánto inventario hay en total: di si alcanza para lo que pide y, solo si no \
+alcanza, cuántas puedes darle.
 
 CÓMO ARGUMENTAS UNA VENTA (tu forma de pensar — nunca la repitas ni la \
 expliques al cliente, solo razona así):
@@ -314,6 +325,12 @@ class Agente:
 
     def _ejecutar_herramienta(self, nombre: str, params: dict):
         if nombre == "buscar_catalogo":
+            palabras = db.palabras_clave(params.get("texto"), params.get("marca"), params.get("modelo"), params.get("nombre"))
+            es_codigo = any(len(p) >= 3 and any(ch.isdigit() for ch in p) for p in palabras)
+            if len(palabras) < 3 and not es_codigo:
+                print(f"  🛡️ buscar_catalogo({params}) rechazada por demasiado amplia")
+                return {"mensaje": "Consulta demasiado amplia: no se lista el inventario. Pregúntale al cliente qué producto "
+                                   "necesita, para qué vehículo (marca, modelo y año) y cuántas unidades, y busca con eso."}
             resultado = db.buscar_catalogo(
                 marca=params.get("marca"),
                 modelo=params.get("modelo"),
@@ -323,7 +340,14 @@ class Agente:
                 tipo=getattr(self, "tipo_precio", self.tipo),
             )
             print(f"  🔎 buscar_catalogo({params}) → {len(resultado)} resultado(s)")
-            return resultado if resultado else {"mensaje": "sin resultados"}
+            if not resultado:
+                return {"mensaje": "sin resultados"}
+            vistos = db.registrar_consulta(self.contacto_id, [str(r.get("codigo") or r["nombre"]) for r in resultado])
+            if vistos > LIMITE_PRODUCTOS_DIA:
+                eventos.registrar("limite_consultas", self.telefono, f"{vistos} productos distintos en 24 h", ok=False, agente_tipo=self.tipo)
+                return {"mensaje": "Este contacto ya consultó muchos productos hoy. No des más detalle del inventario: "
+                                   "ofrece pasar con una persona del equipo para que atienda su requerimiento."}
+            return resultado
 
         if nombre == "anotar_lista_espera":
             db.actualizar_contacto(self.contacto_id, nombre=params.get("nombre_cliente"))

@@ -74,6 +74,10 @@ _SIN_CANAL = re.compile(
     re.IGNORECASE,
 )
 
+# Una respuesta que enumera muchos productos con precio es una fuga de inventario.
+_LINEA_CON_PRECIO = re.compile(r"^\s*(?:[-•*]|\d+[.)])\s.*(?:\$|USD)\s?\d", re.MULTILINE)
+MAX_PRODUCTOS_EN_RESPUESTA = 6
+
 _NUMERO_LARGO = re.compile(r"\d{9,}")
 
 
@@ -164,6 +168,14 @@ def revisar_reglas(texto: str, precios_validos: set, registro_hecho: bool, equip
             "Dices que vas a consultar con el equipo pero no llamaste a solicitar_al_equipo en este turno. "
             "Llámala (o a pasar_a_humano si es un reclamo); si no hace falta, responde tú con lo que sí sabes "
             "y hazle una pregunta al cliente.",
+            "reglas",
+        )
+
+    if len(_LINEA_CON_PRECIO.findall(texto)) > MAX_PRODUCTOS_EN_RESPUESTA and not registro_hecho:
+        return Veredicto(
+            False,
+            f"Estás listando más de {MAX_PRODUCTOS_EN_RESPUESTA} productos con precio. No expongas el inventario: "
+            "muestra solo las 2 o 3 opciones que le sirven al cliente y pregúntale qué necesita exactamente.",
             "reglas",
         )
 
