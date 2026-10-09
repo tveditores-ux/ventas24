@@ -44,7 +44,7 @@ import eventos
 import seguridad
 import wecall
 from wecall import VentanaCerradaError, EnvioFallidoError
-from agente import Agente
+from perfiles import Agente
 
 load_dotenv()
 
