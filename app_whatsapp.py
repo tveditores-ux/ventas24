@@ -494,13 +494,21 @@ def debug_datos_prueba():
         )
         return jsonify({"productos_con_inventario_de_prueba": len(afectados), "muestra": afectados[:12],
                         "datos_pago": "ficticios guardados"})
+    if accion == "todo":
+        cantidad = request.args.get("cantidad", default=100, type=int)
+        with db.conectar() as con:
+            n = con.execute(
+                "UPDATE catalogo SET stock = ?, stock_verificado = 1, stock_prueba = 1", (cantidad,)
+            ).rowcount
+        return jsonify({"productos_actualizados": n, "stock_de_cada_uno": cantidad,
+                        "nota": "cantidades de muestra; accion=quitar las devuelve a 'por confirmar'"})
     if accion == "quitar":
         quitados = db.quitar_stock_prueba()
         pago = db.obtener_config("datos_pago") or ""
         if pago.startswith("PRUEBA"):
             db.guardar_config("datos_pago", None)
         return jsonify({"productos_restablecidos": quitados})
-    return jsonify({"error": "usa ?accion=cargar o ?accion=quitar"}), 400
+    return jsonify({"error": "usa ?accion=cargar, todo o quitar"}), 400
 
 
 @app.route("/debug/cargar-lista", methods=["POST"])
