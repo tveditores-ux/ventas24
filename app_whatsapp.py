@@ -445,6 +445,36 @@ def debug_cargar_catalogo():
     return jsonify({"productos_antes": antes, "productos_despues": despues})
 
 
+@app.route("/debug/salomon-bitacora", methods=["GET"])
+def debug_salomon_bitacora():
+    """DIAGNÓSTICO — últimas objeciones del vigilante (por qué Salomón corrigió o derivó a una persona)."""
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    with db.conectar() as con:
+        try:
+            filas = con.execute(
+                "SELECT b.id, b.fecha, c.telefono, b.capa, b.motivo, b.borrador, b.accion FROM salomon_bitacora b "
+                "LEFT JOIN contactos c ON c.id = b.contacto_id ORDER BY b.id DESC LIMIT 20"
+            ).fetchall()
+        except Exception:
+            filas = []
+    return jsonify([dict(f) for f in filas])
+
+
+@app.route("/debug/modo-manual/<telefono>", methods=["POST"])
+def debug_modo_manual(telefono):
+    """ADMIN — pone o quita el modo manual de un contacto (?valor=0|1). Quitarlo devuelve la conversación al bot."""
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    valor = request.args.get("valor", type=int)
+    if valor not in (0, 1):
+        return jsonify({"error": "usa ?valor=0 o ?valor=1"}), 400
+    telefono = db.normalizar_telefono(telefono)
+    contacto_id = db.obtener_o_crear_contacto(telefono, tipo="cliente")
+    db.actualizar_contacto(contacto_id, modo_manual=valor)
+    return jsonify({"telefono": telefono, "contacto_id": contacto_id, "modo_manual": valor})
+
+
 @app.route("/debug/datos-prueba", methods=["POST"])
 def debug_datos_prueba():
     """ADMIN — carga o quita datos FICTICIOS de prueba: inventario confirmado en algunos productos y
