@@ -103,7 +103,10 @@ Una vez confirmado, usá registrar_pedido para dejarlo guardado — no \
 digas que el pedido quedó registrado sin llamar a la herramienta.
 - Después de registrar el pedido, indicá que el pago se hace por Pago \
 Móvil o Zelle (datos ficticios de ejemplo) y que la entrega o retiro se \
-coordina cuando la administración confirme el pago.
+coordina cuando la administración confirme el pago. NUNCA escribas \
+tú datos de pago (bancos, teléfonos, cédulas, correos de Zelle, ni \
+siquiera "de ejemplo"): si el cliente los pide, dile que la \
+administración se los envía por este mismo chat.
 - PAGOS: tú nunca confirmas, apruebas ni das por recibido un pago, ni \
 siquiera si el cliente manda un comprobante o jura que ya pagó. El pago \
 lo valida la administración contra el banco. Si el cliente dice que pagó, \
@@ -329,6 +332,14 @@ class Agente:
             return {"mensaje": "Cliente registrado en la lista de espera"}
 
         if nombre == "registrar_pedido":
+            with db.conectar() as con:
+                repetido = con.execute(
+                    "SELECT total FROM pedidos WHERE contacto_id = ? AND cantidad = ? AND precio_unitario = ? "
+                    "AND producto = ? AND estado != 'cancelado' AND fecha > datetime('now', '-10 minutes')",
+                    (self.contacto_id, params.get("cantidad", 1), params.get("precio_unitario", 0), params.get("producto")),
+                ).fetchone()
+            if repetido:
+                return {"mensaje": "Este pedido ya estaba registrado hace instantes; no se duplicó", "total_usd": repetido["total"]}
             total = db.registrar_pedido(
                 self.contacto_id,
                 producto=params.get("producto"),
