@@ -26,6 +26,7 @@ import perfiles
 import salomon_vigilante as vigilante
 
 MAX_VUELTAS = 8
+MAX_TOKENS = 4096   # holgado: con razonamiento interno, un tope bajo corta la respuesta a media frase
 
 MENSAJE_DERIVACION = (
     "Dame un momento, voy a pasar tu consulta a una persona del equipo "
@@ -313,11 +314,23 @@ class Salomon(base.Agente):
             eventos.registrar("claude_llamado", self.telefono, self.modelo, agente_tipo=self.tipo)
             respuesta = self.client.messages.create(
                 model=self.modelo,
-                max_tokens=1200,
+                max_tokens=MAX_TOKENS,
                 system=self.system_prompt,
                 tools=herramientas,
                 messages=historial,
             )
+            if respuesta.stop_reason == "max_tokens" and not any(b.type == "tool_use" for b in respuesta.content):
+                # Respuesta cortada a media frase: nunca se envía así. Se reintenta una vez y, si vuelve a
+                # pasar, se deriva a una persona en vez de mandar un mensaje a medias.
+                eventos.registrar("respuesta_cortada", self.telefono, "stop_reason=max_tokens", ok=False, agente_tipo=self.tipo)
+                reintentos_corte = getattr(self, "_cortes", 0) + 1
+                self._cortes = reintentos_corte
+                if reintentos_corte > 1:
+                    self._cortes = 0
+                    self._derivar("la respuesta salió cortada dos veces")
+                    return self._guardar(texto_usuario, MENSAJE_DERIVACION)
+                continue
+            self._cortes = 0
             historial.append({"role": "assistant", "content": respuesta.content})
             bloques = [b for b in respuesta.content if b.type == "tool_use"]
 

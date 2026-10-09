@@ -278,7 +278,7 @@ class Agente:
             eventos.registrar("claude_llamado", self.telefono, MODELO, agente_tipo=self.tipo)
             respuesta = self.client.messages.create(
                 model=MODELO,
-                max_tokens=1000,
+                max_tokens=4096,
                 system=self.system_prompt,
                 tools=[HERRAMIENTA_CATALOGO, HERRAMIENTA_LISTA_ESPERA, HERRAMIENTA_PEDIDO],
                 messages=historial,
