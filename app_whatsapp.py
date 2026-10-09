@@ -313,7 +313,7 @@ def crm_existencia(pedido_id):
     datos = request.get_json(silent=True) or {}
     decision = datos.get("decision")
     if decision == "confirmar":
-        res = ciclo.confirmar_existencia(pedido_id)
+        res = ciclo.confirmar_existencia(pedido_id, request.usuario["nombre"])
     elif decision == "sin_existencia":
         res = ciclo.sin_existencia(pedido_id, (datos.get("nota") or "").strip() or None)
     else:
@@ -443,6 +443,34 @@ def debug_cargar_catalogo():
     with db.conectar() as con:
         despues = con.execute("SELECT COUNT(*) AS n FROM catalogo").fetchone()["n"]
     return jsonify({"productos_antes": antes, "productos_despues": despues})
+
+
+@app.route("/debug/datos-prueba", methods=["POST"])
+def debug_datos_prueba():
+    """ADMIN — carga o quita datos FICTICIOS de prueba: inventario confirmado en algunos productos y
+    datos de pago de ejemplo. ?accion=cargar | quitar. Todo es reversible y queda marcado como prueba."""
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    accion = request.args.get("accion")
+    if accion == "cargar":
+        consultas = ["filtro aceite aveo", "filtro aceite corolla", "filtro aire corolla", "bujia ngk",
+                     "correa tiempo hilux", "pastilla freno", "amortiguador", "bomba agua"]
+        afectados = db.cargar_stock_prueba(consultas, [40, 12, 5, 0])
+        db.guardar_config(
+            "datos_pago",
+            "PRUEBA (datos ficticios, no pagues):\n"
+            "Pago Móvil: Banco Ejemplo (0000) · Tel 0414-0000000 · C.I. V-00000000\n"
+            "Zelle: pagos@ejemplo.com",
+        )
+        return jsonify({"productos_con_inventario_de_prueba": len(afectados), "muestra": afectados[:12],
+                        "datos_pago": "ficticios guardados"})
+    if accion == "quitar":
+        quitados = db.quitar_stock_prueba()
+        pago = db.obtener_config("datos_pago") or ""
+        if pago.startswith("PRUEBA"):
+            db.guardar_config("datos_pago", None)
+        return jsonify({"productos_restablecidos": quitados})
+    return jsonify({"error": "usa ?accion=cargar o ?accion=quitar"}), 400
 
 
 @app.route("/debug/cargar-lista", methods=["POST"])
@@ -629,6 +657,11 @@ def procesar_mensaje_wecall(telefono: str, mensaje: dict):
         try:
             wecall.enviar_mensaje(telefono, texto=respuesta)
             eventos.registrar("envio_wecall", telefono, "enviado", agente_tipo=agente.tipo)
+            # Avisos del sistema que van justo después de la respuesta (ej. total y datos de pago).
+            for extra in getattr(agente, "mensajes_posteriores", []):
+                ok_extra, motivo_extra = ciclo.notificar_cliente(agente.contacto_id, extra)
+                if not ok_extra:
+                    eventos.registrar("envio_wecall", telefono, f"aviso posterior no enviado: {motivo_extra}", ok=False)
         except VentanaCerradaError:
             print(f"  ⚠️ (wecall) ventana de 24h cerrada para {telefono} — hace falta responder con una plantilla aprobada")
             eventos.registrar("envio_wecall", telefono, "ventana de 24h cerrada", ok=False, agente_tipo=agente.tipo)

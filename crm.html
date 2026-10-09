@@ -501,7 +501,8 @@
           estado = '<span class="status-pill entregado">Despachado</span>';
           accion = activas[0].nota_despacho ? `<span class="resuelto">${esc(activas[0].nota_despacho)}</span>` : '';
         } else {
-          estado = `<span class="pago-pill ${esc(estadoPago)}">${esc(GRUPO_ESTADO[estadoPago] || estadoPago)}</span>`;
+          estado = `<span class="pago-pill ${esc(estadoPago)}">${esc(GRUPO_ESTADO[estadoPago] || estadoPago)}</span>`
+            + (activas[0].existencia_confirmada_por ? `<div class="resuelto">Existencia confirmada por ${esc(activas[0].existencia_confirmada_por)}</div>` : '');
           if (estadoPago === 'por_confirmar'){
             accion = `<button class="btn sm" type="button" data-exis="confirmar" data-id="${ref.id}">Hay existencia</button>
                       <button class="btn ghost sm" type="button" data-exis="sin_existencia" data-id="${ref.id}">Sin existencia</button>`;

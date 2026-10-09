@@ -19,6 +19,7 @@ import os
 import uuid
 
 import agente as base
+import ciclo
 import db
 import eventos
 import perfiles
@@ -132,6 +133,8 @@ class Salomon(base.Agente):
         self.modelo = self.perfil.modelo or base.MODELO
         self.modelo_vigilante = self.perfil.modelo_vigilante or os.environ.get("VIGILANTE_MODELO") or base.MODELO
         self.system_prompt = _construir_prompt(self.perfil)
+        self.tipo_precio = "mayorista"   # Salomón siempre cotiza con la lista de mayor
+        self.mensajes_posteriores = []   # avisos del sistema que salen justo después de su respuesta
         self._precios = set()        # precios y totales vistos en este turno
         self._resultados = []        # resultados de herramientas de este turno (para el revisor)
         self._registro_hecho = False
@@ -197,52 +200,84 @@ class Salomon(base.Agente):
                     ).fetchone()
             if not fila:
                 return {"error": f"Línea {i}: ese producto no existe en el catálogo. Búscalo con buscar_catalogo y usa sus datos exactos."}
-            if fila["stock"] < cantidad:
+            if fila["stock_verificado"] and fila["stock"] < cantidad:
                 return {"error": f"Línea {i} ({fila['nombre']}): solo hay {fila['stock']} unidad(es) en stock."}
-            precio = db.precio_para(fila, self.tipo)
+            precio = db.precio_para(fila, self.tipo_precio)
             if not precio or precio <= 0:
                 return {"error": f"Línea {i} ({fila['nombre']}): aún no tiene precio cargado. Pasa a una persona del equipo."}
             validadas.append((fila, cantidad, precio))
 
-        registradas, total_general = [], 0.0
-        orden = uuid.uuid4().hex[:10]
-        estado_pago = "por_confirmar" if any(not f["stock_verificado"] for f, _, _ in validadas) else "por_pagar"
+        # Salomón tiene acceso al inventario: si TODAS las líneas tienen existencia confirmada y alcanzan,
+        # confirma él mismo la existencia y reserva el stock. Si alguna no tiene inventario cargado,
+        # la orden queda para que una persona del equipo la verifique.
+        auto = all(f["stock_verificado"] and f["stock"] >= c for f, c, _ in validadas)
+        estado_pago = "por_pagar" if auto else "por_confirmar"
+        productos = []
         for fila, cantidad, precio in validadas:
             if fila["codigo"]:
                 producto = f'[{fila["codigo"]}] {fila["nombre"][:80]} ({fila["marca"]})'
             else:
                 producto = f'{fila["nombre"]} - {fila["marca"]} {fila["modelo"]}'.strip()
-            with db.conectar() as con:
-                repetido = con.execute(
-                    "SELECT total FROM pedidos WHERE contacto_id = ? AND producto = ? AND cantidad = ? "
-                    "AND estado = 'pendiente' AND fecha > datetime('now', '-10 minutes')",
-                    (self.contacto_id, producto, cantidad),
-                ).fetchone()
-            if repetido:
-                total = repetido["total"]
-            else:
-                total = db.registrar_pedido(self.contacto_id, producto, cantidad, precio, estado_pago, orden)
-            total_general += total
-            self._precios.update({precio, total})
-            registradas.append({
-                "producto": producto, "cantidad": cantidad,
-                "precio_unitario_usd": precio, "total_usd": total,
-                "existencia": "por confirmar" if not fila["stock_verificado"] else "confirmada",
-            })
-            print(f"  🧾 [Salomón] pedido pendiente: {producto} x{cantidad} total=${total} ({self.telefono})")
+            productos.append(producto)
 
-        db.actualizar_contacto(self.contacto_id, estado="cliente")
+        # Evita duplicar si el mismo pedido ya se registró hace instantes (reintento del modelo).
+        with db.conectar() as con:
+            repetido = all(
+                con.execute(
+                    "SELECT 1 FROM pedidos WHERE contacto_id = ? AND producto = ? AND cantidad = ? "
+                    "AND estado != 'cancelado' AND fecha > datetime('now', '-10 minutes')",
+                    (self.contacto_id, productos[i], validadas[i][1]),
+                ).fetchone()
+                for i in range(len(validadas))
+            )
+        orden = uuid.uuid4().hex[:10]
+        lineas_bd = [
+            {"producto": productos[i], "cantidad": c, "precio": p, "catalogo_id": f["id"], "reservar": auto}
+            for i, (f, c, p) in enumerate(validadas)
+        ]
+        if repetido:
+            totales = [round(c * p, 2) for _, c, p in validadas]
+        else:
+            try:
+                totales = db.crear_orden(self.contacto_id, orden, lineas_bd, estado_pago, "Salomón" if auto else None)
+            except ValueError as e:
+                return {"error": f"No se pudo reservar: {e}. Vuelve a consultar el catálogo."}
+            db.actualizar_contacto(self.contacto_id, estado="cliente")
+            if auto:
+                # El total y los datos de pago los manda el sistema justo después de la respuesta de Salomón.
+                with db.conectar() as con:
+                    primera = con.execute("SELECT id FROM pedidos WHERE orden = ? ORDER BY id LIMIT 1", (orden,)).fetchone()["id"]
+                self.mensajes_posteriores.append(ciclo.texto_existencia_confirmada(primera))
+                eventos.registrar("existencia", self.telefono, f"confirmada por Salomón (orden {orden})", agente_tipo=self.tipo)
+
+        registradas, total_general = [], 0.0
+        for i, (fila, cantidad, precio) in enumerate(validadas):
+            total_general += totales[i]
+            self._precios.update({precio, totales[i]})
+            registradas.append({
+                "producto": productos[i], "cantidad": cantidad,
+                "precio_unitario_usd": precio, "total_usd": totales[i],
+            })
+            print(f"  🧾 [Salomón] pedido {'con existencia confirmada' if auto else 'por confirmar'}: {productos[i]} x{cantidad} total=${totales[i]} ({self.telefono})")
+
         total_general = round(total_general, 2)
         self._precios.add(total_general)
         self._registro_hecho = True
+        if auto:
+            mensaje = (
+                "Pedido registrado y EXISTENCIA CONFIRMADA por ti con el inventario; el stock quedó reservado. "
+                "El sistema le envía al cliente, justo después de tu mensaje, el total final y los datos de pago. "
+                "No los escribas tú: dile que le llegan en el siguiente mensaje y que luego envíe el comprobante por este chat; "
+                "la administración valida el pago y después se despacha."
+            )
+        else:
+            mensaje = (
+                "Pedido registrado. Alguna línea no tiene inventario cargado, así que una persona del equipo verifica la "
+                "existencia antes de cobrar; cuando lo haga, el cliente recibe por este chat el total y los datos de pago."
+            )
         return {
-            "mensaje": (
-                "Pedido registrado. Siguen estos pasos, en este orden: 1) el equipo confirma la existencia; "
-                "2) el cliente recibe por este chat el total final y los datos de pago; 3) el cliente envía el "
-                "comprobante por aquí; 4) la administración valida el pago; 5) se despacha y se le avisa."
-                if estado_pago == "por_confirmar" else
-                "Pedido registrado. Sigue el pago: el cliente recibirá los datos y enviará el comprobante por este chat."
-            ),
+            "mensaje": mensaje,
+            "existencia": "confirmada y reservada" if auto else "por confirmar con el equipo",
             "lineas": registradas,
             "total_general_usd": total_general,
         }

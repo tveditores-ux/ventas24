@@ -317,7 +317,7 @@ class Agente:
                 anio=params.get("anio"),
                 nombre=params.get("nombre"),
                 texto=params.get("texto"),
-                tipo=self.tipo,
+                tipo=getattr(self, "tipo_precio", self.tipo),
             )
             print(f"  🔎 buscar_catalogo({params}) → {len(resultado)} resultado(s)")
             return resultado if resultado else {"mensaje": "sin resultados"}

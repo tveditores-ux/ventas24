@@ -71,34 +71,45 @@ def _resumen(lineas):
     return "\n".join(partes), total
 
 
-def confirmar_existencia(pedido_id: int):
+def datos_pago() -> str:
+    """Cuentas de cobro: variable de entorno DATOS_PAGO o, si no está, la configuración guardada en el CRM."""
+    return (os.environ.get("DATOS_PAGO", "").strip() or db.obtener_config("datos_pago") or "").strip()
+
+
+def texto_existencia_confirmada(pedido_id: int) -> str:
+    """Mensaje al cliente cuando la existencia de su orden está confirmada: total final y datos de pago.
+    Si no hay datos de pago configurados, avisa que la administración los envía y abre una solicitud."""
+    lineas = db.lineas_de_orden(pedido_id)
+    contacto = _contacto(lineas[0]["contacto_id"])
+    resumen, total = _resumen(lineas)
+    pago = datos_pago()
+    if pago:
+        return (
+            f"{_saludo(contacto)}confirmamos la existencia de tu pedido:\n{resumen}\n\nTotal: ${total:.2f}\n\n"
+            f"Datos para el pago:\n{pago}\n\n"
+            "Cuando pagues, envíame por aquí la captura del comprobante y la validamos."
+        )
+    db.crear_solicitud(
+        contacto["id"], "pago", f"Enviar datos de pago a {contacto.get('nombre') or contacto['telefono']}",
+        f"Existencia confirmada. Total ${total:.2f}.\n{resumen}",
+    )
+    return (
+        f"{_saludo(contacto)}confirmamos la existencia de tu pedido:\n{resumen}\n\nTotal: ${total:.2f}\n\n"
+        "En un momento una persona de la administración te escribe por aquí con los datos para el pago."
+    )
+
+
+def confirmar_existencia(pedido_id: int, quien: str = "equipo"):
     """La persona verificó que hay existencia. Pasa la orden a 'por_pagar' y avisa al cliente."""
     lineas = db.lineas_de_orden(pedido_id)
     if not any(l["estado_pago"] == "por_confirmar" and l["estado"] != "cancelado" for l in lineas):
         return {"ok": False, "error": "esta orden no está esperando confirmación de existencia"}
     db.cambiar_estado_pago_orden(pedido_id, ("por_confirmar",), "por_pagar")
-    lineas = db.lineas_de_orden(pedido_id)
-    contacto = _contacto(lineas[0]["contacto_id"])
-    resumen, total = _resumen(lineas)
-
-    datos_pago = os.environ.get("DATOS_PAGO", "").strip()
-    if datos_pago:
-        texto = (
-            f"{_saludo(contacto)}confirmamos la existencia de tu pedido:\n{resumen}\n\nTotal: ${total:.2f}\n\n"
-            f"Datos para el pago:\n{datos_pago}\n\n"
-            "Cuando pagues, envíame por aquí la captura del comprobante y la validamos."
-        )
-    else:
-        db.crear_solicitud(
-            contacto["id"], "pago", f"Enviar datos de pago a {contacto.get('nombre') or contacto['telefono']}",
-            f"Existencia confirmada. Total ${total:.2f}.\n{resumen}",
-        )
-        texto = (
-            f"{_saludo(contacto)}confirmamos la existencia de tu pedido:\n{resumen}\n\nTotal: ${total:.2f}\n\n"
-            "En un momento una persona de la administración te escribe por aquí con los datos para el pago."
-        )
-    ok, motivo = notificar_cliente(contacto["id"], texto)
-    return {"ok": True, "aviso": motivo if not ok else "enviado", "aviso_ok": ok, "datos_pago_enviados": bool(datos_pago)}
+    db.confirmar_existencia_por(pedido_id, quien)
+    contacto_id = lineas[0]["contacto_id"]
+    texto = texto_existencia_confirmada(pedido_id)
+    ok, motivo = notificar_cliente(contacto_id, texto)
+    return {"ok": True, "aviso": motivo if not ok else "enviado", "aviso_ok": ok, "datos_pago_enviados": bool(datos_pago())}
 
 
 def sin_existencia(pedido_id: int, nota: str | None = None):

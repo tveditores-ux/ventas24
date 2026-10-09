@@ -69,6 +69,11 @@ CREATE TABLE IF NOT EXISTS pedidos (
     fecha TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS configuracion (
+    clave TEXT PRIMARY KEY,
+    valor TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS solicitudes_equipo (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     contacto_id INTEGER NOT NULL REFERENCES contactos(id),
@@ -148,6 +153,9 @@ def inicializar():
             ("despachado_en", "TEXT"),
             ("orden", "TEXT"),            # agrupa las líneas de un mismo pedido
             ("nota_despacho", "TEXT"),
+            ("catalogo_id", "INTEGER"),               # producto del catálogo (para devolver stock al cancelar)
+            ("reservado", "INTEGER NOT NULL DEFAULT 0"),   # unidades descontadas del stock por este pedido
+            ("existencia_confirmada_por", "TEXT"),    # 'Salomón' o el nombre de la persona del equipo
         ):
             if col not in cols_pedidos:
                 con.execute(f"ALTER TABLE pedidos ADD COLUMN {col} {ddl}")
@@ -156,6 +164,7 @@ def inicializar():
             ("codigo", "TEXT"),
             ("precio_mayor", "REAL"),                       # NULL = usa `precio` para todos
             ("stock_verificado", "INTEGER NOT NULL DEFAULT 1"),  # 0 = existencia por confirmar
+            ("stock_prueba", "INTEGER NOT NULL DEFAULT 0"),      # 1 = cantidad ficticia de prueba
         ):
             if col not in cols_catalogo:
                 con.execute(f"ALTER TABLE catalogo ADD COLUMN {col} {ddl}")
@@ -403,11 +412,106 @@ def cambiar_estado_pago_orden(pedido_id: int, desde: tuple, hacia: str):
 
 
 def cancelar_orden(pedido_id: int):
-    ids = [l["id"] for l in lineas_de_orden(pedido_id) if l["estado"] not in ("entregado", "cancelado")]
+    """Cancela las líneas vivas de la orden y devuelve al catálogo el stock que habían reservado."""
+    lineas = [l for l in lineas_de_orden(pedido_id) if l["estado"] not in ("entregado", "cancelado")]
+    if lineas:
+        with conectar() as con:
+            for l in lineas:
+                if l["reservado"] and l["catalogo_id"]:
+                    con.execute("UPDATE catalogo SET stock = stock + ? WHERE id = ?", (l["reservado"], l["catalogo_id"]))
+            ids = [l["id"] for l in lineas]
+            con.execute(
+                f"UPDATE pedidos SET estado = 'cancelado', reservado = 0 WHERE id IN ({','.join('?' * len(ids))})", ids
+            )
+    return len(lineas)
+
+
+def crear_orden(contacto_id: int, orden: str, lineas: list, estado_pago: str, confirmado_por: str | None = None):
+    """Registra todas las líneas de una orden en una sola transacción. Cada línea es un dict con
+    producto, cantidad, precio, catalogo_id y reservar (True = descuenta del stock; falla si ya no alcanza).
+    Si algo falla no queda nada guardado. Devuelve los totales por línea."""
+    totales = []
+    with conectar() as con:
+        for l in lineas:
+            reservado = 0
+            if l.get("reservar"):
+                cur = con.execute(
+                    "UPDATE catalogo SET stock = stock - ? WHERE id = ? AND stock_verificado = 1 AND stock >= ?",
+                    (l["cantidad"], l["catalogo_id"], l["cantidad"]),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError(f"ya no alcanza el stock de {l['producto'][:50]}")
+                reservado = l["cantidad"]
+            total = round(l["cantidad"] * l["precio"], 2)
+            con.execute(
+                "INSERT INTO pedidos (contacto_id, producto, cantidad, precio_unitario, total, estado_pago, orden, "
+                "catalogo_id, reservado, existencia_confirmada_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (contacto_id, l["producto"], l["cantidad"], l["precio"], total, estado_pago, orden,
+                 l.get("catalogo_id"), reservado, confirmado_por),
+            )
+            totales.append(total)
+    return totales
+
+
+def confirmar_existencia_por(pedido_id: int, quien: str):
+    ids = [l["id"] for l in lineas_de_orden(pedido_id) if l["estado"] != "cancelado"]
     if ids:
         with conectar() as con:
-            con.execute(f"UPDATE pedidos SET estado = 'cancelado' WHERE id IN ({','.join('?' * len(ids))})", ids)
-    return len(ids)
+            con.execute(
+                f"UPDATE pedidos SET existencia_confirmada_por = ? WHERE id IN ({','.join('?' * len(ids))})",
+                (quien, *ids),
+            )
+
+
+# ---------------------------------------------------------------------
+# Configuración (datos editables sin redesplegar, ej. datos de pago)
+# ---------------------------------------------------------------------
+
+def obtener_config(clave: str):
+    with conectar() as con:
+        fila = con.execute("SELECT valor FROM configuracion WHERE clave = ?", (clave,)).fetchone()
+        return fila["valor"] if fila else None
+
+
+def guardar_config(clave: str, valor: str | None):
+    with conectar() as con:
+        if valor is None:
+            con.execute("DELETE FROM configuracion WHERE clave = ?", (clave,))
+        else:
+            con.execute(
+                "INSERT INTO configuracion (clave, valor) VALUES (?, ?) "
+                "ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor",
+                (clave, valor),
+            )
+
+
+# ---------------------------------------------------------------------
+# Inventario de prueba (cantidades ficticias, reversibles)
+# ---------------------------------------------------------------------
+
+def cargar_stock_prueba(consultas: list, cantidades: list):
+    """Marca como 'existencia confirmada' con cantidades ficticias los primeros productos que devuelve
+    cada consulta. Devuelve la lista de productos afectados."""
+    afectados = []
+    with conectar() as con:
+        for texto in consultas:
+            for i, ficha in enumerate(buscar_catalogo(texto=texto, tipo="mayorista", limite=len(cantidades))):
+                con.execute(
+                    "UPDATE catalogo SET stock = ?, stock_verificado = 1, stock_prueba = 1 WHERE codigo = ? AND marca = ?",
+                    (cantidades[i % len(cantidades)], ficha["codigo"], ficha["marca"]),
+                )
+                afectados.append({"codigo": ficha["codigo"], "nombre": ficha["nombre"][:60],
+                                  "marca": ficha["marca"], "stock": cantidades[i % len(cantidades)]})
+    return afectados
+
+
+def quitar_stock_prueba(stock_base: int = 999):
+    with conectar() as con:
+        cur = con.execute(
+            "UPDATE catalogo SET stock = ?, stock_verificado = 0, stock_prueba = 0 WHERE stock_prueba = 1", (stock_base,)
+        )
+        return cur.rowcount
+
 
 
 def pedido_por_pagar_reciente(contacto_id: int):
