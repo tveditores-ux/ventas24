@@ -143,6 +143,23 @@ CREATE TABLE IF NOT EXISTS consultas_catalogo (
     fecha TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Documentos de CONTROL INTERNO (no son facturas fiscales). Numeración correlativa propia.
+CREATE TABLE IF NOT EXISTS documentos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero INTEGER NOT NULL UNIQUE,
+    tipo TEXT NOT NULL DEFAULT 'control',
+    pedido_ref INTEGER NOT NULL,                -- id de la primera línea de la orden
+    contacto_id INTEGER NOT NULL REFERENCES contactos(id),
+    base REAL NOT NULL,
+    iva_pct REAL NOT NULL,
+    iva REAL NOT NULL,
+    igtf_pct REAL NOT NULL,
+    igtf REAL NOT NULL,
+    total REAL NOT NULL,
+    creado_por INTEGER REFERENCES usuarios(id),
+    creado_en TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS configuracion (
     clave TEXT PRIMARY KEY,
     valor TEXT NOT NULL
@@ -216,6 +233,8 @@ def inicializar():
             con.execute("ALTER TABLE contactos ADD COLUMN wecall_ultimo_id INTEGER")
         if "modo_manual" not in columnas:
             con.execute("ALTER TABLE contactos ADD COLUMN modo_manual INTEGER NOT NULL DEFAULT 0")
+        if "limite_credito" not in columnas:
+            con.execute("ALTER TABLE contactos ADD COLUMN limite_credito REAL NOT NULL DEFAULT 0")
         if "asignado_a" not in columnas:
             con.execute("ALTER TABLE contactos ADD COLUMN asignado_a INTEGER REFERENCES usuarios(id)")
         cols_pedidos = {f["name"] for f in con.execute("PRAGMA table_info(pedidos)")}
@@ -230,6 +249,9 @@ def inicializar():
             ("catalogo_id", "INTEGER"),               # producto del catálogo (para devolver stock al cancelar)
             ("reservado", "INTEGER NOT NULL DEFAULT 0"),   # unidades descontadas del stock por este pedido
             ("existencia_confirmada_por", "TEXT"),    # 'Salomón' o el nombre de la persona del equipo
+            ("credito_hasta", "TEXT"),                # fecha límite de pago si se autorizó crédito
+            ("credito_autorizado_por", "INTEGER REFERENCES usuarios(id)"),
+            ("credito_nota", "TEXT"),
         ):
             if col not in cols_pedidos:
                 con.execute(f"ALTER TABLE pedidos ADD COLUMN {col} {ddl}")
@@ -649,7 +671,7 @@ def pedido_por_pagar_reciente(contacto_id: int):
     with conectar() as con:
         fila = con.execute(
             "SELECT * FROM pedidos WHERE contacto_id = ? AND estado != 'cancelado' "
-            "AND estado_pago IN ('por_confirmar', 'por_pagar', 'comprobante_recibido') ORDER BY id DESC LIMIT 1",
+            "AND estado_pago IN ('por_confirmar', 'por_pagar', 'comprobante_recibido', 'a_credito') ORDER BY id DESC LIMIT 1",
             (contacto_id,),
         ).fetchone()
         return dict(fila) if fila else None
@@ -663,8 +685,8 @@ def despachar_pedido(pedido_id: int, usuario_id: int, nota: str | None = None):
         return False, "pedido no encontrado o cancelado"
     if all(l["estado"] == "entregado" for l in lineas):
         return False, "el pedido ya fue despachado"
-    if any(l["estado_pago"] != "pago_confirmado" for l in lineas):
-        return False, "el pago todavía no está confirmado por la administración"
+    if any(l["estado_pago"] not in ("pago_confirmado", "a_credito") for l in lineas):
+        return False, "el pago todavía no está confirmado por la administración (ni hay crédito autorizado)"
     ids = [l["id"] for l in lineas if l["estado"] != "entregado"]
     with conectar() as con:
         con.execute(
@@ -1071,3 +1093,136 @@ def contar_pendientes(usuario: dict | None = None) -> dict:
         "solicitudes_abiertas": len(listar_solicitudes(usuario)),
         "conversaciones_derivadas": len(listar_derivadas(usuario)),
     }
+
+
+# ---------------------------------------------------------------------
+# Crédito (excepción aprobada por un administrador) y cobranza
+# ---------------------------------------------------------------------
+
+def fijar_limite_credito(contacto_id: int, monto: float):
+    if monto < 0:
+        raise ValueError("el límite no puede ser negativo")
+    with conectar() as con:
+        con.execute("UPDATE contactos SET limite_credito = ? WHERE id = ?", (round(monto, 2), contacto_id))
+
+
+def saldo_credito(contacto_id: int) -> float:
+    """Lo que el cliente debe hoy: pedidos despachables a crédito que todavía no se han pagado."""
+    with conectar() as con:
+        return round(con.execute(
+            "SELECT COALESCE(SUM(total), 0) AS t FROM pedidos WHERE contacto_id = ? AND estado_pago = 'a_credito' AND estado != 'cancelado'",
+            (contacto_id,),
+        ).fetchone()["t"], 2)
+
+
+def autorizar_credito(pedido_id: int, usuario_id: int, dias: int, nota: str | None):
+    """Excepción a la regla 'sin pago validado no se despacha'. Solo si el cliente tiene límite de crédito
+    suficiente (límite - lo que ya debe >= total de la orden). Devuelve el resumen de la autorización."""
+    from datetime import date, timedelta
+    if not 1 <= dias <= 90:
+        raise ValueError("los días de crédito deben estar entre 1 y 90")
+    lineas = [l for l in lineas_de_orden(pedido_id) if l["estado"] != "cancelado"]
+    if not lineas:
+        raise ValueError("pedido no encontrado o cancelado")
+    if any(l["estado_pago"] == "por_confirmar" for l in lineas):
+        raise ValueError("primero hay que confirmar la existencia")
+    if all(l["estado_pago"] == "a_credito" for l in lineas):
+        raise ValueError("este pedido ya está a crédito")
+    if any(l["estado_pago"] == "pago_confirmado" for l in lineas):
+        raise ValueError("este pedido ya está pagado")
+    total = round(sum(l["total"] or 0 for l in lineas), 2)
+    contacto_id = lineas[0]["contacto_id"]
+    with conectar() as con:
+        limite = con.execute("SELECT limite_credito FROM contactos WHERE id = ?", (contacto_id,)).fetchone()["limite_credito"]
+    debe = saldo_credito(contacto_id)
+    if limite <= 0:
+        raise ValueError("este cliente no tiene límite de crédito: fíjalo primero")
+    if debe + total > limite:
+        raise ValueError(f"supera el límite de crédito: límite ${limite:.2f}, ya debe ${debe:.2f}, esta orden ${total:.2f}")
+    vence = (date.today() + timedelta(days=dias)).isoformat()
+    ids = [l["id"] for l in lineas]
+    with conectar() as con:
+        con.execute(
+            f"UPDATE pedidos SET estado_pago = 'a_credito', estado = CASE WHEN estado = 'pendiente' THEN 'confirmado' ELSE estado END, "
+            f"credito_hasta = ?, credito_autorizado_por = ?, credito_nota = ? WHERE id IN ({','.join('?' * len(ids))})",
+            (vence, usuario_id, nota, *ids),
+        )
+    return {"total": total, "vence": vence, "limite": limite, "debe_ahora": round(debe + total, 2)}
+
+
+def cuentas_por_cobrar():
+    """Órdenes despachadas o por despachar a crédito, con atraso. Una fila por orden."""
+    from datetime import date
+    with conectar() as con:
+        filas = con.execute(
+            "SELECT p.*, c.nombre, c.telefono, c.limite_credito, u.nombre AS autorizo "
+            "FROM pedidos p JOIN contactos c ON c.id = p.contacto_id LEFT JOIN usuarios u ON u.id = p.credito_autorizado_por "
+            "WHERE p.estado_pago = 'a_credito' AND p.estado != 'cancelado' ORDER BY p.credito_hasta, p.id"
+        ).fetchall()
+    hoy = date.today()
+    grupos = {}
+    for f in filas:
+        clave = f["orden"] or f"p{f['id']}"
+        g = grupos.setdefault(clave, {
+            "pedido_id": f["id"], "cliente": f["nombre"] or f["telefono"], "telefono": f["telefono"], "contacto_id": f["contacto_id"],
+            "vence": f["credito_hasta"], "autorizo": f["autorizo"], "nota": f["credito_nota"], "despachado": f["estado"] == "entregado",
+            "total": 0.0, "limite": f["limite_credito"],
+        })
+        g["total"] = round(g["total"] + (f["total"] or 0), 2)
+    resultado = list(grupos.values())
+    for g in resultado:
+        try:
+            g["atraso_dias"] = max((hoy - date.fromisoformat(g["vence"])).days, 0)
+        except (TypeError, ValueError):
+            g["atraso_dias"] = 0
+    return resultado
+
+
+# ---------------------------------------------------------------------
+# Documentos de control interno
+# ---------------------------------------------------------------------
+
+def _pct(clave: str, defecto: float) -> float:
+    try:
+        return float(obtener_config(clave))
+    except (TypeError, ValueError):
+        return defecto
+
+
+def crear_documento_control(pedido_id: int, usuario_id: int, en_divisas: bool = True):
+    """Documento de CONTROL INTERNO de una orden pagada o a crédito. Una vez por orden. No es factura fiscal.
+    Tasas configurables en `configuracion` (iva_pct, igtf_pct); los precios del catálogo se toman como base imponible."""
+    lineas = [l for l in lineas_de_orden(pedido_id) if l["estado"] != "cancelado"]
+    if not lineas:
+        raise ValueError("pedido no encontrado o cancelado")
+    if any(l["estado_pago"] not in ("pago_confirmado", "a_credito") for l in lineas):
+        raise ValueError("solo se emite documento de órdenes con pago confirmado o a crédito")
+    ref = lineas[0]["id"]
+    with conectar() as con:
+        previo = con.execute("SELECT id FROM documentos WHERE pedido_ref = ?", (ref,)).fetchone()
+        if previo:
+            return previo["id"]
+        base = round(sum(l["total"] or 0 for l in lineas), 2)
+        iva_pct, igtf_pct = _pct("iva_pct", 16.0), _pct("igtf_pct", 3.0)
+        iva = round(base * iva_pct / 100, 2)
+        igtf = round((base + iva) * igtf_pct / 100, 2) if en_divisas else 0.0
+        numero = (con.execute("SELECT COALESCE(MAX(numero), 0) AS n FROM documentos").fetchone()["n"]) + 1
+        cur = con.execute(
+            "INSERT INTO documentos (numero, pedido_ref, contacto_id, base, iva_pct, iva, igtf_pct, igtf, total, creado_por) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (numero, ref, lineas[0]["contacto_id"], base, iva_pct, iva, igtf_pct if en_divisas else 0, igtf, round(base + iva + igtf, 2), usuario_id),
+        )
+        return cur.lastrowid
+
+
+def obtener_documento(documento_id: int):
+    with conectar() as con:
+        d = con.execute(
+            "SELECT d.*, c.nombre, c.telefono FROM documentos d JOIN contactos c ON c.id = d.contacto_id WHERE d.id = ?",
+            (documento_id,),
+        ).fetchone()
+        if not d:
+            return None
+        doc = dict(d)
+    doc["lineas"] = [l for l in lineas_de_orden(doc["pedido_ref"]) if l["estado"] != "cancelado"]
+    return doc

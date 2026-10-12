@@ -220,3 +220,25 @@ def procesar_eventos():
             con.execute("UPDATE eventos_outbox SET estado = ?, procesado_en = CURRENT_TIMESTAMP WHERE id = ?", (estado, ev["id"]))
         resumen["eventos"] += 1
     return resumen
+
+
+def aviso_cobranza(pedido_id: int):
+    """Recordatorio de pago de un pedido a crédito. Lo dispara una persona desde Cobranza (nunca solo)."""
+    from datetime import date
+    lineas = [l for l in db.lineas_de_orden(pedido_id) if l["estado"] != "cancelado" and l["estado_pago"] == "a_credito"]
+    if not lineas:
+        return {"ok": False, "error": "este pedido no tiene saldo a crédito pendiente"}
+    contacto = _contacto(lineas[0]["contacto_id"])
+    total = round(sum(l["total"] or 0 for l in lineas), 2)
+    vence = lineas[0]["credito_hasta"]
+    try:
+        vencido = date.fromisoformat(vence) < date.today()
+    except (TypeError, ValueError):
+        vencido = False
+    estado = f"venció el {vence}" if vencido else f"vence el {vence}"
+    texto = (
+        f"{_saludo(contacto)}te recordamos que tienes pendiente el pago de tu pedido por ${total:.2f} ({estado}). "
+        "Cuando lo hagas, envíame por aquí la captura del comprobante y la validamos."
+    )
+    ok, motivo = notificar_cliente(contacto["id"], texto)
+    return {"ok": True, "aviso": motivo if not ok else "enviado", "aviso_ok": ok}

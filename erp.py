@@ -383,7 +383,7 @@ def reportes(dias: int = 30):
             "SELECT estado_pago AS estado, COUNT(DISTINCT COALESCE(orden, 'p' || id)) AS pedidos FROM pedidos "
             "WHERE estado != 'cancelado' GROUP BY estado_pago ORDER BY pedidos DESC"
         ).fetchall()
-        por_cobrar = suma(("por_pagar", "comprobante_recibido"))
+        por_cobrar = suma(("por_pagar", "comprobante_recibido", "a_credito"))
         pendiente = suma(("por_confirmar",))
 
     hoy = date.today()

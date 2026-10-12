@@ -178,7 +178,7 @@
   }
   .pago-pill::before, .status-pill::before{ content:''; width:6px; height:6px; border-radius:50%; background:currentColor; }
   .pago-pill.por_confirmar, .status-pill.cancelado{ background:var(--danger-bg); color:var(--danger); }
-  .pago-pill.por_pagar, .pago-pill.comprobante_recibido, .status-pill.pendiente{ background:var(--warn-bg); color:var(--warn); }
+  .pago-pill.por_pagar, .pago-pill.comprobante_recibido, .pago-pill.a_credito, .status-pill.pendiente{ background:var(--warn-bg); color:var(--warn); }
   .pago-pill.pago_confirmado, .status-pill.confirmado, .status-pill.entregado{ background:var(--ok-bg); color:var(--ok); }
 
   /* ---------- tarjetas (espera, comprobantes, pendientes) ---------- */
@@ -294,6 +294,7 @@
     <button data-tab="comprobantes" type="button"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>Pagos por revisar<span class="badge" id="badgeComp" hidden></span></button>
     <div class="nav-sec erp-solo" hidden>ERP</div>
     <button class="erp-solo" data-tab="reportes" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Reportes</button>
+    <button class="erp-solo" data-tab="cobranza" type="button" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5C9.5 8.4 10.6 8 12 8s2.5.6 2.5 1.7c0 2.4-5 1.3-5 3.8 0 1.1 1.1 1.7 2.5 1.7s2.5-.5 2.5-1.7"/></svg>Cobranza</button>
     <button class="erp-solo" data-tab="inventario" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 9l9-5 9 5v9l-9 5-9-5z"/><path d="M3 9l9 5 9-5"/><path d="M12 14v9"/></svg>Inventario</button>
     <button class="erp-solo" data-tab="proveedores" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 6h11v10H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg>Proveedores</button>
     <button class="erp-solo" data-tab="compras" type="button" hidden><svg viewBox="0 0 24 24"><path d="M5 4h14v17H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>Compras</button>
@@ -386,6 +387,20 @@
 
   <h3 class="pend-h">Qué han hecho los agentes</h3>
   <div class="table-wrap" style="max-height:340px"><table style="min-width:0"><thead><tr><th>Cuándo</th><th>Agente</th><th>Herramienta</th><th>Con qué</th></tr></thead><tbody id="audBody"></tbody></table></div>
+</div>
+
+<div id="cobranzaWrap" hidden>
+  <div class="pend-resumen" id="cobResumen"></div>
+  <div class="toolbar" style="margin-top:14px">
+    <button class="btn ghost" id="btnLimite" type="button">Fijar límite de crédito a un cliente</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Cliente</th><th>Debe</th><th>Vence</th><th>Estado</th><th>Autorizó</th><th></th></tr></thead>
+      <tbody id="cobBody"></tbody>
+    </table>
+  </div>
+  <p class="nota-erp">El crédito es una excepción: solo lo autoriza un administrador, dentro del límite del cliente. Mientras una cuenta no se pague sigue contando como por cobrar. El recordatorio lo envías tú, nunca sale solo.</p>
 </div>
 
 <div id="inventarioWrap" hidden>
@@ -512,7 +527,7 @@
     document.getElementById('subnav').hidden = false;
     if (esAdmin()){
       document.querySelectorAll('.erp-solo').forEach(el => el.hidden = false);
-      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista();
+      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza();
     }
     activarTab('pendientes');
     setInterval(refrescarInsignia, 30000);
@@ -525,7 +540,7 @@
   });
 
   // -------- pestañas --------
-  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes'];
+  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza'];
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -542,6 +557,7 @@
     proveedores: ['Proveedores', 'A quién le compras.'],
     compras: ['Compras', 'Órdenes de compra: de borrador a mercancía recibida.'],
     reportes: ['Reportes', 'Cuánto se cobra, cuánto deja y qué se mueve.'],
+    cobranza: ['Cobranza', 'Lo que los clientes deben por ventas a crédito.'],
   };
   function activarTab(tab){
     const v = VISTAS[tab] || ['', ''];
@@ -561,6 +577,7 @@
     else if (tab === 'inventario') cargarInventario();
     else if (tab === 'proveedores') cargarProveedores();
     else if (tab === 'compras') cargarCompras();
+    else if (tab === 'cobranza') cargarCobranza();
     else if (tab === 'reportes'){ cargarReportes(); cargarAuditoria(); }
   }
   document.querySelectorAll('#subnav button').forEach(b => {
@@ -623,7 +640,7 @@
   }
 
   const GRUPO_ESTADO = {
-    por_confirmar: 'Existencia por confirmar', por_pagar: 'Por pagar',
+    por_confirmar: 'Existencia por confirmar', por_pagar: 'Por pagar', a_credito: 'A crédito',
     comprobante_recibido: 'En validación', pago_confirmado: 'Pago confirmado',
   };
   async function cargarPedidos(){
@@ -651,17 +668,21 @@
         if (cancelado){ estado = '<span class="status-pill cancelado">Cancelado</span>'; accion = ''; }
         else if (despachado){
           estado = '<span class="status-pill entregado">Despachado</span>';
-          accion = activas[0].nota_despacho ? `<span class="resuelto">${esc(activas[0].nota_despacho)}</span>` : '';
+          accion = (activas[0].nota_despacho ? `<span class="resuelto">${esc(activas[0].nota_despacho)}</span> ` : '')
+            + (esAdmin() ? `<button class="btn ghost sm" type="button" data-doc="${ref.id}">Documento</button>` : '');
         } else {
           estado = `<span class="pago-pill ${esc(estadoPago)}">${esc(GRUPO_ESTADO[estadoPago] || estadoPago)}</span>`
             + (activas[0].existencia_confirmada_por ? `<div class="resuelto">Existencia confirmada por ${esc(activas[0].existencia_confirmada_por)}</div>` : '');
           if (estadoPago === 'por_confirmar'){
             accion = `<button class="btn sm" type="button" data-exis="confirmar" data-id="${ref.id}">Hay existencia</button>
                       <button class="btn ghost sm" type="button" data-exis="sin_existencia" data-id="${ref.id}">Sin existencia</button>`;
-          } else if (estadoPago === 'pago_confirmado'){
-            accion = `<button class="btn sm" type="button" data-despachar="${ref.id}">Despachar</button>`;
+          } else if (estadoPago === 'pago_confirmado' || estadoPago === 'a_credito'){
+            accion = `<button class="btn sm" type="button" data-despachar="${ref.id}">Despachar</button>`
+              + (esAdmin() ? ` <button class="btn ghost sm" type="button" data-doc="${ref.id}">Documento</button>` : '')
+              + (estadoPago === 'a_credito' ? ` <button class="btn ghost sm" type="button" data-cargar="${ref.id}" data-info="${esc((ref.nombre || ref.telefono || '') + ' · $' + total.toFixed(2))}">Registrar pago</button>` : '');
           } else {
-            accion = `<button class="btn ghost sm" type="button" data-cargar="${ref.id}" data-info="${esc((ref.nombre || ref.telefono || '') + ' · $' + total.toFixed(2))}">Cargar comprobante</button>`;
+            accion = `<button class="btn ghost sm" type="button" data-cargar="${ref.id}" data-info="${esc((ref.nombre || ref.telefono || '') + ' · $' + total.toFixed(2))}">Cargar comprobante</button>`
+              + (esAdmin() ? ` <button class="btn ghost sm" type="button" data-credito="${ref.id}">Autorizar crédito</button>` : '');
           }
         }
         const items = activas.length ? activas : ls;
@@ -700,6 +721,27 @@
       if (!r.ok) alert(d.error || 'No se pudo guardar');
       else if (avisoTexto(d)) alert(avisoTexto(d));
       cargarPedidos(); refrescarInsignia();
+      return;
+    }
+    const cred = ev.target.closest('[data-credito]');
+    if (cred){
+      const dias = prompt('Días de crédito (1 a 90):', '15');
+      if (dias === null) return;
+      const nota = prompt('Motivo de la excepción (queda registrado):', '');
+      if (nota === null) return;
+      const r = await api(`/api/crm/pedidos/${cred.dataset.credito}/credito`, {
+        method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ dias: parseInt(dias, 10), nota }),
+      });
+      const d = await r.json().catch(()=>({}));
+      if (!r.ok) alert(d.error || 'No se pudo autorizar el crédito');
+      else alert(`Crédito autorizado hasta ${d.vence}. Debe ahora: $${d.debe_ahora.toFixed(2)} de $${d.limite.toFixed(2)}.`);
+      cargarPedidos(); return;
+    }
+    const doc = ev.target.closest('[data-doc]');
+    if (doc){
+      const r = await api('/api/erp/documentos', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ pedido_id: parseInt(doc.dataset.doc, 10) }) });
+      const d = await r.json().catch(()=>({}));
+      if (!r.ok) alert(d.error || 'No se pudo emitir el documento'); else window.open(d.url, '_blank');
       return;
     }
     const desp = ev.target.closest('[data-despachar]');
@@ -1184,6 +1226,61 @@
       });
   }
 
+
+
+  // -------- ERP: cobranza (ventas a crédito) --------
+  async function cargarCobranza(){
+    const cuerpo = document.getElementById('cobBody');
+    try {
+      const r = await api('/api/erp/cobranza');
+      if (r.status === 401){ irALogin(); return; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      document.getElementById('cobResumen').innerHTML = `
+        <div class="pend-card"><b>$${d.total.toFixed(2)}</b><span>por cobrar a crédito</span></div>
+        <div class="pend-card"><b>$${d.vencido.toFixed(2)}</b><span>vencido</span></div>
+        <div class="pend-card"><b>${d.cuentas.length}</b><span>cuentas abiertas</span></div>`;
+      cuerpo.innerHTML = d.cuentas.length ? d.cuentas.map(c => `
+        <tr>
+          <td>${esc(c.cliente)}<br><span class="resuelto">${esc(c.telefono)}</span></td>
+          <td class="num">$${c.total.toFixed(2)}</td>
+          <td class="num">${esc(c.vence)}</td>
+          <td>${c.atraso_dias > 0 ? `<span class="pago-pill por_confirmar">${c.atraso_dias} días de atraso</span>` : '<span class="pago-pill pago_confirmado">al día</span>'}</td>
+          <td>${esc(c.autorizo || '—')}${c.nota ? `<div class="resuelto">${esc(c.nota)}</div>` : ''}</td>
+          <td class="acciones-td">
+            <button class="btn ghost sm" type="button" data-rec="${c.pedido_id}">Recordatorio</button>
+            <button class="btn sm" type="button" data-pago="${c.pedido_id}" data-info="${esc(c.cliente + ' · $' + c.total.toFixed(2))}">Registrar pago</button>
+          </td>
+        </tr>`).join('') : '<tr><td colspan="6" class="empty">No hay cuentas a crédito abiertas.</td></tr>';
+    } catch(e){
+      cuerpo.innerHTML = `<tr><td colspan="6" class="error">No pude cargar la cobranza (${esc(e.message)}).</td></tr>`;
+    }
+  }
+
+  function iniciarCobranza(){
+    document.getElementById('cobBody').addEventListener('click', async (ev) => {
+      const rec = ev.target.closest('[data-rec]');
+      if (rec){
+        if (!confirm('¿Enviar recordatorio de pago al cliente por WhatsApp?')) return;
+        const r = await api(`/api/erp/cobranza/${rec.dataset.rec}/recordatorio`, { method:'POST' });
+        const d = await r.json().catch(()=>({}));
+        if (!r.ok) alert(d.error || 'No se pudo enviar');
+        else alert(d.aviso_ok === false ? 'No se pudo avisar al cliente: ' + d.aviso : 'Recordatorio enviado.');
+        return;
+      }
+      const pago = ev.target.closest('[data-pago]');
+      if (pago) abrirDialogo({ pedidoId: pago.dataset.pago, info: pago.dataset.info });
+    });
+    document.getElementById('btnLimite').addEventListener('click', async () => {
+      const telefono = (prompt('Teléfono del cliente (formato +58…):') || '').trim();
+      if (!telefono) return;
+      const monto = parseFloat((prompt('Límite de crédito en USD (0 = sin crédito):') || '').replace(',', '.'));
+      if (isNaN(monto) || monto < 0) return;
+      const r = await api('/api/erp/clientes/limite', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ telefono, monto }) });
+      const d = await r.json().catch(()=>({}));
+      alert(r.ok ? `Límite de ${d.cliente}: $${d.limite.toFixed(2)}` : (d.error || 'No se pudo fijar el límite'));
+    });
+  }
 
   // -------- ERP: analista, auditoría y compras automáticas --------
   function iniciarAnalista(){

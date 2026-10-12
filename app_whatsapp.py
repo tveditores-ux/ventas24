@@ -34,7 +34,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from dotenv import load_dotenv
-from flask import Flask, request, Response, jsonify, send_from_directory, session
+from flask import Flask, request, Response, jsonify, redirect, send_from_directory, session
 from twilio.rest import Client
 from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
@@ -309,6 +309,114 @@ def erp_analista():
         eventos.registrar("error", "-", f"analista: {e}", ok=False)
         return jsonify({"error": "El analista no pudo responder ahora. Intenta de nuevo en un momento."}), 502
     return jsonify({"respuesta": respuesta})
+
+
+@app.route("/api/crm/pedidos/<int:pedido_id>/credito", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def crm_autorizar_credito(pedido_id):
+    """Excepción aprobada por un administrador: el pedido puede despacharse sin pago validado, hasta el límite
+    de crédito del cliente. Queda anotado quién lo autorizó, hasta cuándo y por qué."""
+    d = request.get_json(silent=True) or {}
+    try:
+        resumen = db.autorizar_credito(pedido_id, request.usuario["id"], int(d.get("dias") or 0), (d.get("nota") or "").strip() or None)
+    except (TypeError, ValueError) as e:
+        return jsonify({"error": str(e) or "datos inválidos"}), 409
+    pedido = db.obtener_pedido(pedido_id)
+    eventos.registrar("credito", pedido["telefono"], f"pedido {pedido_id} a crédito hasta {resumen['vence']} por {request.usuario['nombre']}")
+    db.registrar_accion("Administración", pedido["contacto_id"], "autorizar_credito", {"pedido": pedido_id, **d}, resumen)
+    return jsonify(resumen)
+
+
+@app.route("/api/erp/clientes/limite", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_limite_credito():
+    d = request.get_json(silent=True) or {}
+    telefono = db.normalizar_telefono((d.get("telefono") or "").strip())
+    try:
+        monto = float(str(d.get("monto")).replace(",", "."))
+    except (TypeError, ValueError):
+        return jsonify({"error": "el monto debe ser un número"}), 400
+    with db.conectar() as con:
+        fila = con.execute("SELECT id, nombre FROM contactos WHERE telefono = ?", (telefono,)).fetchone()
+    if not fila:
+        return jsonify({"error": "no hay ningún contacto con ese teléfono (usa el formato +58…)"}), 404
+    try:
+        db.fijar_limite_credito(fila["id"], monto)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    db.registrar_accion("Administración", fila["id"], "fijar_limite_credito", {"monto": monto}, request.usuario["nombre"])
+    return jsonify({"cliente": fila["nombre"] or telefono, "limite": monto})
+
+
+@app.route("/api/erp/cobranza", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_cobranza():
+    cuentas = db.cuentas_por_cobrar()
+    return jsonify({"cuentas": cuentas, "total": round(sum(c["total"] for c in cuentas), 2),
+                    "vencido": round(sum(c["total"] for c in cuentas if c["atraso_dias"] > 0), 2)})
+
+
+@app.route("/api/erp/cobranza/<int:pedido_id>/recordatorio", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_recordatorio(pedido_id):
+    res = ciclo.aviso_cobranza(pedido_id)
+    if not res.get("ok"):
+        return jsonify({"error": res.get("error")}), 409
+    db.registrar_accion("Cobranza", None, "recordatorio", {"pedido": pedido_id, "por": request.usuario["nombre"]}, res)
+    return jsonify(res)
+
+
+@app.route("/api/erp/documentos", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_crear_documento():
+    d = request.get_json(silent=True) or {}
+    try:
+        doc_id = db.crear_documento_control(int(d.get("pedido_id")), request.usuario["id"], bool(d.get("en_divisas", True)))
+    except (TypeError, ValueError) as e:
+        return jsonify({"error": str(e) or "pedido inválido"}), 409
+    return jsonify({"id": doc_id, "url": f"/doc/{doc_id}"})
+
+
+@app.route("/doc/<int:documento_id>", methods=["GET"])
+def documento_control(documento_id):
+    """Página imprimible del documento de control interno. Exige sesión de administración."""
+    from html import escape as e
+    usuario = _usuario_actual()
+    if not usuario:
+        return redirect("/login?next=" + request.path)
+    if usuario["rol"] not in ROLES_ADMIN:
+        return "No autorizado", 403
+    doc = db.obtener_documento(documento_id)
+    if not doc:
+        return "Documento no encontrado", 404
+    filas = "".join(
+        f"<tr><td>{e(str(l['cantidad']))}</td><td>{e(l['producto'])}</td><td class='n'>${l['precio_unitario']:.2f}</td><td class='n'>${l['total']:.2f}</td></tr>"
+        for l in doc["lineas"]
+    )
+    fecha = (doc["creado_en"] or "")[:10]
+    return Response(f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
+<title>Documento de control {doc['numero']:06d}</title><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+ body{{font-family:system-ui,Segoe UI,Arial,sans-serif;color:#152033;max-width:760px;margin:24px auto;padding:0 16px;position:relative}}
+ .marca{{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0}}
+ .marca span{{font-size:64px;font-weight:800;color:rgba(190,58,43,.10);transform:rotate(-24deg);text-align:center;line-height:1.1}}
+ .aviso{{background:#FBE4E0;color:#7a2018;border:1px solid #e9b7ae;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:18px}}
+ h1{{font-size:22px;margin:0 0 4px}} .sub{{color:#55627A;font-size:13px;margin-bottom:18px}}
+ table{{width:100%;border-collapse:collapse;position:relative;z-index:1;font-size:14px}} th,td{{padding:9px 8px;border-bottom:1px solid #E1E7F0;text-align:left}}
+ th{{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#55627A}} .n{{text-align:right;font-variant-numeric:tabular-nums}}
+ .tot td{{border:none;padding:4px 8px}} .tot .g td{{font-weight:800;font-size:16px;border-top:2px solid #152033;padding-top:10px}}
+ button{{margin-top:22px;padding:10px 18px;border-radius:9px;border:0;background:#2B5C8F;color:#fff;font-weight:700;cursor:pointer}} @media print{{button{{display:none}}}}
+</style></head><body>
+<div class="marca"><span>CONTROL INTERNO<br>NO FISCAL</span></div>
+<div class="aviso">DOCUMENTO DE PRUEBA DE CONTROL INTERNO. No es una factura fiscal ni tiene validez ante el SENIAT. Las tasas deben validarse con el contador.</div>
+<h1>Documento de control N.º {doc['numero']:06d}</h1>
+<div class="sub">Fecha {e(fecha)} · Cliente: {e(doc['nombre'] or doc['telefono'])} · Tel. {e(doc['telefono'])}</div>
+<table><thead><tr><th>Cant.</th><th>Producto</th><th class="n">Precio</th><th class="n">Total</th></tr></thead><tbody>{filas}</tbody></table>
+<table class="tot"><tr><td></td><td class="n">Base imponible</td><td class="n">${doc['base']:.2f}</td></tr>
+<tr><td></td><td class="n">IVA {doc['iva_pct']:g} %</td><td class="n">${doc['iva']:.2f}</td></tr>
+<tr><td></td><td class="n">IGTF {doc['igtf_pct']:g} %</td><td class="n">${doc['igtf']:.2f}</td></tr>
+<tr class="g"><td></td><td class="n">Total</td><td class="n">${doc['total']:.2f}</td></tr></table>
+<button onclick="window.print()">Imprimir</button></body></html>""", mimetype="text/html")
 
 
 @app.route("/api/erp/proveedores", methods=["GET", "POST"])
