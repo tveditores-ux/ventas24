@@ -177,6 +177,20 @@ def monitor_page():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "monitor.html")
 
 
+@app.route("/libreta", methods=["GET"])
+def libreta_page():
+    """Libreta personal de la reunión: solo administración, con sesión del CRM."""
+    usuario = _usuario_actual()
+    if not usuario:
+        return redirect("/login?next=/libreta")
+    if usuario["rol"] not in ROLES_ADMIN:
+        return "No autorizado", 403
+    resp = send_from_directory(os.path.dirname(os.path.abspath(__file__)), "libreta.html")
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resp
+
+
 @app.route("/hub", methods=["GET"])
 def hub_page():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "hub.html")
@@ -417,6 +431,28 @@ def documento_control(documento_id):
 <tr><td></td><td class="n">IGTF {doc['igtf_pct']:g} %</td><td class="n">${doc['igtf']:.2f}</td></tr>
 <tr class="g"><td></td><td class="n">Total</td><td class="n">${doc['total']:.2f}</td></tr></table>
 <button onclick="window.print()">Imprimir</button></body></html>""", mimetype="text/html")
+
+
+@app.route("/api/libreta", methods=["GET", "PUT"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def api_libreta():
+    """Notas personales de cada usuario: se guardan atadas a su id, nadie más las ve."""
+    import json
+    clave = f"libreta_{request.usuario['id']}"
+    if request.method == "GET":
+        crudo = db.obtener_config(clave)
+        try:
+            return jsonify({"estado": json.loads(crudo) if crudo else None})
+        except ValueError:
+            return jsonify({"estado": None})
+    estado = (request.get_json(silent=True) or {}).get("estado")
+    if not isinstance(estado, dict):
+        return jsonify({"error": "falta el estado de la libreta"}), 400
+    texto = json.dumps(estado, ensure_ascii=False)
+    if len(texto) > 200_000:
+        return jsonify({"error": "la libreta es demasiado grande"}), 413
+    db.guardar_config(clave, texto)
+    return jsonify({"ok": True})
 
 
 @app.route("/api/erp/proveedores", methods=["GET", "POST"])
