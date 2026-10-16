@@ -95,6 +95,30 @@ ul.check li.done label { text-decoration: line-through; color: var(--muted); }
 .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin-top: 10px; }
 .note { border-left: 4px solid var(--accent); padding: 10px 14px; background: var(--card); border-radius: 6px; color: var(--muted); margin-top: 12px; }
 @media (prefers-reduced-motion: reduce) { .meter i { transition: none; } }
+
+[hidden] { display: none !important; }
+details.f { padding: 0; overflow: hidden; }
+details.f > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 14px 18px; min-height: 52px; }
+details.f > summary::-webkit-details-marker { display: none; }
+details.f > summary::after { content: "▾"; margin-left: auto; color: var(--muted); }
+details.f[open] > summary::after { content: "▴"; }
+details.f .num { font-size: 15px; letter-spacing: 0; min-width: 38px; }
+details.f .tt { font-weight: 700; flex: 1 1 220px; min-width: 0; }
+details.f .cuerpo { padding: 0 18px 18px; border-top: 1px solid var(--line); }
+details.f .guia { margin-top: 12px; }
+details.f.hecho { border-left: 6px solid var(--ok); }
+details.f.escalar { border-left: 6px solid var(--warn); }
+details.f.falta { border-left: 6px solid var(--bad); }
+.bd { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.bd.ok { color: var(--ok); } .bd.comp { color: var(--warn); } .bd.pend { color: var(--bad); }
+.guia .ojo { background: transparent; border: 1px dashed var(--warn); }
+.guia .ojo b { color: var(--warn); }
+.marca { background: #FFE98A; color: #14213D; padding: 0 5px; border-radius: 4px; font-weight: 700; }
+.filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 4px; }
+.filtro { min-height: 40px; padding: 6px 14px; border-radius: 999px; font-size: 14px; }
+.filtro.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+details.viejo { margin-top: 18px; }
+details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted); padding: 10px 2px; }
 </style>
 
 <div class="bar">
@@ -103,6 +127,7 @@ ul.check li.done label { text-decoration: line-through; color: var(--muted); }
     <div class="meter" aria-hidden="true"><i id="meterFill"></i></div>
     <nav class="chips" aria-label="Secciones">
       <a href="#antes">Antes</a>
+      <a href="#pedir">Pedir</a>
       <a href="#p5">Punto 5</a>
       <a href="#p6">Punto 6</a>
       <a href="#calc">Costos</a>
@@ -120,13 +145,22 @@ ul.check li.done label { text-decoration: line-through; color: var(--muted); }
 <p class="muted small">Lo que hay que pedirle a Gabriela para poder cerrar los puntos en la sala.</p>
 <ul class="check" id="listaAntes"></ul>
 
+<h2 id="pedir">Lo que necesito pedir hoy</h2>
+<p class="muted small">Sacado del formulario de Gabriela: lo que cada persona tiene que traer o decidir. Marca cada pedido cuando lo hagas.</p>
+<div id="pedirLista"></div>
+
 <h2 id="p5">Punto 5 · Puntos abiertos <span class="muted" style="font-size:16px">(9:50 a 10:15, 5 min por tema)</span></h2>
 <p class="muted small">Gabriela y Eliezer. Resultado esperado: una propuesta y un responsable por punto.</p>
-<div id="fichas5"></div>
+<p class="muted small lead">Primero, las respuestas preparadas del formulario de Gabriela (sección 5). Toca un tema para abrirlo y anotar lo que acuerden.</p>
+<div class="filtros" id="filtrosForm" role="group" aria-label="Filtrar temas del formulario"></div>
+<div id="form5"></div>
+<details class="viejo"><summary>Mi guía de propuestas (versión anterior)</summary><div id="fichas5"></div></details>
 
 <h2 id="p6">Punto 6 · Costos y precios <span class="muted" style="font-size:16px">(10:15 a 10:30)</span></h2>
 <p class="muted small">Lo lleva Gabriela. Resultado esperado: campos de costo y precio del catálogo definidos.</p>
-<div id="fichas6"></div>
+<p class="muted small lead">Respuestas preparadas del formulario de Gabriela (sección 6).</p>
+<div id="form6"></div>
+<details class="viejo"><summary>Mi guía de propuestas (versión anterior)</summary><div id="fichas6"></div></details>
 
 <h2 id="calc">Prueba de la fórmula con tres productos</h2>
 <p class="muted small">Costo puesto en almacén = costo FOB + flete y seguro + aranceles y gastos. Los márgenes son una propuesta para probar con Gabriela: precio = costo × (1 + margen). El IVA va aparte.</p>
@@ -194,8 +228,89 @@ ul.check li.done label { text-decoration: line-through; color: var(--muted); }
   ];
   var CAMPOS = [["c1", "Costo FOB"], ["c2", "Flete y seguro"], ["c3", "Aranceles y gastos"], ["c4", "Costo puesto en almacén"], ["c5", "Precio mayor"], ["c6", "Precio detal"], ["c7", "Comisión"], ["c8", "IVA (aparte)"]];
 
+
+  /* ---------- Formulario de Gabriela: respuestas preparadas (secciones 5 y 6) ---------- */
+  // e = estado de la respuesta; q = de quién se necesita algo; ojo = aviso para quien presenta
+  var FORM = [
+    { f: 1, id: "5.1", s: 5, t: "Reserva con nota de pedido o llamada", e: "Respondida", q: [],
+      r: "Sí. El stock se reserva al confirmar el pedido, antes del pago, y vuelve si se cancela.", n: "Nada." },
+    { f: 1, id: "5.2", s: 5, t: "Vencimiento de la reserva", e: "Respondida con compromiso", q: ["reunion"], fecha: "30/10",
+      r: "Hoy no vence. Se construye un vencimiento configurable en horas.", n: "El valor que decidan en 5.4." },
+    { f: 1, id: "5.3", s: 5, t: "Sincronización de reserva y descuento", e: "Respondida con compromiso", q: ["reunion"], fecha: "30/10",
+      r: "Un solo inventario. La reserva descuenta del disponible y el descuento definitivo ocurre al facturar o entregar.", n: "La decisión de 5.4.",
+      ojo: "Hoy el sistema descuenta el stock al confirmar el pedido (la reserva) y no vuelve a descontar al despachar; si se cancela, el stock vuelve. El «descuento definitivo al facturar o entregar» es el diseño propuesto, no lo que hace hoy: dilo así." },
+    { f: 1, id: "5.5", s: 5, t: "Calibración y simulaciones del módulo de voz", e: "Respondida", q: ["equipo"],
+      r: "El módulo está construido. Falta el equipo para pasarlo a prueba. Calibración actual: [__ %].", n: "El equipo (tipo por confirmar) y la fecha de llegada.",
+      ojo: "En el código de Ventas 24 no encuentro un módulo de voz con calibración ni simulaciones; solo hay un script antiguo de llamadas salientes (llamar_mayoristas.py). Confirma que hablas de otro módulo antes de decir que está construido, y completa el porcentaje de calibración." },
+    { f: 1, id: "5.6", s: 5, t: "Casos de prueba de voz", e: "Respondida", q: ["alirio"], fecha: "[dd/mm]",
+      r: "Se cubren cinco categorías: precio, disponibilidad, mayorista, reclamo y códigos dictados, con deletreo y repetición.", n: "Que Alirio Aranguren valide los casos y aporte audios reales de clientes." },
+    { f: 1, id: "5.9", s: 5, t: "Cálculo de fletes (Fase 2)", e: "Respondida con compromiso", q: ["gabriela"], fecha: "13/11",
+      r: "Hoy el sistema no calcula fletes. Se propone un cargo configurable por zona o por peso. La cotización del transportista queda fuera de alcance.", n: "Las tarifas de Gabriela Mujica." },
+    { f: 1, id: "5.11", s: 5, t: "Tasa guardada por transacción", e: "Respondida con compromiso", q: [], fecha: "30/10",
+      r: "Hoy no se guarda la tasa. Se construye el registro de tasa y el recálculo en bolívares al pago.", n: "Nada." },
+    { f: 1, id: "5.14", s: 5, t: "Descuento por divisas o USDT e IGTF", e: "Respondida", q: ["jaime"],
+      r: "El sistema ya calcula el IGTF del 3 % en el documento de control. El descuento se puede mostrar como línea aparte.", n: "Que Jaime García decida si se mantiene el descuento.",
+      ojo: "Verificado: el documento de control calcula el IVA (16 %) y el IGTF (3 %) con tasas configurables. El descuento por divisas todavía no existe como línea aparte." },
+    { f: 1, id: "5.15", s: 5, t: "Factura en bolívares con referencia en USD y tasa BCV", e: "Pendiente", q: ["jaime"],
+      r: "Hoy no. Solo existe un documento de control interno en USD, que no es fiscal.", n: "Que Jaime decida el emisor fiscal y la fase." },
+    { f: 1, id: "5.16", s: 5, t: "Carga de la tasa del día", e: "Pendiente", q: ["gabriela"], fecha: "30/10",
+      r: "Hoy no hay carga. Propuesta: carga automática desde el BCV con respaldo manual auditado.", n: "Que Gabriela confirme la fuente oficial." },
+    { f: 1, id: "5.17", s: 5, t: "Requisitos del Seniat para facturar", e: "Pendiente", q: ["gabriela", "contador"], fecha: "[dd/mm]",
+      r: "No afirmar cumplimiento todavía. Se validará el formato con un contador.", n: "El nombre del contador y la decisión del formato (libre, máquina fiscal o digital) con Gabriela." },
+
+    { f: 1, id: "6.1", s: 6, t: "Método de valoración de inventario", e: "Pendiente de decisión", q: ["reunion"],
+      r: "No está implementado. Propuesta: promedio ponderado o PEPS.", n: "La decisión de 6.2." },
+    { f: 1, id: "6.3", s: 6, t: "Costo provisional y ajuste al definitivo", e: "Respondida con compromiso", q: [], fecha: "30/10",
+      r: "Parcial. Cada recepción guarda su costo unitario, pero falta el ajuste explícito con el valor anterior y el nuevo.", n: "Nada." },
+    { f: 1, id: "6.4", s: 6, t: "Costo en USD y en bolívares con tasa", e: "Pendiente", q: ["reunion"],
+      r: "No. Hoy el costo está en una sola moneda.", n: "Decidir si lo quieren." },
+    { f: 1, id: "6.5", s: 6, t: "Expediente de importación en el mínimo operativo", e: "Respondida", q: ["gabriela"],
+      r: "Recomiendo cargar el primer pedido desde la liquidación en Excel para enero y dejar el expediente para Fase 2.", n: "La decisión de Gabriela Mujica." },
+    { f: 1, id: "6.6", s: 6, t: "Pedido con FOB y actualización con proforma", e: "Pendiente", q: [], fecha: "13/11",
+      r: "No. Fase 2.", n: "Nada." },
+    { f: 1, id: "6.7", s: 6, t: "Gastos por concepto, estimados o reales", e: "Pendiente", q: [], fecha: "13/11",
+      r: "No. Fase 2.", n: "Nada." },
+    { f: 1, id: "6.8", s: 6, t: "Prorrateo de gastos", e: "Pendiente", q: ["reunion"], fecha: "13/11",
+      r: "No está implementado. Por defecto sería por FOB, como la liquidación actual.", n: "Confirmar el criterio." },
+    { f: 1, id: "6.9", s: 6, t: "Anticipos al proveedor y mercancía en tránsito", e: "Pendiente", q: [], fecha: "13/11",
+      r: "No. Fase 2.", n: "Nada." },
+    { f: 1, id: "6.10", s: 6, t: "IVA de importación como crédito fiscal", e: "Pendiente", q: ["contador"],
+      r: "No está implementado.", n: "Que el contador confirme el tratamiento." },
+    { f: 1, id: "6.11", s: 6, t: "Listas de precios para mayor y detal", e: "Respondida", q: [],
+      r: "Sí. Cada producto tiene precio detal y precio mayor, y el tipo del contacto decide cuál aplica.", n: "Nada." },
+    { f: 1, id: "6.13", s: 6, t: "Precio sugerido y aprobación de Presidencia", e: "Respondida con compromiso", q: ["jaime"], fecha: "30/10",
+      r: "No. Propuesta: precio sugerido a partir del costo y el margen objetivo, publicado solo con aprobación.", n: "Que Presidencia defina quién aprueba." },
+    { f: 1, id: "6.14", s: 6, t: "Vigencia y registro de cambios en listas", e: "Respondida con compromiso", q: [], fecha: "30/10",
+      r: "No. Se construye con fecha de vigencia y log de usuario y fecha.", n: "Nada." },
+    { f: 1, id: "6.15", s: 6, t: "Permisos para costo y margen", e: "Respondida con compromiso", q: ["reunion"], fecha: "30/10",
+      r: "Hay roles (super_admin, admin, vendedor), pero no permisos por campo. Se agregan para Presidencia y Gerencia de Operaciones.", n: "Confirmar quién ve qué." },
+    { f: 1, id: "6.17", s: 6, t: "Comisión al facturar o al cobrar", e: "Respondida", q: ["jaime"],
+      r: "Puede calcularse en cualquiera de los dos momentos y vincularse a cuentas por cobrar cuando se construya.", n: "Que Jaime García decida el momento." },
+    { f: 1, id: "6.18", s: 6, t: "Comisión sobre precio sin IVA, acumulada por vendedor", e: "Pendiente", q: ["reunion"],
+      r: "No existe. Se construye con base sin IVA y liquidación por periodo.", n: "La regla de 6.16." },
+    { f: 1, id: "6.19", s: 6, t: "IVA de 16 % separado en la factura", e: "Pendiente", q: [],
+      r: "No en la factura fiscal, que no existe. Solo aparece en el documento de control interno.", n: "Nada." },
+    { f: 1, id: "6.20", s: 6, t: "El bot indica si el precio incluye IVA", e: "Pendiente", q: [],
+      r: "No lo encontré en el código.", n: "Revisar el agente antes de responder.",
+      ojo: "Revisado hoy: ninguno de los dos vendedores (Salomón y el de siempre) tiene instrucción alguna sobre si el precio incluye IVA. Respuesta: no. Propuesta: agregar esa regla en cuanto se decida si los precios del catálogo llevan IVA o no." },
+    { f: 1, id: "6.21", s: 6, t: "Libros de compras y ventas", e: "Pendiente", q: ["contador"],
+      r: "No existen.", n: "Que el contador defina el formato." },
+    { f: 1, id: "6.22", s: 6, t: "Retenciones de IVA", e: "Pendiente", q: ["gabriela"], fecha: "13/11",
+      r: "Fase 2, solo si Grupo Vextor es contribuyente especial.", n: "Confirmar ese estatus." }
+  ];
+  var QUIEN = [["jaime", "Jaime García · decisiones"], ["gabriela", "Gabriela Mujica"], ["alirio", "Alirio Aranguren"],
+               ["contador", "Contador (por nombrar)"], ["reunion", "Para decidir en la sala"], ["equipo", "Equipo del módulo de voz"]];
+  var FILTROS = [
+    ["todas", "Todas", function () { return true; }],
+    ["pend", "Pendientes", function (it) { return /^Pendiente/.test(it.e); }],
+    ["comp", "Con compromiso", function (it) { return it.e === "Respondida con compromiso"; }],
+    ["nec", "Necesito algo", function (it) { return it.q.length > 0; }],
+    ["jaime", "Decide Jaime", function (it) { return it.q.indexOf("jaime") >= 0; }],
+    ["ojo", "Con aviso", function (it) { return !!it.ojo; }]
+  ];
+
   function vacio() {
-    return { v: 1, items: {}, antes: {}, campos: {}, iva: 16, skus: [{}, {}, {}] };
+    return { v: 1, items: {}, antes: {}, campos: {}, form: {}, pedir: {}, iva: 16, skus: [{}, {}, {}] };
   }
   var state = vacio();
   var LKEY = "libreta-vextor-16oct";
@@ -317,6 +432,95 @@ ul.check li.done label { text-decoration: line-through; color: var(--muted); }
     return card;
   }
 
+
+  /* ---------- fichas del formulario ---------- */
+  var fichasForm = {};
+  var filtroActual = "todas";
+  function conMarcas(el, texto) {
+    texto.split(/(\[[^\]]*\])/).forEach(function (t) {
+      if (!t) return;
+      if (t.charAt(0) === "[") el.appendChild(h("span", { "class": "marca", text: t })); else el.appendChild(document.createTextNode(t));
+    });
+    return el;
+  }
+  function fd(id) { if (!state.form[id]) state.form[id] = {}; return state.form[id]; }
+  function fichaForm(it) {
+    var card = h("details", { "class": "card f", id: "ff" + it.id.replace(".", "_") });
+    var cls = /^Pendiente/.test(it.e) ? "pend" : it.e === "Respondida con compromiso" ? "comp" : "ok";
+    var resumen = h("summary", null,
+      h("span", { "class": "num", text: it.id }),
+      h("span", { "class": "tt", text: it.t }),
+      h("span", { "class": "bd " + cls, text: it.e }));
+    card.appendChild(resumen);
+    var cuerpo = h("div", { "class": "cuerpo" });
+    var guia = h("div", { "class": "guia" });
+    guia.appendChild(conMarcas(h("div", null, h("b", { text: "Respuesta preparada" })), it.r));
+    guia.appendChild(h("div", null, h("b", { text: "Necesito" }), document.createTextNode(it.n)));
+    if (it.fecha) guia.appendChild(conMarcas(h("div", null, h("b", { text: "Fecha comprometida" })), it.fecha));
+    if (it.ojo) guia.appendChild(h("div", { "class": "ojo" }, h("b", { text: "Ojo antes de decirlo" }), document.createTextNode(it.ojo)));
+    cuerpo.appendChild(guia);
+
+    var d = fd(it.id);
+    var sel = h("select", { id: "fe_" + it.id, "aria-label": "Estado en la reunión del tema " + it.id });
+    ESTADOS.forEach(function (e) { sel.appendChild(h("option", { value: e[0], text: e[1] })); });
+    sel.value = d.estado || "";
+    var resp = h("input", { type: "text", id: "fr_" + it.id, placeholder: "Quién", autocomplete: "off" }); resp.value = d.resp || "";
+    var fecha = h("input", { type: "date", id: "fd_" + it.id }); fecha.value = d.fecha || "";
+    var notas = h("textarea", { id: "fn_" + it.id, placeholder: "Qué dijeron, cifras, decisión…" }); notas.value = d.notas || "";
+    function marca() { card.className = "card f" + (sel.value === "acordado" ? " hecho" : sel.value === "escalar" ? " escalar" : sel.value === "falta" ? " falta" : ""); }
+    marca();
+    sel.addEventListener("change", function () { fd(it.id).estado = sel.value; marca(); guardar(); });
+    resp.addEventListener("input", function () { fd(it.id).resp = resp.value; guardar(); });
+    fecha.addEventListener("change", function () { fd(it.id).fecha = fecha.value; guardar(); });
+    notas.addEventListener("input", function () { fd(it.id).notas = notas.value; guardar(); });
+    cuerpo.appendChild(h("div", { "class": "campos" },
+      h("label", { "class": "f" }, document.createTextNode("Estado en la reunión"), sel),
+      h("label", { "class": "f" }, document.createTextNode("Responsable"), resp),
+      h("label", { "class": "f" }, document.createTextNode("Fecha"), fecha),
+      h("label", { "class": "f ancho" }, document.createTextNode("Notas"), notas)));
+    card.appendChild(cuerpo);
+    fichasForm[it.id] = card;
+    return card;
+  }
+
+  function filtros() {
+    var barra = document.getElementById("filtrosForm");
+    barra.textContent = "";
+    FILTROS.forEach(function (f) {
+      var b = h("button", { type: "button", "class": "filtro" + (f[0] === filtroActual ? " on" : ""), text: f[1] });
+      b.addEventListener("click", function () { filtroActual = f[0]; aplicarFiltro(); filtros(); });
+      barra.appendChild(b);
+    });
+    barra.appendChild(h("span", { "class": "small muted", id: "cuentaForm" }));
+    aplicarFiltro();
+  }
+  function aplicarFiltro() {
+    var pred = FILTROS.filter(function (f) { return f[0] === filtroActual; })[0][2], n = 0;
+    FORM.forEach(function (it) { var ver = pred(it); fichasForm[it.id].hidden = !ver; if (ver) n++; });
+    var c = document.getElementById("cuentaForm");
+    if (c) c.textContent = "Mostrando " + n + " de " + FORM.length;
+  }
+
+  function pedir() {
+    var cont = document.getElementById("pedirLista");
+    QUIEN.forEach(function (q) {
+      var items = FORM.filter(function (it) { return it.q.indexOf(q[0]) >= 0; });
+      if (!items.length) return;
+      cont.appendChild(h("h3", { text: q[1], style: "margin-top:14px" }));
+      var ul = h("ul", { "class": "check" });
+      items.forEach(function (it) {
+        var key = it.id + ":" + q[0];
+        var li = h("li"), cb = h("input", { type: "checkbox", id: "cp_" + key.replace(".", "_").replace(":", "_") });
+        cb.checked = !!state.pedir[key]; li.classList.toggle("done", cb.checked);
+        cb.addEventListener("change", function () { state.pedir[key] = cb.checked; li.classList.toggle("done", cb.checked); guardar(); });
+        li.appendChild(cb);
+        li.appendChild(h("label", { "for": cb.id, text: it.id + " · " + it.t + " — " + it.n }));
+        ul.appendChild(li);
+      });
+      cont.appendChild(ul);
+    });
+  }
+
   function calc() {
     var box = document.getElementById("skus");
     var iva = document.getElementById("ivaPct");
@@ -370,27 +574,33 @@ ul.check li.done label { text-decoration: line-through; color: var(--muted); }
   }
 
   /* ---------- resumen y avance ---------- */
-  function etiqueta(item) {
-    var d = state.items[item.id] || {};
-    var l = item.id + " " + item.t;
+  function datosDe(it) { return (it.f ? state.form : state.items)[it.id] || {}; }
+  function etiqueta(it) {
+    var d = datosDe(it);
+    var l = (it.f ? "Formulario " : "") + it.id + " " + it.t;
     if (d.resp) l += " — Responsable: " + d.resp;
     if (d.fecha) l += " — Fecha: " + d.fecha.split("-").reverse().join("/");
     if (d.notas && d.notas.trim()) l += "\n   " + d.notas.trim().replace(/\n/g, "\n   ");
     return "• " + l;
   }
   function refrescar() {
+    var TODOS = ITEMS.concat(FORM);
     var grupos = { acordado: [], escalar: [], falta: [], aplazado: [], sin: [] };
-    ITEMS.forEach(function (item) { var e = (state.items[item.id] || {}).estado || "sin"; grupos[e].push(item); });
+    TODOS.forEach(function (it) {
+      var d = datosDe(it), e = d.estado || "sin";
+      if (e === "sin" && !(d.notas || d.resp || d.fecha)) return;   // solo entra lo que tienes anotado
+      grupos[e].push(it);
+    });
     var hechos = grupos.acordado.length + grupos.escalar.length;
-    document.getElementById("avance").textContent = hechos + " de " + ITEMS.length + " temas con decisión o escalados";
-    document.getElementById("meterFill").style.width = (hechos / ITEMS.length * 100) + "%";
+    document.getElementById("avance").textContent = hechos + " de " + TODOS.length + " temas con decisión o escalados";
+    document.getElementById("meterFill").style.width = (hechos / TODOS.length * 100) + "%";
     var tx = "REUNIÓN GRUPO VEXTOR · 16/10/2026 · Puntos 5 y 6\n";
     function bloque(titulo, lista) { if (lista.length) tx += "\n" + titulo + "\n" + lista.map(etiqueta).join("\n") + "\n"; }
     bloque("ACUERDOS", grupos.acordado);
     bloque("PARA DECISIÓN DE JAIME GARCÍA", grupos.escalar);
     bloque("FALTA INFORMACIÓN", grupos.falta);
     bloque("APLAZADO", grupos.aplazado);
-    bloque("SIN DEFINIR", grupos.sin);
+    bloque("SIN DEFINIR / CON NOTAS", grupos.sin);
     var val = CAMPOS.filter(function (c) { return state.campos[c[0]]; }).map(function (c) { return c[1]; });
     if (val.length) tx += "\nCAMPOS DEL CATÁLOGO VALIDADOS\n" + val.join(", ") + "\n";
     document.getElementById("resumenTxt").value = tx;
@@ -405,8 +615,11 @@ ul.check li.done label { text-decoration: line-through; color: var(--muted); }
 
   /* ---------- arranque ---------- */
   function construir() {
-    ["fichas5", "fichas6", "listaAntes", "skus"].forEach(function (id) { document.getElementById(id).textContent = ""; });
+    ["form5", "form6", "fichas5", "fichas6", "listaAntes", "pedirLista", "skus"].forEach(function (id) { document.getElementById(id).textContent = ""; });
     antes();
+    pedir();
+    FORM.forEach(function (it) { document.getElementById(it.s === 5 ? "form5" : "form6").appendChild(fichaForm(it)); });
+    filtros();
     ITEMS.forEach(function (item) { document.getElementById(item.p === 5 ? "fichas5" : "fichas6").appendChild(ficha(item)); });
     calc();
     refrescar();
