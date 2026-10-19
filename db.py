@@ -228,6 +228,8 @@ def inicializar():
     with conectar() as con:
         con.executescript(ESQUEMA)
         # Migración liviana para bases creadas antes de agregar esta columna.
+        if "debe_cambiar" not in {f["name"] for f in con.execute("PRAGMA table_info(usuarios)")}:
+            con.execute("ALTER TABLE usuarios ADD COLUMN debe_cambiar INTEGER NOT NULL DEFAULT 0")   # 1 = clave temporal
         columnas = {f["name"] for f in con.execute("PRAGMA table_info(contactos)")}
         if "wecall_ultimo_id" not in columnas:
             con.execute("ALTER TABLE contactos ADD COLUMN wecall_ultimo_id INTEGER")
@@ -988,7 +990,7 @@ def obtener_usuario(usuario_id: int):
 
 def listar_usuarios():
     with conectar() as con:
-        filas = con.execute("SELECT id, nombre, email, rol, activo, fecha_creacion FROM usuarios ORDER BY fecha_creacion").fetchall()
+        filas = con.execute("SELECT id, nombre, email, rol, activo, debe_cambiar, fecha_creacion FROM usuarios ORDER BY id").fetchall()
         return [dict(f) for f in filas]
 
 

@@ -130,7 +130,8 @@ def api_login():
     session.clear()
     session["usuario_id"] = usuario["id"]
     session.permanent = True
-    return jsonify({"id": usuario["id"], "nombre": usuario["nombre"], "rol": usuario["rol"]})
+    return jsonify({"id": usuario["id"], "nombre": usuario["nombre"], "rol": usuario["rol"],
+                    "debe_cambiar": bool(usuario.get("debe_cambiar"))})
 
 
 @app.route("/api/crm/logout", methods=["POST"])
@@ -145,6 +146,80 @@ def api_yo():
     if not usuario:
         return jsonify({"error": "no autenticado"}), 401
     return jsonify({"id": usuario["id"], "nombre": usuario["nombre"], "rol": usuario["rol"], "email": usuario["email"]})
+
+
+@app.route("/api/crm/cambiar-password", methods=["POST"])
+@requiere_sesion()
+def api_cambiar_password():
+    d = request.get_json(silent=True) or {}
+    u = db.obtener_usuario(request.usuario["id"])
+    if not check_password_hash(u["password_hash"], d.get("actual") or ""):
+        return jsonify({"error": "la contraseña actual no es correcta"}), 400
+    nueva = d.get("nueva") or ""
+    if len(nueva) < 10:
+        return jsonify({"error": "la contraseña nueva debe tener al menos 10 caracteres"}), 400
+    if nueva == (d.get("actual") or ""):
+        return jsonify({"error": "la contraseña nueva debe ser distinta de la actual"}), 400
+    db.actualizar_usuario(u["id"], password_hash=generate_password_hash(nueva), debe_cambiar=0)
+    db.registrar_accion("Usuarios", None, "cambiar_password", {"usuario": u["email"]}, "ok")
+    return jsonify({"ok": True})
+
+
+def _clave_temporal() -> str:
+    import secrets
+    alfabeto = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789"   # sin letras que se confunden (l, I, O, 0, 1)
+    return "".join(secrets.choice(alfabeto) for _ in range(12))
+
+
+@app.route("/api/crm/usuarios", methods=["GET", "POST"])
+@requiere_sesion(roles=["super_admin"])
+def api_usuarios():
+    if request.method == "GET":
+        return jsonify(db.listar_usuarios())
+    d = request.get_json(silent=True) or {}
+    nombre, email, rol = (d.get("nombre") or "").strip(), (d.get("email") or "").strip().lower(), d.get("rol") or "vendedor"
+    if not nombre or "@" not in email:
+        return jsonify({"error": "falta el nombre o el correo es inválido"}), 400
+    if rol not in db.ROLES_VALIDOS:
+        return jsonify({"error": "rol inválido"}), 400
+    temporal = _clave_temporal()
+    try:
+        uid = db.crear_usuario(nombre, email, generate_password_hash(temporal), rol)
+    except Exception:
+        return jsonify({"error": "ya existe un usuario con ese correo"}), 400
+    db.actualizar_usuario(uid, debe_cambiar=1)
+    db.registrar_accion("Usuarios", None, "crear_usuario", {"email": email, "rol": rol}, request.usuario["nombre"])
+    return jsonify({"id": uid, "nombre": nombre, "email": email, "rol": rol, "clave_temporal": temporal})
+
+
+@app.route("/api/crm/usuarios/<int:uid>", methods=["POST"])
+@requiere_sesion(roles=["super_admin"])
+def api_usuario_editar(uid):
+    d = request.get_json(silent=True) or {}
+    u = db.obtener_usuario(uid)
+    if not u:
+        return jsonify({"error": "usuario no encontrado"}), 404
+    propio = uid == request.usuario["id"]
+    cambios, salida = {}, {}
+    if "rol" in d:
+        if d["rol"] not in db.ROLES_VALIDOS:
+            return jsonify({"error": "rol inválido"}), 400
+        if propio and d["rol"] != u["rol"]:
+            return jsonify({"error": "no puedes cambiar tu propio rol"}), 400
+        cambios["rol"] = d["rol"]
+    if "activo" in d:
+        if propio and not d["activo"]:
+            return jsonify({"error": "no puedes desactivar tu propia cuenta"}), 400
+        cambios["activo"] = 1 if d["activo"] else 0
+    if d.get("reiniciar_clave"):
+        temporal = _clave_temporal()
+        cambios["password_hash"] = generate_password_hash(temporal); cambios["debe_cambiar"] = 1
+        salida["clave_temporal"] = temporal
+    if not cambios:
+        return jsonify({"error": "nada que cambiar"}), 400
+    db.actualizar_usuario(uid, **cambios)
+    db.registrar_accion("Usuarios", None, "editar_usuario", {"email": u["email"], "cambios": [k for k in cambios if k != "password_hash"]}, request.usuario["nombre"])
+    return jsonify({"ok": True, **salida})
 
 
 @app.route("/debug/crear-usuario", methods=["POST"])

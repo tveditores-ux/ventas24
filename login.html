@@ -85,7 +85,36 @@
   <input type="password" id="password" autocomplete="current-password" required>
   <button type="submit" id="btn">Entrar</button>
 </form>
+<form class="card" id="cambio" hidden>
+  <h1>Crea tu contraseña</h1>
+  <div class="sub">Entraste con una clave temporal. Elige una propia (mínimo 10 caracteres).</div>
+  <div class="error" id="errorCambio"></div>
+  <label for="nueva">Contraseña nueva</label>
+  <input type="password" id="nueva" autocomplete="new-password" minlength="10" required>
+  <label for="nueva2">Repítela</label>
+  <input type="password" id="nueva2" autocomplete="new-password" minlength="10" required>
+  <button type="submit">Guardar y entrar</button>
+</form>
 <script>
+  function irAdestino(){
+    const next = new URLSearchParams(location.search).get('next') || '';
+    location.href = (next.startsWith('/') && !next.startsWith('//')) ? next : '/crm';
+  }
+  function mostrarCambio(actual){
+    document.getElementById('form').hidden = true;
+    const f = document.getElementById('cambio'); f.hidden = false;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const eb = document.getElementById('errorCambio'); eb.classList.remove('show');
+      const n1 = document.getElementById('nueva').value, n2 = document.getElementById('nueva2').value;
+      if (n1 !== n2){ eb.textContent = 'Las dos contraseñas no coinciden'; eb.classList.add('show'); return; }
+      const r = await fetch('/api/crm/cambiar-password', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+        body: JSON.stringify({ actual, nueva: n1 }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok){ eb.textContent = d.error || 'No se pudo cambiar'; eb.classList.add('show'); return; }
+      irAdestino();
+    });
+  }
   const form = document.getElementById('form');
   const errBox = document.getElementById('error');
   form.addEventListener('submit', async (e) => {
@@ -94,21 +123,23 @@
     const btn = document.getElementById('btn');
     btn.disabled = true; btn.textContent = 'Entrando…';
     try {
+      const password = document.getElementById('password').value;
       const r = await fetch('/api/crm/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({
           email: document.getElementById('email').value.trim(),
-          password: document.getElementById('password').value,
+          password,
         }),
       });
       if (!r.ok){
         const d = await r.json().catch(() => ({}));
         throw new Error(d.error || ('HTTP ' + r.status));
       }
-      const params = new URLSearchParams(location.search);
-      location.href = params.get('next') || '/crm';
+      const d = await r.json().catch(() => ({}));
+      if (d.debe_cambiar){ mostrarCambio(password); return; }
+      irAdestino();
     } catch(err){
       errBox.textContent = err.message;
       errBox.classList.add('show');
