@@ -266,6 +266,8 @@
   }
   @media (max-width:480px){ .dlg-grid{ grid-template-columns:1fr; } }
   @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+.tasa-chip{display:inline-flex;gap:14px;align-items:center;margin-top:8px;padding:6px 14px;border-radius:999px;border:1px solid var(--line,#d9dee7);font-size:13.5px;font-variant-numeric:tabular-nums;background:var(--card,#fff)}
+.tasa-chip b{font-weight:700}.tasa-chip.vieja{border-color:#c0392b;color:#c0392b}
 </style>
 </head>
 <body>
@@ -311,7 +313,7 @@
   </div>
 </aside>
 <main class="content">
-  <header class="page-head"><h2 id="tituloVista">Por atender</h2><p id="subtituloVista"></p></header>
+  <header class="page-head"><h2 id="tituloVista">Por atender</h2><p id="subtituloVista"></p><div id="chipTasa" class="tasa-chip" title="Tasa oficial del BCV" hidden></div></header>
 
 <div id="convWrap" hidden>
   <div class="toolbar">
@@ -420,7 +422,9 @@
 <div id="reglasWrap" hidden>
   <div class="pend-resumen" id="reglasResumen"></div>
   <form id="reglasForm" class="toolbar" style="margin-top:14px;flex-wrap:wrap;gap:12px;align-items:flex-end">
-    <label>Tasa del día (Bs por $)<br><input type="text" inputmode="decimal" name="tasa" placeholder="ej. 36,50"></label>
+    <label>Tasa USD a mano (Bs por $)<br><input type="text" inputmode="decimal" name="tasa" placeholder="solo si falla el BCV"></label>
+    <label>Tasa EUR a mano (Bs por €)<br><input type="text" inputmode="decimal" name="eur" placeholder="opcional"></label>
+    <button class="btn ghost" type="button" id="btnBcv">Actualizar desde el BCV</button>
     <label>Vigencia de la tasa (días)<br><input type="text" inputmode="numeric" name="tasa_vigencia_dias" placeholder="1"></label>
     <label>Días de reserva sin pago<br><input type="text" inputmode="numeric" name="reserva_dias" placeholder="7"></label>
     <label>Pedido mínimo (USD)<br><input type="text" inputmode="decimal" name="pedido_minimo_usd" placeholder="500"></label>
@@ -1334,14 +1338,31 @@
       const d = await r.json(), t = d.tasa;
       const cuando = t.fecha ? new Date(t.fecha.replace(' ', 'T') + 'Z').toLocaleString() : '—';
       document.getElementById('reglasResumen').innerHTML = `
-        <div class="pend-card"><b>${t.tasa ? t.tasa.toFixed(2) : '—'}</b><span>Bs por $ · ${t.vigente ? 'vigente' : (t.tasa ? 'VENCIDA' : 'sin cargar')}<br>${esc(cuando)}</span></div>
+        <div class="pend-card"><b>${t.tasa ? t.tasa.toFixed(2) : '—'}</b><span>Bs por $ · ${t.vigente ? 'vigente' : (t.tasa ? 'VENCIDA' : 'sin cargar')}<br>${esc(t.fuente || '')} ${t.auto ? '' : '(a mano: no se actualiza sola)'}</span></div>
+        <div class="pend-card"><b>${t.eur ? t.eur.toFixed(2) : '—'}</b><span>Bs por € · fecha valor ${esc(t.fecha_valor || '—')}<br>${esc(cuando)}</span></div>
         <div class="pend-card"><b>${d.reserva_dias} días</b><span>de reserva sin pago</span></div>
         <div class="pend-card"><b>$${d.pedido_minimo.usd} / ${d.pedido_minimo.unidades} uds</b><span>pedido mínimo al mayor (uno u otro)</span></div>`;
     } catch(e){
       document.getElementById('reglasResumen').innerHTML = `<p class="error">No pude cargar las reglas (${esc(e.message)}).</p>`;
     }
   }
+  async function cargarTasaChip(){
+    try {
+      const r = await api('/api/erp/tasa'); if (!r.ok) return;
+      const t = await r.json(), chip = document.getElementById('chipTasa');
+      if (!t.tasa){ chip.hidden = true; return; }
+      chip.hidden = false; chip.classList.toggle('vieja', !t.vigente);
+      chip.innerHTML = `<span>BCV</span><span><b>USD</b> ${t.tasa.toFixed(2)}</span>${t.eur ? `<span><b>EUR</b> ${t.eur.toFixed(2)}</span>` : ''}<span>${esc(t.fecha_valor || '')}${t.vigente ? '' : ' · vencida'}</span>`;
+    } catch(e){ /* sin tasa visible */ }
+  }
   function iniciarReglas(){
+    cargarTasaChip(); setInterval(cargarTasaChip, 600000);
+    document.getElementById('btnBcv').addEventListener('click', async () => {
+      const msg = document.getElementById('reglasMsg'); msg.textContent = 'Consultando el BCV…'; msg.classList.remove('error');
+      const r = await api('/api/erp/tasa/actualizar', { method:'POST' }), d = await r.json().catch(()=>({}));
+      if (!r.ok){ msg.textContent = d.error || 'No se pudo actualizar'; msg.classList.add('error'); return; }
+      msg.textContent = `Listo: USD ${d.usd} · EUR ${d.eur} (${d.fecha_valor}).`; cargarReglas(); cargarTasaChip();
+    });
     document.getElementById('reglasForm').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const cuerpo = {};
@@ -1351,7 +1372,7 @@
       const d = await r.json().catch(()=>({}));
       const msg = document.getElementById('reglasMsg');
       if (!r.ok){ msg.textContent = d.error || 'No se pudo guardar'; msg.classList.add('error'); return; }
-      msg.classList.remove('error'); msg.textContent = 'Guardado.'; ev.target.reset(); cargarReglas();
+      msg.classList.remove('error'); msg.textContent = 'Guardado.'; ev.target.reset(); cargarReglas(); cargarTasaChip();
     });
   }
 

@@ -1265,11 +1265,17 @@ def tasa_vigente() -> dict:
             vigente = (datetime.utcnow() - datetime.strptime(fecha, "%Y-%m-%d %H:%M:%S")).total_seconds() <= _num_config("tasa_vigencia_dias", 1) * 86400
         except ValueError:
             pass
-    return {"tasa": tasa or None, "fecha": fecha, "vigente": vigente, "fuente": obtener_config("tasa_fuente")}
+    eur = _num_config("tasa_eur", 0)
+    return {"tasa": tasa or None, "eur": eur or None, "fecha": fecha, "vigente": vigente,
+            "fuente": obtener_config("tasa_fuente"), "fecha_valor": obtener_config("tasa_fecha_valor"),
+            "auto": obtener_config("tasa_auto") != "0"}
 
 
-def guardar_tasa(tasa: float, fuente: str = "BCV"):
+def guardar_tasa(tasa: float, fuente: str = "BCV", eur: float | None = None, fecha_valor: str | None = None):
     guardar_config("tasa_bs", str(tasa))
+    if eur:
+        guardar_config("tasa_eur", str(eur))
+    guardar_config("tasa_fecha_valor", fecha_valor)
     guardar_config("tasa_fecha", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
     guardar_config("tasa_fuente", fuente)
 

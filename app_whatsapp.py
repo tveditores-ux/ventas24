@@ -42,6 +42,7 @@ from functools import wraps
 import db
 import analista
 import ciclo
+import bcv
 import erp
 import importacion
 import zipfile
@@ -381,7 +382,8 @@ def erp_reglas():
         try:
             hecho = {}
             if d.get("tasa") not in (None, ""):
-                db.guardar_tasa(num("tasa"), (d.get("fuente") or "BCV").strip()[:40]); hecho["tasa"] = d["tasa"]
+                db.guardar_tasa(num("tasa"), (d.get("fuente") or "manual").strip()[:40], eur=num("eur") if d.get("eur") not in (None, "") else None)
+                db.guardar_config("tasa_auto", "0"); hecho["tasa"] = d["tasa"]   # a mano: el automático no la pisa hasta que lo reactives
             for k, clave in (("reserva_dias", "reserva_dias"), ("pedido_minimo_usd", "pedido_minimo_usd"),
                              ("pedido_minimo_unidades", "pedido_minimo_unidades"), ("tasa_vigencia_dias", "tasa_vigencia_dias")):
                 if d.get(k) not in (None, ""):
@@ -438,6 +440,22 @@ def erp_importacion_accion(eid, accion):
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     return jsonify({"error": "acción desconocida"}), 404
+
+
+@app.route("/api/erp/tasa", methods=["GET"])
+@requiere_sesion()
+def erp_tasa():
+    """Tasa BCV para mostrarla en la cabecera del CRM (cualquier usuario con sesión)."""
+    return jsonify(db.tasa_vigente())
+
+
+@app.route("/api/erp/tasa/actualizar", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_tasa_actualizar():
+    r = bcv.actualizar()
+    if r["ok"]:
+        db.registrar_accion("Administración", None, "actualizar_tasa_bcv", r, request.usuario["nombre"])
+    return jsonify({**r, "tasa": db.tasa_vigente()}), (200 if r["ok"] else 502)
 
 
 @app.route("/api/erp/cobranza", methods=["GET"])
@@ -1225,6 +1243,9 @@ def _loop_polling_wecall():
         except Exception as e:
             print(f"  (wecall-poll) error en el ciclo: {e}")
 
+
+if os.environ.get("TASA_BCV_AUTO", "1") != "0" and not os.environ.get("PYTEST_CURRENT_TEST"):
+    bcv.iniciar()
 
 if os.environ.get("WECALL_API_KEY") and os.environ.get("WECALL_WEBHOOK_SECRET"):
     threading.Thread(target=_loop_polling_wecall, daemon=True).start()
