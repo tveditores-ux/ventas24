@@ -119,19 +119,56 @@ details.f.falta { border-left: 6px solid var(--bad); }
 .filtro.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 details.viejo { margin-top: 18px; }
 details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted); padding: 10px 2px; }
+
+.tabs { display: flex; gap: 6px; margin-bottom: 2px; }
+.tabs button { flex: 1 1 0; min-height: 44px; border-radius: 10px 10px 0 0; border-bottom: 3px solid transparent; font-size: 14.5px; }
+.tabs button[aria-selected="true"] { background: var(--card); color: var(--accent); border-color: var(--line); border-bottom-color: var(--accent); }
+.due { font-size: 12.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.due.v { color: var(--bad); } .due.h { color: var(--warn); } .due.ok { color: var(--muted); } .due.l { color: var(--ok); }
+.pr { font-size: 11.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+.pr.alta { color: var(--bad); }
+details.f.pend-ac { border-left: 6px solid transparent; }
+details.f.curso { border-left: 6px solid var(--warn); }
+details.f.bloq { border-left: 6px solid var(--bad); }
+details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
+.dep { margin-top: 8px; font-size: 14px; color: var(--warn); font-weight: 600; }
+.req { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-top: 10px; display: grid; gap: 8px; }
+.req.recibido { opacity: .6; }
+.req .rt { font-weight: 700; }
+.req .rp { font-size: 14.5px; color: var(--muted); }
+.req .rm { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; font-size: 13px; color: var(--muted); }
+.req select { width: auto; min-height: 42px; }
+.acu { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-top: 10px; }
+.acu h3 { font-size: 16.5px; }
+.acu .g { margin-top: 8px; display: grid; gap: 6px; }
+.acu .g div { background: var(--soft); border-radius: 10px; padding: 8px 12px; font-size: 14.5px; }
+.acu .g b { display: block; font-size: 11px; letter-spacing: 1.3px; text-transform: uppercase; color: var(--accent); }
+.acu .g .hoy b { color: var(--warn); }
+.cajaMsg { width: 100%; min-height: 220px; font: 14.5px/1.5 var(--sans); white-space: pre-wrap; margin-top: 10px; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 </style>
 
 <div class="bar">
   <div class="bar-in">
+    <div class="tabs" role="tablist" aria-label="Secciones de la libreta">
+      <button type="button" role="tab" id="tabBtn-acciones" data-tab="acciones" aria-selected="true">Después del 16/10</button>
+      <button type="button" role="tab" id="tabBtn-reunion" data-tab="reunion" aria-selected="false">Reunión · puntos 5 y 6</button>
+    </div>
     <div class="bar-top"><b id="avance">Cargando…</b><span class="sync" id="sync"></span></div>
     <div class="meter" aria-hidden="true"><i id="meterFill"></i></div>
-    <nav class="chips" aria-label="Secciones">
+    <nav class="chips" id="chips-reunion" aria-label="Secciones de la reunión" hidden>
       <a href="#antes">Antes</a>
       <a href="#pedir">Pedir</a>
       <a href="#p5">Punto 5</a>
       <a href="#p6">Punto 6</a>
       <a href="#calc">Costos</a>
       <a href="#resumen">Resumen</a>
+    </nav>
+    <nav class="chips" id="chips-acciones" aria-label="Secciones de después de la reunión">
+      <a href="#mis">Mis compromisos</a>
+      <a href="#pedirb">Lo que debo pedir</a>
+      <a href="#acuerdos">Acuerdos</a>
+      <a href="#recibidos">Datos recibidos</a>
     </nav>
   </div>
 </div>
@@ -141,6 +178,7 @@ details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted)
 <h1>Libreta de la reunión: puntos 5 y 6</h1>
 <p class="muted small">Cada tema tiene su guía, un temporizador y sus campos. Lo que escribas se guarda solo. Al final, el resumen sale armado para copiarlo a la minuta.</p>
 
+<div id="tab-reunion" hidden>
 <h2 id="antes">Antes de la reunión</h2>
 <p class="muted small">Lo que hay que pedirle a Gabriela para poder cerrar los puntos en la sala.</p>
 <ul class="check" id="listaAntes"></ul>
@@ -175,6 +213,33 @@ details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted)
   <button type="button" class="primary" id="copiar">Copiar resumen</button>
 </div>
 <div class="note">Lo que dejes en "Escalar a Jaime" va aparte en el resumen: son las decisiones que no se toman en la sala.</div>
+</div>
+
+<div id="tab-acciones">
+<h2 id="mis">Mis compromisos tras la reunión del 16/10</h2>
+<p class="muted small lead">Salen de la minuta ejecutiva y de la lista de acciones requeridas de Eliezer Alvarado. Van ordenados por fecha límite. Toca uno para ver qué se pide y anotar el avance.</p>
+<div class="filtros" id="filtrosAcc" role="group" aria-label="Filtrar compromisos"></div>
+<div id="accLista"></div>
+
+<h2 id="pedirb">Lo que debo pedir para poder avanzar</h2>
+<p class="muted small lead">Lo que necesito de Gabriela, de Jaime y de otras personas para no quedar detenido. Cambia el estado según vaya avanzando, y copia el mensaje listo para enviarles.</p>
+<div id="reqLista"></div>
+<div class="btnrow">
+  <button type="button" class="primary" id="msgGabriela">Mensaje para Gabriela</button>
+  <button type="button" class="primary" id="msgJaime">Mensaje para Jaime</button>
+</div>
+<textarea class="cajaMsg" id="msgReq" readonly hidden aria-label="Mensaje para copiar"></textarea>
+<div class="row" id="msgFila" hidden>
+  <span class="small muted" id="msgEstado" role="status"></span>
+  <button type="button" id="copiarMsg">Copiar mensaje</button>
+</div>
+
+<h2 id="acuerdos">Acuerdos de la minuta y su efecto en el sistema</h2>
+<p class="muted small lead">Qué se acordó, qué cambia en Ventas 24 y cómo está hoy según el código (al 19/10).</p>
+<div id="acuLista"></div>
+
+<h2 id="recibidos">Lo que ya llegó: liquidación de importación (CSV)</h2>
+<div id="csvInfo"></div>
 </div>
 
 <script>
@@ -310,7 +375,7 @@ details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted)
   ];
 
   function vacio() {
-    return { v: 1, items: {}, antes: {}, campos: {}, form: {}, pedir: {}, iva: 16, skus: [{}, {}, {}] };
+    return { v: 1, items: {}, antes: {}, campos: {}, form: {}, pedir: {}, acc: {}, req: {}, csv: {}, iva: 16, skus: [{}, {}, {}] };
   }
   var state = vacio();
   var LKEY = "libreta-vextor-16oct";
@@ -521,6 +586,279 @@ details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted)
     });
   }
 
+
+  /* ======================= Después del 16/10 ======================= */
+  var ACC_ESTADOS = [["pend", "Pendiente"], ["curso", "En curso"], ["bloq", "Bloqueada"], ["listo", "Listo"]];
+  var ACC = [
+    { id: "A1", cat: "Bot y CRM", t: "Parametrizar algoritmos de venta y atención 24/7", p: "Alta", f: "2026-10-20",
+      r: "El bot debe responder consultas de catálogo e inventario en tiempo real, en menos de 10 a 15 segundos, guiando al usuario de forma natural." },
+    { id: "A2", cat: "Bot y CRM", t: "Programar la regla de pedido mínimo (6 cajas / $500)", p: "Alta", f: "2026-10-20",
+      r: "Filtro de entrada: pedido mínimo al mayor de 6 cajas (unas 100 unidades surtidas o $500). Si piden al detal, el bot ofrece el contacto de los distribuidores locales." },
+    { id: "A3", cat: "Bot y CRM", t: "Reserva de inventario por 7 días", p: "Alta", f: "2026-10-20",
+      r: "Bloquear la mercancía hasta 7 días continuos tras la nota de pedido y liberarla automáticamente si no hay pago." },
+    { id: "A4", cat: "Bot y CRM", t: "Escalamiento híbrido: inteligencia artificial o vendedor", p: "Media", f: "2026-10-25",
+      r: "La IA atiende el pre-filtro y la venta automatizada, y transfiere la conversación al vendedor asignado según la zona (por ejemplo, Alirio en Valencia y Lara).",
+      dep: "Necesito las zonas de cada vendedor y las reglas de cuándo el bot cierra solo." },
+    { id: "A5", cat: "Bot y CRM", t: "Vincular la tasa del BCV para cotizaciones en bolívares", p: "Alta", f: "2026-10-23",
+      r: "Cotizaciones en USD con conversión a bolívares a la tasa del día del pago (vigencia de 24 h a 15 días).",
+      dep: "Necesito que confirmen la fuente oficial de la tasa y quién la autoriza." },
+    { id: "A6", cat: "Datos e inventarios", t: "Revisar y adaptar la plantilla Excel/CSV para carga masiva", p: "Alta", f: "2026-10-20",
+      r: "Verificar el archivo de costos de Gabriela: CSV plano, sin celdas combinadas y con comas y puntos alineados.",
+      dep: "Ya llegó un primer juego de CSV (ver «Datos recibidos»); falta su versión final." },
+    { id: "A7", cat: "Datos e inventarios", t: "Valoración por costo promedio ponderado", p: "Media", f: "2026-10-25",
+      r: "Configurar la fórmula para unificar el costo de los lotes anteriores con cada embarque nuevo (prorrateo lineal)." },
+    { id: "A8", cat: "Datos e inventarios", t: "Cargar las listas de precios de los aliados comerciales", p: "Media", f: "2026-10-23",
+      r: "RG (unos 12.000 códigos), Fabrilara/Magnus y radiadores de Jair Moreno, con la fórmula porcentual (margen de 20 % a 25 %, por confirmar).",
+      dep: "Necesito las listas y el porcentaje autorizado." },
+    { id: "A9", cat: "Datos e inventarios", t: "Sincronizar el CRM con el sistema administrativo (ERP)", p: "Media", f: "2026-10-30",
+      r: "Descargar el stock automáticamente al confirmar una nota de pedido o factura, sin duplicar." },
+    { id: "A10", cat: "Web e infraestructura", t: "Vincular la línea Digitel (0422) con la API de Meta", p: "Alta", f: "2026-10-23",
+      r: "Conectar el chip corporativo exclusivo a la API oficial de Meta (WhatsApp Business, Instagram y Facebook).",
+      dep: "Depende de que Gabriela compre y active la línea. Hoy el canal funciona por WeCall: preguntarles cómo se incorpora un número nuevo." },
+    { id: "A11", cat: "Web e infraestructura", t: "Cuentas corporativas de Meta y carpeta compartida en Google Drive", p: "Media", f: "2026-10-23",
+      r: "Crear las cuentas institucionales (Facebook e Instagram) y habilitar la carpeta compartida junto con Gabriela.", dep: "Se hace con Gabriela." },
+    { id: "A12", cat: "Web e infraestructura", t: "Repositorio corporativo en Google Drive con permisos por rol", p: "Media", f: "2026-10-20",
+      r: "Carpetas con permisos por área: Dirección, Tecnología, Logística y Ventas." },
+    { id: "A13", cat: "Web e infraestructura", t: "Construir la página web institucional", p: "Media", f: "2026-11-15",
+      r: "La «casa matriz digital»: catálogo, fichas técnicas de Fram y Prestone, logotipo y enlace al bot de WhatsApp.",
+      dep: "Necesito los productos con imágenes y las cartas de autorización de las marcas." },
+    { id: "A14", cat: "Voz", t: "Recibir el hardware y calibrar la agente de voz", p: "Alta", f: "2026-11-10",
+      r: "Recibir el dispositivo dedicado e iniciar las pruebas técnicas de calibración.", dep: "Necesito la fecha de llegada y el tipo de equipo." },
+    { id: "A15", cat: "Voz", t: "Casos de prueba y simulación de llamadas", p: "Alta", f: "2026-11-30",
+      r: "Simular consultas de stock, códigos duplicados y reclamos hasta un índice de acierto de 90 % o más antes del lanzamiento público." },
+    { id: "A16", cat: "Capacitación", t: "Adiestramiento técnico a Gabriela y a Administración", p: "Media", f: "2026-10-25",
+      r: "Carga de listas de precios, cambio de porcentajes, actualización de stock y monitoreo de conversaciones en el CRM." },
+    { id: "A17", cat: "Capacitación", t: "Presentar el prototipo o sistema preliminar de trabajo", p: "Alta", f: "2026-10-22",
+      r: "Una versión previa e interactiva del sistema para la demostración a la directiva en la próxima sesión." },
+    { id: "A18", cat: "Requerimientos", t: "Formato de requerimiento de información para alimentar el CRM y el ERP", p: "Alta", f: "2026-10-20",
+      r: "Compromiso de la minuta: el formato para que Grupo Vextor entregue la información que necesita el sistema." }
+  ];
+
+  var QUIEN2 = [["gabriela", "Gabriela Mujica", "Gabriela"], ["jaime", "Jaime García", "Jaime"],
+                ["alirio", "Alirio Aranguren (por medio de Jaime o Gabriela)", null], ["nazaret", "Lic. Nazaret, contadora (por medio de Jaime)", null]];
+  var REQ = [
+    { id: "G1", q: "gabriela", t: "Matriz de costos de importación en CSV, sin celdas combinadas", para: "cargar los costos y calcular el costo puesto en almacén por producto (A6).", f: "20/10", src: "Minuta" },
+    { id: "G2", q: "gabriela", t: "Listas de precios de los aliados: RG, Fabrilara/Magnus y radiadores (Jair Moreno)", para: "cargarlas al sistema con la fórmula (A8).", f: "23/10", src: "Minuta" },
+    { id: "G3", q: "gabriela", t: "Porcentaje que se aplica al costo puesto en almacén para el precio mayor y gran mayor (preliminar, junto con Jaime)", para: "calcular los precios de venta.", f: "30/10", src: "Minuta" },
+    { id: "G4", q: "gabriela", t: "Nombre, especificaciones e imágenes de los productos", para: "armar el catálogo y la página web (A13).", f: "23/10", src: "Minuta" },
+    { id: "G5", q: "gabriela", t: "Línea Digitel 0422 comprada y activa", para: "vincularla a la API de Meta (A10).", f: "23/10", src: "Minuta" },
+    { id: "G6", q: "gabriela", t: "Cuentas corporativas de Meta y la carpeta compartida de Google Drive habilitadas", para: "dejar la infraestructura institucional lista (A11, A12).", f: "23/10", src: "Minuta" },
+    { id: "G7", q: "gabriela", t: "Cotización real del flete marítimo y confirmación de arancel y gastos con el agente aduanal (Héctor Maduro)", para: "cerrar la liquidación: hoy son supuestos o estimados.", f: "", src: "CSV" },
+    { id: "G8", q: "gabriela", t: "Revisar la línea CH9972-12PK del pedido Mauri: total impreso $2.905,68 y calculado $2.095,68", para: "no cargar un costo equivocado.", f: "", src: "CSV" },
+    { id: "G9", q: "gabriela", t: "Tarifas de flete: transporte terrestre y despacho, por zona o por peso", para: "incluir el flete en el costo y el precio, y la regla de flete al detal.", f: "13/11", src: "Formulario 5.9" },
+    { id: "G10", q: "gabriela", t: "Fuente oficial de la tasa del día y quién la carga o autoriza", para: "vincular el CRM a la tasa (A5).", f: "30/10", src: "Formulario 5.16" },
+    { id: "G11", q: "gabriela", t: "Si Grupo Vextor es contribuyente especial (retenciones de IVA) y el criterio de prorrateo de gastos (por valor FOB)", para: "definir retenciones y repartir los gastos del embarque.", f: "13/11", src: "Formulario 6.22 y 6.8" },
+    { id: "G12", q: "gabriela", t: "Fecha de llegada y tipo del equipo (hardware) del módulo de voz", para: "iniciar las pruebas de voz (A14).", f: "10/11", src: "Lista de acciones" },
+    { id: "J1", q: "jaime", t: "Cita con la contadora Lic. Nazaret el 22 o 23 de octubre y sus datos de contacto", para: "definir facturación fiscal o nota de entrega, IGTF y libros.", f: "22/10", src: "Minuta" },
+    { id: "J2", q: "jaime", t: "Decisión del emisor fiscal y de la fase en que entra la factura (después de la cita con la contadora)", para: "construir el módulo fiscal.", f: "", src: "Formulario 5.15" },
+    { id: "J3", q: "jaime", t: "Decisión sobre el descuento por divisas o USDT y el IGTF", para: "mostrarlo como línea aparte en los documentos.", f: "", src: "Formulario 5.14" },
+    { id: "J4", q: "jaime", t: "Margen autorizado definitivo (de 20 % a 25 %) para las listas de aliados y la regla de gran mayor", para: "cargar los precios de los aliados (A8).", f: "30/10", src: "Minuta y lista" },
+    { id: "J5", q: "jaime", t: "Cartas de autorización de Fram y Prestone para usar sus marcas y fotografías", para: "publicar la página web y el catálogo del bot.", f: "23/10", src: "Minuta" },
+    { id: "J6", q: "jaime", t: "Autorización por escrito de los aliados para usar su imagen y enlazar sus redes o páginas", para: "mostrarlos en la página de Vextor.", f: "30/10", src: "Minuta" },
+    { id: "J7", q: "jaime", t: "Quién aprueba los precios sugeridos y en qué momento se calcula la comisión (al facturar o al cobrar)", para: "configurar la aprobación de precios y las comisiones.", f: "30/10", src: "Formulario 6.13 y 6.17" },
+    { id: "J8", q: "jaime", t: "Qué zona atiende cada vendedor y cuándo el bot cierra la venta solo (por ejemplo, Valencia y Lara)", para: "programar el escalamiento híbrido (A4).", f: "25/10", src: "Minuta y lista" },
+    { id: "J9", q: "jaime", t: "Quién ve qué: permisos de costos y márgenes (Presidencia y Gerencia de Operaciones)", para: "configurar permisos por campo.", f: "30/10", src: "Formulario 6.15" },
+    { id: "J10", q: "jaime", t: "Cómo se sincronizan los inventarios de proveedores terceros (RG, Fabrilara): conexión directa o correo semanal", para: "mostrar disponibilidad real en el bot.", f: "", src: "Minuta, puntos abiertos" },
+    { id: "J11", q: "jaime", t: "Firma del acuerdo de protección de Ventas 24 y la adhesión de Gabriela, antes de darle accesos de administración", para: "abrir los accesos con la protección ya firmada.", f: "", src: "Acuerdos" },
+    { id: "L1", q: "alirio", t: "Validar los casos de prueba de voz y aportar audios reales de clientes", para: "las simulaciones de voz (A15).", f: "", src: "Formulario 5.6" },
+    { id: "L2", q: "alirio", t: "Zonas que atiende y su número, para derivarle las conversaciones", para: "el escalamiento híbrido (A4).", f: "25/10", src: "Minuta y lista" },
+    { id: "N1", q: "nazaret", t: "Requisitos del Seniat, formato de factura (libre, máquina fiscal o digital) y de los libros de compras y ventas", para: "construir el módulo fiscal.", f: "22/10 o 23/10", src: "Formulario 5.17 y 6.21" },
+    { id: "N2", q: "nazaret", t: "Tratamiento del IVA de importación como crédito fiscal y de la facturación en dólares a crédito", para: "calcular bien el costo y evitar contingencias.", f: "22/10 o 23/10", src: "Formulario 6.10 y minuta" }
+  ];
+  var REQ_ESTADOS = [["por", "Por pedir"], ["pedido", "Pedido"], ["recibido", "Recibido"]];
+
+  var ACUERDOS = [
+    { t: "Pedido mínimo al mayor: 6 cajas (unas 100 unidades o $500)", e: "Una regla de entrada en el bot; las compras al detal se redirigen a los distribuidores locales.", h: "No existe: hoy el bot atiende cualquier cantidad." },
+    { t: "Reserva de inventario por 7 días", e: "Liberación automática si no se registra el pago.", h: "La reserva existe pero no vence." },
+    { t: "Valoración por costo promedio ponderado", e: "Unificar el costo de los lotes anteriores con cada embarque nuevo.", h: "Se guarda el último costo de compra, no el promedio." },
+    { t: "Cotizaciones en USD (vigencia de 24 h a 15 días) y conversión a bolívares con la tasa del día del pago", e: "Guardar la tasa por transacción y recalcular al pagar.", h: "Todo está en USD y no se guarda la tasa." },
+    { t: "Carga de datos desde Excel, en CSV plano", e: "Importar costos, liquidaciones y listas de precios.", h: "Existe la carga de inventario por CSV (código, cantidad, costo y mínimo). Falta la carga de la estructura de costos." },
+    { t: "Flete de despacho incluido en el precio", e: "Un campo de flete dentro de la estructura de costo.", h: "No existe." },
+    { t: "Línea Digitel 0422 para la API de Meta", e: "Vincular el número oficial de la empresa.", h: "El canal funciona por WeCall. Hay que preguntarle cómo se incorpora un número nuevo." },
+    { t: "Escalamiento híbrido entre la IA y el vendedor por zona", e: "Derivar la conversación al vendedor asignado según la zona.", h: "Existe el modo manual y las solicitudes al equipo, pero no la asignación automática por zona." },
+    { t: "Sesión con la contadora Lic. Nazaret, el 22 o 23 de octubre", e: "Define la política fiscal: factura o nota de entrega, IGTF y libros.", h: "Solo hay un documento de control interno, no fiscal." }
+  ];
+
+  var CSV_CONFIRMAR = [
+    ["c1", "Flete marítimo de $7.500: confirmar con la cotización de la naviera contratada por Mauri."],
+    ["c2", "Arancel de 16 %: validar con el agente aduanal según el código arancelario de los filtros de aceite."],
+    ["c3", "Gastos marcados como «nuevo» y estimados: comisiones bancarias ($180), inspección preembarque ($400), courier ($90), gastos de la naviera ($450), tasas portuarias ($600), almacenaje ($300), aforo ($250), tramitación del agente ($200), seguro terrestre ($113,08) y descarga ($150)."],
+    ["c4", "Gastos operativos: la línea está en $0; falta completarla (viáticos, papelería)."],
+    ["c5", "Supuestos financieros: costo financiero de 12 % anual, anticipos a 2,5 meses y contingencias de 1,5 %."],
+    ["c6", "IGTF de 3 % sobre pagos locales en divisas y IVA recuperable (contribuyente ordinario): confirmar con la contadora."],
+    ["c7", "Línea CH9972-12PK: total impreso $2.905,68 frente a $2.095,68 calculado (708 unidades confirmadas de 768 pedidas)."]
+  ];
+
+  function hoyUTC() { var d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); }
+  function diasHasta(iso) { var p = iso.split("-"); return Math.round((Date.UTC(+p[0], +p[1] - 1, +p[2]) - hoyUTC()) / 86400000); }
+  function dueTxt(iso, listo) {
+    var d = diasHasta(iso), corto = iso.slice(8) + "/" + iso.slice(5, 7);
+    if (listo) return ["l", "Listo · " + corto];
+    if (d < 0) return ["v", "Vencida hace " + (-d) + (d === -1 ? " día" : " días") + " · " + corto];
+    if (d === 0) return ["h", "Vence hoy · " + corto];
+    if (d === 1) return ["h", "Vence mañana · " + corto];
+    if (d <= 7) return ["h", "En " + d + " días · " + corto];
+    return ["ok", "En " + d + " días · " + corto];
+  }
+  function ad(id) { if (!state.acc[id]) state.acc[id] = {}; return state.acc[id]; }
+
+  var fichasAcc = {}, filtroAcc = "todas";
+  var FILTROS_ACC = [
+    ["todas", "Todas", function () { return true; }],
+    ["abiertas", "Abiertas", function (a) { return ad(a.id).estado !== "listo"; }],
+    ["alta", "Prioridad alta", function (a) { return a.p === "Alta" && ad(a.id).estado !== "listo"; }],
+    ["semana", "Próximos 7 días", function (a) { return ad(a.id).estado !== "listo" && diasHasta(a.f) <= 7; }],
+    ["bloq", "Bloqueadas", function (a) { return ad(a.id).estado === "bloq"; }],
+    ["listas", "Listas", function (a) { return ad(a.id).estado === "listo"; }]
+  ];
+
+  function fichaAcc(a) {
+    var card = h("details", { "class": "card f", id: "fa_" + a.id });
+    var d = ad(a.id);
+    var du = h("span", { "class": "due", text: "" });
+    var sum = h("summary", null, h("span", { "class": "num", text: a.id }), h("span", { "class": "tt", text: a.t }),
+      h("span", { "class": "pr" + (a.p === "Alta" ? " alta" : ""), text: a.p }), du);
+    card.appendChild(sum);
+    var cuerpo = h("div", { "class": "cuerpo" });
+    var guia = h("div", { "class": "guia" });
+    guia.appendChild(h("div", null, h("b", { text: "Área" }), document.createTextNode(a.cat)));
+    guia.appendChild(h("div", null, h("b", { text: "Qué se pide" }), document.createTextNode(a.r)));
+    cuerpo.appendChild(guia);
+    if (a.dep) cuerpo.appendChild(h("div", { "class": "dep", text: "Depende de: " + a.dep }));
+    var sel = h("select", { id: "ae_" + a.id, "aria-label": "Avance de " + a.id });
+    ACC_ESTADOS.forEach(function (e) { sel.appendChild(h("option", { value: e[0], text: e[1] })); });
+    sel.value = d.estado || "pend";
+    var notas = h("textarea", { id: "an_" + a.id, placeholder: "Avance, bloqueos, lo que falta…" }); notas.value = d.notas || "";
+    function pinta() {
+      var est = sel.value, x = dueTxt(a.f, est === "listo");
+      du.className = "due " + x[0]; du.textContent = x[1];
+      card.className = "card f " + (est === "curso" ? "curso" : est === "bloq" ? "bloq" : est === "listo" ? "listo" : "pend-ac");
+    }
+    pinta();
+    sel.addEventListener("change", function () { ad(a.id).estado = sel.value; pinta(); guardar(); aplicarFiltroAcc(); });
+    notas.addEventListener("input", function () { ad(a.id).notas = notas.value; guardar(); });
+    cuerpo.appendChild(h("div", { "class": "campos" },
+      h("label", { "class": "f" }, document.createTextNode("Avance"), sel),
+      h("label", { "class": "f ancho" }, document.createTextNode("Notas"), notas)));
+    card.appendChild(cuerpo);
+    fichasAcc[a.id] = card;
+    return card;
+  }
+  function filtrosAccBarra() {
+    var barra = document.getElementById("filtrosAcc"); barra.textContent = "";
+    FILTROS_ACC.forEach(function (f) {
+      var b = h("button", { type: "button", "class": "filtro" + (f[0] === filtroAcc ? " on" : ""), text: f[1] });
+      b.addEventListener("click", function () { filtroAcc = f[0]; aplicarFiltroAcc(); filtrosAccBarra(); });
+      barra.appendChild(b);
+    });
+    barra.appendChild(h("span", { "class": "small muted", id: "cuentaAcc" }));
+    aplicarFiltroAcc();
+  }
+  function aplicarFiltroAcc() {
+    var pred = FILTROS_ACC.filter(function (f) { return f[0] === filtroAcc; })[0][2], n = 0;
+    ACC.forEach(function (a) { var ver = pred(a); fichasAcc[a.id].hidden = !ver; if (ver) n++; });
+    var c = document.getElementById("cuentaAcc"); if (c) c.textContent = "Mostrando " + n + " de " + ACC.length;
+  }
+
+  function rd(id) { if (!state.req[id]) state.req[id] = "por"; return state.req[id]; }
+  function reqs() {
+    var cont = document.getElementById("reqLista"); cont.textContent = "";
+    QUIEN2.forEach(function (q) {
+      var lista = REQ.filter(function (r) { return r.q === q[0]; });
+      var pend = lista.filter(function (r) { return rd(r.id) !== "recibido"; }).length;
+      cont.appendChild(h("h3", { text: q[1] + " · " + pend + " por conseguir", style: "margin-top:18px" }));
+      lista.forEach(function (r) {
+        var sel = h("select", { id: "rq_" + r.id, "aria-label": "Estado del pedido " + r.id });
+        REQ_ESTADOS.forEach(function (e) { sel.appendChild(h("option", { value: e[0], text: e[1] })); });
+        sel.value = rd(r.id);
+        var card = h("div", { "class": "req" + (sel.value === "recibido" ? " recibido" : "") });
+        card.appendChild(h("div", { "class": "rt", text: r.t }));
+        card.appendChild(h("div", { "class": "rp", text: "Me sirve para " + r.para }));
+        card.appendChild(h("div", { "class": "rm" },
+          h("span", { text: (r.f ? "Fecha acordada: " + r.f + " · " : "") + "Fuente: " + r.src }), sel));
+        sel.addEventListener("change", function () { state.req[r.id] = sel.value; card.classList.toggle("recibido", sel.value === "recibido"); guardar(); reqs(); });
+        cont.appendChild(card);
+      });
+    });
+  }
+  function mensaje(clave) {
+    var q = QUIEN2.filter(function (x) { return x[0] === clave; })[0];
+    var lista = REQ.filter(function (r) { return r.q === clave && rd(r.id) !== "recibido"; });
+    var tx = "Buenos días, " + q[2] + ". Para poder avanzar con la parte técnica del sistema, le pido por favor lo siguiente:\n\n";
+    lista.forEach(function (r, i) {
+      tx += (i + 1) + ". " + r.t + (r.f ? " (acordado para el " + r.f + ")" : "") + ".\n   Me sirve para " + r.para + "\n";
+    });
+    tx += "\nCualquier duda, me avisa. Muchas gracias.";
+    var caja = document.getElementById("msgReq");
+    caja.value = lista.length ? tx : "No queda nada por pedirle a " + q[2] + ".";
+    caja.hidden = false; document.getElementById("msgFila").hidden = false;
+    document.getElementById("msgEstado").textContent = "Puedes editarlo en tu mensajería antes de enviarlo.";
+    caja.scrollIntoView({ block: "nearest" });
+  }
+  function acuerdos() {
+    var cont = document.getElementById("acuLista"); cont.textContent = "";
+    ACUERDOS.forEach(function (a) {
+      cont.appendChild(h("div", { "class": "acu" }, h("h3", { text: a.t }),
+        h("div", { "class": "g" },
+          h("div", null, h("b", { text: "Qué implica en el sistema" }), document.createTextNode(a.e)),
+          h("div", { "class": "hoy" }, h("b", { text: "Cómo está hoy" }), document.createTextNode(a.h)))));
+    });
+  }
+  function csvInfo() {
+    var cont = document.getElementById("csvInfo"); cont.textContent = "";
+    cont.appendChild(h("div", { "class": "acu" }, h("h3", { text: "Primer juego de CSV (19/10): pedido Mauri-092526" }),
+      h("div", { "class": "g" },
+        h("div", null, h("b", { text: "Qué trae" }), document.createTextNode("El pedido a Mauri Corporation (14 productos, FOB $67.064,83 con 5 % de descuento), la liquidación de gastos de 34 líneas, los parámetros y la estructura de costo por producto.")),
+        h("div", null, h("b", { text: "Resultado calculado" }), document.createTextNode("Costo total de importación $97.029,53; cada $1 de FOB cuesta $1,4468 puesto en almacén; costo promedio por unidad $3,128. Depende de los supuestos de abajo.")))));
+    cont.appendChild(h("h3", { text: "Por confirmar antes de cargarlo al sistema", style: "margin-top:16px" }));
+    var ul = h("ul", { "class": "check" });
+    CSV_CONFIRMAR.forEach(function (c2) {
+      var li = h("li"), cb = h("input", { type: "checkbox", id: "cv_" + c2[0] });
+      cb.checked = !!state.csv[c2[0]]; li.classList.toggle("done", cb.checked);
+      cb.addEventListener("change", function () { state.csv[c2[0]] = cb.checked; li.classList.toggle("done", cb.checked); guardar(); });
+      li.appendChild(cb); li.appendChild(h("label", { "for": "cv_" + c2[0], text: c2[1] })); ul.appendChild(li);
+    });
+    cont.appendChild(ul);
+  }
+
+  /* pestañas y barra superior */
+  var tabActiva = "acciones";
+  try { tabActiva = localStorage.getItem("libreta-tab") || "acciones"; } catch (e) { /* sin almacenamiento */ }
+  var textoBarra = { reunion: ["", 0], acciones: ["", 0] };
+  function pintarBarra() {
+    var t = textoBarra[tabActiva];
+    document.getElementById("avance").textContent = t[0];
+    document.getElementById("meterFill").style.width = t[1] + "%";
+  }
+  function mostrarTab(t) {
+    tabActiva = t;
+    try { localStorage.setItem("libreta-tab", t); } catch (e) { /* sin almacenamiento */ }
+    document.getElementById("tab-reunion").hidden = t !== "reunion";
+    document.getElementById("tab-acciones").hidden = t !== "acciones";
+    document.getElementById("chips-reunion").hidden = t !== "reunion";
+    document.getElementById("chips-acciones").hidden = t !== "acciones";
+    ["reunion", "acciones"].forEach(function (k) { document.getElementById("tabBtn-" + k).setAttribute("aria-selected", String(k === t)); });
+    pintarBarra();
+    window.scrollTo(0, 0);
+  }
+  function refrescarAcc() {
+    var listas = ACC.filter(function (a) { return ad(a.id).estado === "listo"; }).length;
+    var venc = ACC.filter(function (a) { return ad(a.id).estado !== "listo" && diasHasta(a.f) < 0; }).length;
+    var porPedir = REQ.filter(function (r) { return rd(r.id) === "por"; }).length;
+    textoBarra.acciones = [listas + " de " + ACC.length + " compromisos listos · " + porPedir + " cosas por pedir" + (venc ? " · " + venc + " vencidos" : ""), listas / ACC.length * 100];
+    pintarBarra();
+  }
+  document.getElementById("tabBtn-acciones").addEventListener("click", function () { mostrarTab("acciones"); });
+  document.getElementById("tabBtn-reunion").addEventListener("click", function () { mostrarTab("reunion"); });
+  document.getElementById("msgGabriela").addEventListener("click", function () { mensaje("gabriela"); });
+  document.getElementById("msgJaime").addEventListener("click", function () { mensaje("jaime"); });
+  document.getElementById("copiarMsg").addEventListener("click", function () {
+    var ta = document.getElementById("msgReq"), msg = document.getElementById("msgEstado");
+    function ok() { msg.textContent = "Mensaje copiado."; }
+    function plan() { ta.focus(); ta.select(); msg.textContent = "Texto seleccionado: usa Ctrl+C o mantén pulsado para copiar."; }
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(ok, plan); else plan(); } catch (e) { plan(); }
+  });
+
   function calc() {
     var box = document.getElementById("skus");
     var iva = document.getElementById("ivaPct");
@@ -592,8 +930,8 @@ details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted)
       grupos[e].push(it);
     });
     var hechos = grupos.acordado.length + grupos.escalar.length;
-    document.getElementById("avance").textContent = hechos + " de " + TODOS.length + " temas con decisión o escalados";
-    document.getElementById("meterFill").style.width = (hechos / TODOS.length * 100) + "%";
+    textoBarra.reunion = [hechos + " de " + TODOS.length + " temas con decisión o escalados", hechos / TODOS.length * 100];
+    refrescarAcc();
     var tx = "REUNIÓN GRUPO VEXTOR · 16/10/2026 · Puntos 5 y 6\n";
     function bloque(titulo, lista) { if (lista.length) tx += "\n" + titulo + "\n" + lista.map(etiqueta).join("\n") + "\n"; }
     bloque("ACUERDOS", grupos.acordado);
@@ -620,6 +958,11 @@ details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted)
     pedir();
     FORM.forEach(function (it) { document.getElementById(it.s === 5 ? "form5" : "form6").appendChild(fichaForm(it)); });
     filtros();
+    ACC.slice().sort(function (a, b) { return a.f < b.f ? -1 : a.f > b.f ? 1 : (a.p === "Alta" ? -1 : 1); }).forEach(function (a) { });
+    var ordenadas = ACC.slice().sort(function (a, b) { return a.f < b.f ? -1 : a.f > b.f ? 1 : (a.p === b.p ? 0 : a.p === "Alta" ? -1 : 1); });
+    document.getElementById("accLista").textContent = "";
+    ordenadas.forEach(function (a) { document.getElementById("accLista").appendChild(fichaAcc(a)); });
+    filtrosAccBarra(); reqs(); acuerdos(); csvInfo();
     ITEMS.forEach(function (item) { document.getElementById(item.p === 5 ? "fichas5" : "fichas6").appendChild(ficha(item)); });
     calc();
     refrescar();
@@ -628,6 +971,7 @@ details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted)
   if (local && typeof local === "object") state = Object.assign(vacio(), local);
   while (state.skus.length < 3) state.skus.push({});
   construir();
+  mostrarTab(tabActiva);
   setSync("Guardado en este navegador");
 
   /* La nube: tus notas viven en el servidor, atadas a tu usuario del CRM. Si ya hay notas guardadas y no has escrito
@@ -642,7 +986,7 @@ details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted)
     if (d.estado && !dirty) {
       state = Object.assign(vacio(), d.estado);
       while (state.skus.length < 3) state.skus.push({});
-      lsSet(); detener(); construir();
+      lsSet(); detener(); construir(); mostrarTab(tabActiva);
       setSync("Guardado en el servidor");
     } else if (dirty || local) {
       return push();
