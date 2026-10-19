@@ -43,6 +43,8 @@ import db
 import analista
 import ciclo
 import erp
+import importacion
+import zipfile
 import eventos
 import seguridad
 import wecall
@@ -389,6 +391,53 @@ def erp_reglas():
         db.registrar_accion("Administración", None, "cambiar_reglas", hecho, request.usuario["nombre"])
     return jsonify({"tasa": db.tasa_vigente(), "reserva_dias": db.reserva_dias(), "pedido_minimo": db.pedido_minimo(),
                     "tasa_vigencia_dias": db._num_config("tasa_vigencia_dias", 1)})
+
+
+@app.route("/api/erp/importacion", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_importacion_lista():
+    return jsonify({"embarques": importacion.listar()})
+
+
+@app.route("/api/erp/importacion/analizar", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_importacion_analizar():
+    archivos = {}
+    for f in request.files.getlist("archivos"):
+        datos = f.read(6_000_001)
+        if len(datos) > 6_000_000:
+            return jsonify({"error": f"{f.filename} pesa demasiado (máx. 6 MB)"}), 400
+        archivos[f.filename or "archivo"] = datos
+    if not archivos:
+        return jsonify({"error": "sube el ZIP o los 4 CSV de la liquidación"}), 400
+    try:
+        return jsonify(importacion.analizar(archivos, request.usuario["id"]))
+    except (ValueError, zipfile.BadZipFile) as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/erp/importacion/<int:eid>", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_importacion_ver(eid):
+    e = importacion.obtener(eid)
+    return (jsonify(e), 200) if e else (jsonify({"error": "no encontrado"}), 404)
+
+
+@app.route("/api/erp/importacion/<int:eid>/<accion>", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_importacion_accion(eid, accion):
+    d = request.get_json(silent=True) or {}
+    try:
+        if accion == "aprobar":
+            return jsonify(importacion.aprobar(eid, request.usuario["id"], bool(d.get("acepto_revisar"))))
+        if accion == "recibir":
+            return jsonify(importacion.recibir(eid, request.usuario["id"], d.get("recibidos")))
+        if accion == "descartar":
+            importacion.descartar(eid)
+            return jsonify({"ok": True})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({"error": "acción desconocida"}), 404
 
 
 @app.route("/api/erp/cobranza", methods=["GET"])

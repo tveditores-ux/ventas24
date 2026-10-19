@@ -295,6 +295,7 @@
     <div class="nav-sec erp-solo" hidden>ERP</div>
     <button class="erp-solo" data-tab="reportes" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Reportes</button>
     <button class="erp-solo" data-tab="cobranza" type="button" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5C9.5 8.4 10.6 8 12 8s2.5.6 2.5 1.7c0 2.4-5 1.3-5 3.8 0 1.1 1.1 1.7 2.5 1.7s2.5-.5 2.5-1.7"/></svg>Cobranza</button>
+    <button class="erp-solo" data-tab="importacion" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 15h13V6H3zM16 9h3l2 3v3h-5z"/><circle cx="7" cy="17" r="1.6"/><circle cx="17" cy="17" r="1.6"/></svg>Importación</button>
     <button class="erp-solo" data-tab="reglas" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Reglas</button>
     <button class="erp-solo" data-tab="inventario" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 9l9-5 9 5v9l-9 5-9-5z"/><path d="M3 9l9 5 9-5"/><path d="M12 14v9"/></svg>Inventario</button>
     <button class="erp-solo" data-tab="proveedores" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 6h11v10H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg>Proveedores</button>
@@ -402,6 +403,18 @@
     </table>
   </div>
   <p class="nota-erp">El crédito es una excepción: solo lo autoriza un administrador, dentro del límite del cliente. Mientras una cuenta no se pague sigue contando como por cobrar. El recordatorio lo envías tú, nunca sale solo.</p>
+</div>
+
+<div id="importacionWrap" hidden>
+  <div class="toolbar">
+    <button class="btn" id="btnImp" type="button">Subir liquidación (ZIP o 4 CSV)</button>
+    <input type="file" id="archivoImp" accept=".zip,.csv" multiple hidden>
+    <span class="count" id="impEstado"></span>
+  </div>
+  <div id="impDetalle"></div>
+  <h3 class="pend-h">Embarques</h3>
+  <div class="table-wrap"><table style="min-width:0"><thead><tr><th>Orden</th><th>Estado</th><th>FOB</th><th>Costo total</th><th>Factor</th><th>Fecha</th><th></th></tr></thead><tbody id="impBody"></tbody></table></div>
+  <p class="nota-erp">El agente de importación audita los archivos y deja un borrador: no cambia costos ni existencias hasta que lo apruebes y registres la recepción. Al recibir, el costo de cada producto pasa a ser el promedio ponderado entre lo que había y lo que llega.</p>
 </div>
 
 <div id="reglasWrap" hidden>
@@ -541,7 +554,7 @@
     document.getElementById('subnav').hidden = false;
     if (esAdmin()){
       document.querySelectorAll('.erp-solo').forEach(el => el.hidden = false);
-      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza(); iniciarReglas();
+      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza(); iniciarReglas(); iniciarImportacion();
     }
     activarTab('pendientes');
     setInterval(refrescarInsignia, 30000);
@@ -554,7 +567,7 @@
   });
 
   // -------- pestañas --------
-  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza', 'reglas'];
+  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza', 'reglas', 'importacion'];
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -572,6 +585,7 @@
     compras: ['Compras', 'Órdenes de compra: de borrador a mercancía recibida.'],
     reportes: ['Reportes', 'Cuánto se cobra, cuánto deja y qué se mueve.'],
     cobranza: ['Cobranza', 'Lo que los clientes deben por ventas a crédito.'],
+    importacion: ['Importación', 'Liquidación de embarques, costo puesto en almacén y costo promedio.'],
     reglas: ['Reglas', 'Tasa del día, reserva de inventario y pedido mínimo al mayor.'],
   };
   function activarTab(tab){
@@ -594,6 +608,7 @@
     else if (tab === 'compras') cargarCompras();
     else if (tab === 'cobranza') cargarCobranza();
     else if (tab === 'reglas') cargarReglas();
+    else if (tab === 'importacion') cargarImportacion();
     else if (tab === 'reportes'){ cargarReportes(); cargarAuditoria(); }
   }
   document.querySelectorAll('#subnav button').forEach(b => {
@@ -1243,6 +1258,72 @@
   }
 
 
+
+  // -------- ERP: agente de importación --------
+  const NIVEL_IMP = { bloquea:['Bloquea','por_confirmar'], revisar:['Revisar','comprobante_recibido'], info:['Info','pago_confirmado'] };
+  async function cargarImportacion(){
+    const cuerpo = document.getElementById('impBody');
+    try {
+      const r = await api('/api/erp/importacion');
+      if (r.status === 401){ irALogin(); return; }
+      const d = await r.json();
+      cuerpo.innerHTML = d.embarques.length ? d.embarques.map(e => `
+        <tr><td>${esc(e.referencia)}</td><td>${esc(e.estado)}</td><td class="num">$${(e.fob||0).toFixed(2)}</td>
+        <td class="num">$${(e.costo_total||0).toFixed(2)}</td><td class="num">${e.factor||'—'}</td><td>${esc((e.creado_en||'').slice(0,10))}</td>
+        <td><button class="btn ghost sm" type="button" data-ver="${e.id}">Ver</button></td></tr>`).join('') : '<tr><td colspan="7" class="empty">Aún no hay embarques.</td></tr>';
+    } catch(e){ cuerpo.innerHTML = `<tr><td colspan="7" class="error">No pude cargar los embarques (${esc(e.message)}).</td></tr>`; }
+  }
+  async function verEmbarque(id){
+    const r = await api('/api/erp/importacion/' + id), e = await r.json();
+    if (!r.ok){ alert(e.error || 'No se pudo abrir'); return; }
+    const i = e.informe;
+    const alertas = i.alertas.map(a => `<li><span class="pago-pill ${NIVEL_IMP[a.nivel][1]}">${NIVEL_IMP[a.nivel][0]}</span> ${esc(a.texto)}</li>`).join('');
+    const filas = e.lineas.map(l => `<tr><td>${esc(l.sku)}</td><td>${esc(l.descripcion||'')}</td><td class="num">${l.unidades}</td>
+      <td class="num">$${l.costo_unit_almacen.toFixed(4)}</td><td>${l.catalogo_id ? 'en catálogo' : 'se creará'}</td></tr>`).join('');
+    let acciones = '';
+    if (e.estado === 'borrador'){
+      acciones = `${i.por_revisar ? '<label class="chk"><input type="checkbox" id="impAcepto"> Revisé los puntos marcados «Revisar»</label>' : ''}
+        <button class="btn" type="button" id="impAprobar" ${i.bloqueos ? 'disabled' : ''}>Aprobar</button>
+        <button class="btn ghost" type="button" id="impDescartar">Descartar</button>`;
+    } else if (e.estado === 'aprobado'){
+      acciones = '<button class="btn" type="button" id="impRecibir">Registrar recepción de la mercancía</button>';
+    }
+    document.getElementById('impDetalle').innerHTML = `
+      <div class="pend-resumen">
+        <div class="pend-card"><b>${esc(i.referencia)}</b><span>${esc(i.proveedor||'')} · ${esc(e.estado)}</span></div>
+        <div class="pend-card"><b>$${i.costo_total.toFixed(2)}</b><span>costo total (FOB $${i.fob.toFixed(2)})</span></div>
+        <div class="pend-card"><b>${i.factor}</b><span>costo por cada $1 de FOB</span></div>
+        <div class="pend-card"><b>${i.unidades}</b><span>unidades · prom. $${i.costo_promedio_unidad}</span></div>
+      </div>
+      <ul style="margin:14px 0;padding-left:18px;display:grid;gap:8px">${alertas}</ul>
+      <div class="toolbar">${acciones}</div>
+      <div class="table-wrap" style="max-height:340px"><table style="min-width:0"><thead><tr><th>Código</th><th>Descripción</th><th>Unidades</th><th>Costo unitario</th><th>Catálogo</th></tr></thead><tbody>${filas}</tbody></table></div>`;
+    const accion = async (nombre, cuerpo, ok) => {
+      const rr = await api(`/api/erp/importacion/${id}/${nombre}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo||{}) });
+      const dd = await rr.json().catch(()=>({}));
+      if (!rr.ok){ alert(dd.error || 'No se pudo'); return; }
+      alert(ok(dd)); cargarImportacion(); verEmbarque(id);
+    };
+    const q = (x) => document.getElementById(x);
+    if (q('impAprobar')) q('impAprobar').onclick = () => accion('aprobar', { acepto_revisar: !!(q('impAcepto') && q('impAcepto').checked) }, d => `Aprobado. Productos creados en el catálogo: ${d.productos_creados}.`);
+    if (q('impDescartar')) q('impDescartar').onclick = () => confirm('¿Descartar este borrador?') && accion('descartar', {}, () => 'Descartado.');
+    if (q('impRecibir')) q('impRecibir').onclick = () => confirm('¿La mercancía ya llegó al almacén? Esto suma las existencias y actualiza los costos promedio.') && accion('recibir', {}, d => `Recibido. Productos actualizados: ${d.lineas.length}.`);
+  }
+  function iniciarImportacion(){
+    document.getElementById('impBody').addEventListener('click', (ev) => { const b = ev.target.closest('[data-ver]'); if (b) verEmbarque(b.dataset.ver); });
+    const btn = document.getElementById('btnImp'), inp = document.getElementById('archivoImp');
+    btn.addEventListener('click', () => inp.click());
+    inp.addEventListener('change', async () => {
+      if (!inp.files.length) return;
+      const fd = new FormData(); [...inp.files].forEach(f => fd.append('archivos', f));
+      document.getElementById('impEstado').textContent = 'Auditando…';
+      const r = await fetch('/api/erp/importacion/analizar', { method:'POST', body: fd, credentials:'same-origin' });
+      const d = await r.json().catch(()=>({}));
+      inp.value = '';
+      document.getElementById('impEstado').textContent = r.ok ? '' : (d.error || 'No se pudo auditar');
+      if (r.ok){ cargarImportacion(); verEmbarque(d.id); }
+    });
+  }
 
   // -------- ERP: reglas comerciales --------
   async function cargarReglas(){
