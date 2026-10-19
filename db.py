@@ -8,7 +8,7 @@ memoria), ahora vive acá, conectado por contacto.
 import os
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # En producción (Render), CRM_DB_PATH apunta al disco persistente
 # (ej. /var/data/crm.db) para que la base sobreviva a cada deploy.
@@ -248,6 +248,7 @@ def inicializar():
             ("nota_despacho", "TEXT"),
             ("catalogo_id", "INTEGER"),               # producto del catálogo (para devolver stock al cancelar)
             ("reservado", "INTEGER NOT NULL DEFAULT 0"),   # unidades descontadas del stock por este pedido
+            ("reservado_hasta", "TEXT"),              # la reserva se libera sola si no hay pago a esta fecha (UTC)
             ("existencia_confirmada_por", "TEXT"),    # 'Salomón' o el nombre de la persona del equipo
             ("credito_hasta", "TEXT"),                # fecha límite de pago si se autorizó crédito
             ("credito_autorizado_por", "INTEGER REFERENCES usuarios(id)"),
@@ -582,6 +583,7 @@ def crear_orden(contacto_id: int, orden: str, lineas: list, estado_pago: str, co
     producto, cantidad, precio, catalogo_id y reservar (True = descuenta del stock; falla si ya no alcanza).
     Si algo falla no queda nada guardado. Devuelve los totales por línea."""
     totales = []
+    hasta = (datetime.utcnow() + timedelta(days=reserva_dias())).strftime("%Y-%m-%d %H:%M:%S")
     with conectar() as con:
         for l in lineas:
             reservado = 0
@@ -597,9 +599,9 @@ def crear_orden(contacto_id: int, orden: str, lineas: list, estado_pago: str, co
             total = round(l["cantidad"] * l["precio"], 2)
             con.execute(
                 "INSERT INTO pedidos (contacto_id, producto, cantidad, precio_unitario, total, estado_pago, orden, "
-                "catalogo_id, reservado, existencia_confirmada_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "catalogo_id, reservado, existencia_confirmada_por, reservado_hasta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (contacto_id, l["producto"], l["cantidad"], l["precio"], total, estado_pago, orden,
-                 l.get("catalogo_id"), reservado, confirmado_por),
+                 l.get("catalogo_id"), reservado, confirmado_por, hasta if reservado else None),
             )
             totales.append(total)
     return totales
@@ -1226,3 +1228,58 @@ def obtener_documento(documento_id: int):
         doc = dict(d)
     doc["lineas"] = [l for l in lineas_de_orden(doc["pedido_ref"]) if l["estado"] != "cancelado"]
     return doc
+
+
+# ---------------------------------------------------------------------
+# Reglas comerciales editables (reserva, pedido mínimo, tasa del día)
+# ---------------------------------------------------------------------
+
+def _num_config(clave: str, defecto: float) -> float:
+    try:
+        return float(obtener_config(clave))
+    except (TypeError, ValueError):
+        return defecto
+
+
+def reserva_dias() -> int:
+    return int(_num_config("reserva_dias", 7))
+
+
+def pedido_minimo() -> dict:
+    """Pedido mínimo al mayor: se cumple con UNO de los dos (monto o unidades)."""
+    return {"usd": _num_config("pedido_minimo_usd", 500), "unidades": int(_num_config("pedido_minimo_unidades", 100))}
+
+
+def cumple_pedido_minimo(total_usd: float, unidades: int) -> bool:
+    m = pedido_minimo()
+    return total_usd >= m["usd"] or unidades >= m["unidades"]
+
+
+def tasa_vigente() -> dict:
+    """Tasa Bs/USD cargada por la administración. `vigente` es False si tiene más de `tasa_vigencia_dias` (1 por defecto)."""
+    tasa = _num_config("tasa_bs", 0)
+    fecha = obtener_config("tasa_fecha")
+    vigente = False
+    if tasa > 0 and fecha:
+        try:
+            vigente = (datetime.utcnow() - datetime.strptime(fecha, "%Y-%m-%d %H:%M:%S")).total_seconds() <= _num_config("tasa_vigencia_dias", 1) * 86400
+        except ValueError:
+            pass
+    return {"tasa": tasa or None, "fecha": fecha, "vigente": vigente, "fuente": obtener_config("tasa_fuente")}
+
+
+def guardar_tasa(tasa: float, fuente: str = "BCV"):
+    guardar_config("tasa_bs", str(tasa))
+    guardar_config("tasa_fecha", datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"))
+    guardar_config("tasa_fuente", fuente)
+
+
+def reservas_vencidas() -> list:
+    """Primera línea (id) de cada orden con stock reservado, sin comprobante ni pago ni crédito, cuya reserva ya venció."""
+    with conectar() as con:
+        filas = con.execute(
+            "SELECT MIN(id) AS id FROM pedidos WHERE reservado > 0 AND estado NOT IN ('entregado','cancelado') "
+            "AND estado_pago IN ('por_confirmar','por_pagar') AND reservado_hasta IS NOT NULL "
+            "AND reservado_hasta <= datetime('now') GROUP BY orden"
+        ).fetchall()
+    return [f["id"] for f in filas]

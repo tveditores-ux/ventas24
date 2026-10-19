@@ -208,6 +208,17 @@ class Salomon(base.Agente):
                 return {"error": f"Línea {i} ({fila['nombre']}): aún no tiene precio cargado. Pasa a una persona del equipo."}
             validadas.append((fila, cantidad, precio))
 
+        # Pedido mínimo al mayor (6 cajas ≈ 100 unidades, o $500): se cumple con uno de los dos.
+        total_usd = sum(c * p for _, c, p in validadas)
+        unidades = sum(c for _, c, _ in validadas)
+        if not db.cumple_pedido_minimo(total_usd, unidades):
+            m = db.pedido_minimo()
+            return {"error": (
+                f"Pedido por debajo del mínimo al mayor (${m['usd']:.0f} o {m['unidades']} unidades; llevas ${total_usd:.2f} y {unidades} unidades). "
+                "No lo registres. Ofrécele completar el pedido con más productos; si de verdad quiere menos, dile con amabilidad que "
+                "las compras al detal se atienden con los distribuidores locales."
+            )}
+
         # Salomón tiene acceso al inventario: si TODAS las líneas tienen existencia confirmada y alcanzan,
         # confirma él mismo la existencia y reserva el stock. Si alguna no tiene inventario cargado,
         # la orden queda para que una persona del equipo la verifique.

@@ -64,6 +64,14 @@ def _saludo(contacto):
     return f"{n}, " if n else ""
 
 
+def linea_bs(total: float) -> str:
+    """'≈ Bs. X (tasa Y del dd/mm)' si hay una tasa vigente cargada; si no, texto vacío (nunca se inventa)."""
+    t = db.tasa_vigente()
+    if not t["vigente"]:
+        return ""
+    return f" (≈ Bs. {total * t['tasa']:,.2f} a tasa {t['tasa']:,.2f} del {t['fecha'][8:10]}/{t['fecha'][5:7]})"
+
+
 def _resumen(lineas):
     activas = [l for l in lineas if l["estado"] != "cancelado"]
     partes = [f"• {l['cantidad']} x {l['producto'][:70]}: ${l['total']:.2f}" for l in activas]
@@ -85,7 +93,7 @@ def texto_existencia_confirmada(pedido_id: int) -> str:
     pago = datos_pago()
     if pago:
         return (
-            f"{_saludo(contacto)}confirmamos la existencia de tu pedido:\n{resumen}\n\nTotal: ${total:.2f}\n\n"
+            f"{_saludo(contacto)}confirmamos la existencia de tu pedido:\n{resumen}\n\nTotal: ${total:.2f}{linea_bs(total)}\n\n"
             f"Datos para el pago:\n{pago}\n\n"
             "Cuando pagues, envíame por aquí la captura del comprobante y la validamos."
         )
@@ -94,7 +102,7 @@ def texto_existencia_confirmada(pedido_id: int) -> str:
         f"Existencia confirmada. Total ${total:.2f}.\n{resumen}",
     )
     return (
-        f"{_saludo(contacto)}confirmamos la existencia de tu pedido:\n{resumen}\n\nTotal: ${total:.2f}\n\n"
+        f"{_saludo(contacto)}confirmamos la existencia de tu pedido:\n{resumen}\n\nTotal: ${total:.2f}{linea_bs(total)}\n\n"
         "En un momento una persona de la administración te escribe por aquí con los datos para el pago."
     )
 
@@ -220,6 +228,26 @@ def procesar_eventos():
             con.execute("UPDATE eventos_outbox SET estado = ?, procesado_en = CURRENT_TIMESTAMP WHERE id = ?", (estado, ev["id"]))
         resumen["eventos"] += 1
     return resumen
+
+
+def liberar_reservas_vencidas():
+    """Libera el stock de las órdenes cuya reserva (7 días por defecto) venció sin pago y avisa al cliente."""
+    hechas = 0
+    for pid in db.reservas_vencidas():
+        lineas = db.lineas_de_orden(pid)
+        if not lineas:
+            continue
+        contacto = _contacto(lineas[0]["contacto_id"])
+        resumen, total = _resumen(lineas)
+        db.cancelar_orden(pid)
+        db.registrar_accion("Sistema", contacto["id"], "reserva_vencida", {"pedido": pid}, {"liberado": True, "total": total})
+        texto = (
+            f"{_saludo(contacto)}tu reserva venció porque no recibimos el pago a tiempo y liberamos el inventario:\n{resumen}\n\n"
+            "Si todavía lo quieres, escríbeme y lo volvemos a apartar según la existencia."
+        )
+        notificar_cliente(contacto["id"], texto)
+        hechas += 1
+    return hechas
 
 
 def aviso_cobranza(pedido_id: int):

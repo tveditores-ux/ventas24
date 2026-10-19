@@ -35,6 +35,14 @@ def _cuentas_cobro():
 
 
 def _tasa():
+    """Tasa del día cargada en el CRM (si está vigente); si no, la variable de entorno."""
+    try:
+        import db
+        t = db.tasa_vigente()
+        if t["vigente"]:
+            return t["tasa"]
+    except Exception:
+        pass
     try:
         return float(os.environ.get("TASA_BS_USD", ""))
     except ValueError:

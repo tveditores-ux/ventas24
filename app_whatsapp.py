@@ -362,6 +362,35 @@ def erp_limite_credito():
     return jsonify({"cliente": fila["nombre"] or telefono, "limite": monto})
 
 
+@app.route("/api/erp/reglas", methods=["GET", "POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_reglas():
+    """Reglas comerciales: tasa del día, vigencia, días de reserva y pedido mínimo al mayor."""
+    if request.method == "POST":
+        d = request.get_json(silent=True) or {}
+        def num(k, minimo=0):
+            try:
+                v = float(str(d.get(k)).replace(",", "."))
+            except (TypeError, ValueError):
+                raise ValueError(f"{k} debe ser un número")
+            if v <= minimo and not (minimo == 0 and v == 0):
+                raise ValueError(f"{k} debe ser mayor que {minimo}")
+            return v
+        try:
+            hecho = {}
+            if d.get("tasa") not in (None, ""):
+                db.guardar_tasa(num("tasa"), (d.get("fuente") or "BCV").strip()[:40]); hecho["tasa"] = d["tasa"]
+            for k, clave in (("reserva_dias", "reserva_dias"), ("pedido_minimo_usd", "pedido_minimo_usd"),
+                             ("pedido_minimo_unidades", "pedido_minimo_unidades"), ("tasa_vigencia_dias", "tasa_vigencia_dias")):
+                if d.get(k) not in (None, ""):
+                    db.guardar_config(clave, str(num(k))); hecho[k] = d[k]
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        db.registrar_accion("Administración", None, "cambiar_reglas", hecho, request.usuario["nombre"])
+    return jsonify({"tasa": db.tasa_vigente(), "reserva_dias": db.reserva_dias(), "pedido_minimo": db.pedido_minimo(),
+                    "tasa_vigencia_dias": db._num_config("tasa_vigencia_dias", 1)})
+
+
 @app.route("/api/erp/cobranza", methods=["GET"])
 @requiere_sesion(roles=ROLES_ADMIN)
 def erp_cobranza():
@@ -1143,6 +1172,7 @@ def _loop_polling_wecall():
                             with wecall_lock:
                                 db.actualizar_contacto(c["id"], wecall_ultimo_id=mid)
             ciclo.procesar_eventos()   # reintenta avisos y compras automáticas pendientes
+            ciclo.liberar_reservas_vencidas()
         except Exception as e:
             print(f"  (wecall-poll) error en el ciclo: {e}")
 

@@ -295,6 +295,7 @@
     <div class="nav-sec erp-solo" hidden>ERP</div>
     <button class="erp-solo" data-tab="reportes" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Reportes</button>
     <button class="erp-solo" data-tab="cobranza" type="button" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5C9.5 8.4 10.6 8 12 8s2.5.6 2.5 1.7c0 2.4-5 1.3-5 3.8 0 1.1 1.1 1.7 2.5 1.7s2.5-.5 2.5-1.7"/></svg>Cobranza</button>
+    <button class="erp-solo" data-tab="reglas" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Reglas</button>
     <button class="erp-solo" data-tab="inventario" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 9l9-5 9 5v9l-9 5-9-5z"/><path d="M3 9l9 5 9-5"/><path d="M12 14v9"/></svg>Inventario</button>
     <button class="erp-solo" data-tab="proveedores" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 6h11v10H3z"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg>Proveedores</button>
     <button class="erp-solo" data-tab="compras" type="button" hidden><svg viewBox="0 0 24 24"><path d="M5 4h14v17H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>Compras</button>
@@ -401,6 +402,19 @@
     </table>
   </div>
   <p class="nota-erp">El crédito es una excepción: solo lo autoriza un administrador, dentro del límite del cliente. Mientras una cuenta no se pague sigue contando como por cobrar. El recordatorio lo envías tú, nunca sale solo.</p>
+</div>
+
+<div id="reglasWrap" hidden>
+  <div class="pend-resumen" id="reglasResumen"></div>
+  <form id="reglasForm" class="toolbar" style="margin-top:14px;flex-wrap:wrap;gap:12px;align-items:flex-end">
+    <label>Tasa del día (Bs por $)<br><input type="text" inputmode="decimal" name="tasa" placeholder="ej. 36,50"></label>
+    <label>Vigencia de la tasa (días)<br><input type="text" inputmode="numeric" name="tasa_vigencia_dias" placeholder="1"></label>
+    <label>Días de reserva sin pago<br><input type="text" inputmode="numeric" name="reserva_dias" placeholder="7"></label>
+    <label>Pedido mínimo (USD)<br><input type="text" inputmode="decimal" name="pedido_minimo_usd" placeholder="500"></label>
+    <label>o mínimo de unidades<br><input type="text" inputmode="numeric" name="pedido_minimo_unidades" placeholder="100"></label>
+    <button class="btn" type="submit">Guardar</button>
+  </form>
+  <p class="nota-erp" id="reglasMsg">Deja en blanco lo que no quieras cambiar. La tasa se muestra en bolívares a los clientes solo mientras esté vigente; si venció, el sistema no inventa conversiones.</p>
 </div>
 
 <div id="inventarioWrap" hidden>
@@ -527,7 +541,7 @@
     document.getElementById('subnav').hidden = false;
     if (esAdmin()){
       document.querySelectorAll('.erp-solo').forEach(el => el.hidden = false);
-      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza();
+      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza(); iniciarReglas();
     }
     activarTab('pendientes');
     setInterval(refrescarInsignia, 30000);
@@ -540,7 +554,7 @@
   });
 
   // -------- pestañas --------
-  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza'];
+  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza', 'reglas'];
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -558,6 +572,7 @@
     compras: ['Compras', 'Órdenes de compra: de borrador a mercancía recibida.'],
     reportes: ['Reportes', 'Cuánto se cobra, cuánto deja y qué se mueve.'],
     cobranza: ['Cobranza', 'Lo que los clientes deben por ventas a crédito.'],
+    reglas: ['Reglas', 'Tasa del día, reserva de inventario y pedido mínimo al mayor.'],
   };
   function activarTab(tab){
     const v = VISTAS[tab] || ['', ''];
@@ -578,6 +593,7 @@
     else if (tab === 'proveedores') cargarProveedores();
     else if (tab === 'compras') cargarCompras();
     else if (tab === 'cobranza') cargarCobranza();
+    else if (tab === 'reglas') cargarReglas();
     else if (tab === 'reportes'){ cargarReportes(); cargarAuditoria(); }
   }
   document.querySelectorAll('#subnav button').forEach(b => {
@@ -1227,6 +1243,36 @@
   }
 
 
+
+  // -------- ERP: reglas comerciales --------
+  async function cargarReglas(){
+    try {
+      const r = await api('/api/erp/reglas');
+      if (r.status === 401){ irALogin(); return; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json(), t = d.tasa;
+      const cuando = t.fecha ? new Date(t.fecha.replace(' ', 'T') + 'Z').toLocaleString() : '—';
+      document.getElementById('reglasResumen').innerHTML = `
+        <div class="pend-card"><b>${t.tasa ? t.tasa.toFixed(2) : '—'}</b><span>Bs por $ · ${t.vigente ? 'vigente' : (t.tasa ? 'VENCIDA' : 'sin cargar')}<br>${esc(cuando)}</span></div>
+        <div class="pend-card"><b>${d.reserva_dias} días</b><span>de reserva sin pago</span></div>
+        <div class="pend-card"><b>$${d.pedido_minimo.usd} / ${d.pedido_minimo.unidades} uds</b><span>pedido mínimo al mayor (uno u otro)</span></div>`;
+    } catch(e){
+      document.getElementById('reglasResumen').innerHTML = `<p class="error">No pude cargar las reglas (${esc(e.message)}).</p>`;
+    }
+  }
+  function iniciarReglas(){
+    document.getElementById('reglasForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const cuerpo = {};
+      new FormData(ev.target).forEach((v, k) => { if (String(v).trim()) cuerpo[k] = String(v).trim(); });
+      if (!Object.keys(cuerpo).length) return;
+      const r = await api('/api/erp/reglas', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo) });
+      const d = await r.json().catch(()=>({}));
+      const msg = document.getElementById('reglasMsg');
+      if (!r.ok){ msg.textContent = d.error || 'No se pudo guardar'; msg.classList.add('error'); return; }
+      msg.classList.remove('error'); msg.textContent = 'Guardado.'; ev.target.reset(); cargarReglas();
+    });
+  }
 
   // -------- ERP: cobranza (ventas a crédito) --------
   async function cargarCobranza(){
