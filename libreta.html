@@ -168,6 +168,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
       <a href="#mis">Mis compromisos</a>
       <a href="#pedirb">Lo que debo pedir</a>
       <a href="#acuerdos">Acuerdos</a>
+      <a href="#correos">Correos</a>
       <a href="#recibidos">Datos recibidos</a>
     </nav>
   </div>
@@ -237,6 +238,16 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
 <h2 id="acuerdos">Acuerdos de la minuta y su efecto en el sistema</h2>
 <p class="muted small lead">Qué se acordó, qué cambia en Ventas 24 y cómo está hoy según el código (al 19/10).</p>
 <div id="acuLista"></div>
+
+<h2 id="correos">Correos revisados el 20/10 (eliezer.compras@gmail.com)</h2>
+<div class="acu"><div class="g">
+  <div><b>19/10 · Gabriela Mujica</b>Agenda de la reunión del jueves 22/10, 9:00 am, Yarapark. Puntos: 1) Lic. Nazaret, aclaratoria de preguntas; 2) Eliezer: formato de requerimientos, avance del sistema y pruebas del bot en audio; 3) Alirio: distribución y nuevos aliados en Valencia; 4) Gabriela: estatus varios; 5) cierre y compromisos, con Jaime.</div>
+  <div><b>19/10 · Gabriela Mujica</b>Compartió en Drive la Minuta Ejecutiva 16-10-26.</div>
+  <div><b>17/10 · Gabriela Mujica</b>Liquidación preliminar: los montos «no son los definitivos», solo un acercamiento. Pide tu confirmación de que la información cumple lo requerido. <i>Falta tu respuesta (A19).</i></div>
+  <div><b>17/10 · Gabriela Mujica</b>Lista de acciones requeridas por Eliezer y la minuta del 16/10 (ya incorporadas en esta libreta).</div>
+  <div><b>17/10 y 16/10 · Jaime García</b>Reenvió la autorización de Mauri Corporation para usar imágenes de Fram y Prestone (sin exclusividad territorial) y los logos de Prestone. Tú la reenviaste a Gabriela el 19/10.</div>
+  <div class="hoy"><b>De Alirio</b>No hay ningún correo suyo en los últimos 10 días. Solo aparece en copia en los mensajes de Mauri.</div>
+</div></div>
 
 <h2 id="recibidos">Lo que ya llegó: liquidación de importación (CSV)</h2>
 <div id="csvInfo"></div>
@@ -630,6 +641,11 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
       r: "Carga de listas de precios, cambio de porcentajes, actualización de stock y monitoreo de conversaciones en el CRM." },
     { id: "A17", cat: "Capacitación", t: "Presentar el prototipo o sistema preliminar de trabajo", p: "Alta", f: "2026-10-22",
       r: "Una versión previa e interactiva del sistema para la demostración a la directiva en la próxima sesión." },
+    { id: "A19", cat: "Reuniones", t: "Responder a Gabriela sobre la liquidación preliminar", p: "Alta", f: "2026-10-20",
+      r: "Gabriela quedó esperando tu confirmación de que el archivo cumple lo requerido. Dile que la estructura sirve y cuáles son los 8 puntos por confirmar (flete, arancel, gastos estimados, línea CH9972, supuestos financieros y gastos operativos).", dep: "Ya revisado: el archivo cuadra y se puede cargar; falta que lo definitivo llegue." },
+    { id: "A20", cat: "Reuniones", t: "Preparar tu estatus para la reunión del jueves 22/10, 9:00 am, Yarapark", p: "Alta", f: "2026-10-22",
+      r: "Tu punto 2 de la agenda: formato de requerimientos, avance de la configuración del sistema y estatus de las pruebas del bot en audio. Lleva también las preguntas para la Lic. Nazaret (punto 1).",
+      dep: "Sé honesto con el audio: en Ventas 24 todavía no existe el módulo de voz; solo hay un script antiguo de llamadas de salida." },
     { id: "A18", cat: "Requerimientos", t: "Formato de requerimiento de información para alimentar el CRM y el ERP", p: "Alta", f: "2026-10-20",
       r: "Compromiso de la minuta: el formato para que Grupo Vextor entregue la información que necesita el sistema." }
   ];
@@ -649,11 +665,14 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
     { id: "G10", q: "gabriela", t: "Fuente oficial de la tasa del día y quién la carga o autoriza", para: "vincular el CRM a la tasa (A5).", f: "30/10", src: "Formulario 5.16" },
     { id: "G11", q: "gabriela", t: "Si Grupo Vextor es contribuyente especial (retenciones de IVA) y el criterio de prorrateo de gastos (por valor FOB)", para: "definir retenciones y repartir los gastos del embarque.", f: "13/11", src: "Formulario 6.22 y 6.8" },
     { id: "G12", q: "gabriela", t: "Fecha de llegada y tipo del equipo (hardware) del módulo de voz", para: "iniciar las pruebas de voz (A14).", f: "10/11", src: "Lista de acciones" },
-    { id: "J1", q: "jaime", t: "Cita con la contadora Lic. Nazaret el 22 o 23 de octubre y sus datos de contacto", para: "definir facturación fiscal o nota de entrega, IGTF y libros.", f: "22/10", src: "Minuta" },
+    { id: "G13", q: "gabriela", t: "Fecha en que tendrá la liquidación definitiva (la del 17/10 es preliminar y ella misma lo aclaró)", para: "saber cuándo se pueden fijar costos y precios.", f: "", src: "Correo del 17/10" },
+    { id: "J1", q: "jaime", t: "Cita con la contadora Lic. Nazaret el 22 o 23 de octubre y sus datos de contacto", para: "definir facturación fiscal o nota de entrega, IGTF y libros.", f: "22/10", src: "Minuta", est: "pedido",
+      nota: "La agenda del 19/10 confirma que la Lic. Nazaret participa en la reunión del jueves 22/10, 9:00 am, en Yarapark (punto 1: aclaratoria de preguntas). Falta su contacto directo." },
     { id: "J2", q: "jaime", t: "Decisión del emisor fiscal y de la fase en que entra la factura (después de la cita con la contadora)", para: "construir el módulo fiscal.", f: "", src: "Formulario 5.15" },
     { id: "J3", q: "jaime", t: "Decisión sobre el descuento por divisas o USDT y el IGTF", para: "mostrarlo como línea aparte en los documentos.", f: "", src: "Formulario 5.14" },
     { id: "J4", q: "jaime", t: "Margen autorizado definitivo (de 20 % a 25 %) para las listas de aliados y la regla de gran mayor", para: "cargar los precios de los aliados (A8).", f: "30/10", src: "Minuta y lista" },
-    { id: "J5", q: "jaime", t: "Cartas de autorización de Fram y Prestone para usar sus marcas y fotografías", para: "publicar la página web y el catálogo del bot.", f: "23/10", src: "Minuta" },
+    { id: "J5", q: "jaime", t: "Cartas de autorización de Fram y Prestone para usar sus marcas y fotografías", para: "publicar la página web y el catálogo del bot.", f: "23/10", src: "Minuta", est: "recibido",
+      nota: "Llegó el 16/10: Mauri Corporation (Luis E. Aranguren) autoriza por correo usar las imágenes de Fram y Prestone en la web y las redes, como Distribuidor Autorizado, SIN mencionar exclusividad territorial. Los logos de Prestone llegaron el 17/10 (5 archivos). Es un correo, no una carta formal: si Jaime la quiere formal, pedirla." },
     { id: "J6", q: "jaime", t: "Autorización por escrito de los aliados para usar su imagen y enlazar sus redes o páginas", para: "mostrarlos en la página de Vextor.", f: "30/10", src: "Minuta" },
     { id: "J7", q: "jaime", t: "Quién aprueba los precios sugeridos y en qué momento se calcula la comisión (al facturar o al cobrar)", para: "configurar la aprobación de precios y las comisiones.", f: "30/10", src: "Formulario 6.13 y 6.17" },
     { id: "J8", q: "jaime", t: "Qué zona atiende cada vendedor y cuándo el bot cierra la venta solo (por ejemplo, Valencia y Lara)", para: "programar el escalamiento híbrido (A4).", f: "25/10", src: "Minuta y lista" },
@@ -661,6 +680,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
     { id: "J10", q: "jaime", t: "Cómo se sincronizan los inventarios de proveedores terceros (RG, Fabrilara): conexión directa o correo semanal", para: "mostrar disponibilidad real en el bot.", f: "", src: "Minuta, puntos abiertos" },
     { id: "J11", q: "jaime", t: "Firma del acuerdo de protección de Ventas 24 y la adhesión de Gabriela, antes de darle accesos de administración", para: "abrir los accesos con la protección ya firmada.", f: "", src: "Acuerdos" },
     { id: "L1", q: "alirio", t: "Validar los casos de prueba de voz y aportar audios reales de clientes", para: "las simulaciones de voz (A15).", f: "", src: "Formulario 5.6" },
+    { id: "L3", q: "alirio", t: "Estatus de distribución y nuevos aliados en Valencia (su punto en la agenda del 22/10)", para: "cargar a los aliados nuevos y definir zonas.", f: "22/10", src: "Agenda 22/10" },
     { id: "L2", q: "alirio", t: "Zonas que atiende y su número, para derivarle las conversaciones", para: "el escalamiento híbrido (A4).", f: "25/10", src: "Minuta y lista" },
     { id: "N1", q: "nazaret", t: "Requisitos del Seniat, formato de factura (libre, máquina fiscal o digital) y de los libros de compras y ventas", para: "construir el módulo fiscal.", f: "22/10 o 23/10", src: "Formulario 5.17 y 6.21" },
     { id: "N2", q: "nazaret", t: "Tratamiento del IVA de importación como crédito fiscal y de la facturación en dólares a crédito", para: "calcular bien el costo y evitar contingencias.", f: "22/10 o 23/10", src: "Formulario 6.10 y minuta" }
@@ -760,7 +780,10 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
     var c = document.getElementById("cuentaAcc"); if (c) c.textContent = "Mostrando " + n + " de " + ACC.length;
   }
 
-  function rd(id) { if (!state.req[id]) state.req[id] = "por"; return state.req[id]; }
+  function rd(id) {
+    if (!state.req[id]) { var r0 = REQ.filter(function (x) { return x.id === id; })[0]; state.req[id] = (r0 && r0.est) || "por"; }
+    return state.req[id];
+  }
   function reqs() {
     var cont = document.getElementById("reqLista"); cont.textContent = "";
     QUIEN2.forEach(function (q) {
@@ -774,6 +797,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
         var card = h("div", { "class": "req" + (sel.value === "recibido" ? " recibido" : "") });
         card.appendChild(h("div", { "class": "rt", text: r.t }));
         card.appendChild(h("div", { "class": "rp", text: "Me sirve para " + r.para }));
+        if (r.nota) card.appendChild(h("div", { "class": "rp", style: "color:var(--ok)", text: "Según el correo: " + r.nota }));
         card.appendChild(h("div", { "class": "rm" },
           h("span", { text: (r.f ? "Fecha acordada: " + r.f + " · " : "") + "Fuente: " + r.src }), sel));
         sel.addEventListener("change", function () { state.req[r.id] = sel.value; card.classList.toggle("recibido", sel.value === "recibido"); guardar(); reqs(); });
