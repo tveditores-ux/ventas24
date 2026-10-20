@@ -653,8 +653,9 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
   var QUIEN2 = [["gabriela", "Gabriela Mujica", "Gabriela"], ["jaime", "Jaime García", "Jaime"],
                 ["alirio", "Alirio Aranguren (por medio de Jaime o Gabriela)", null], ["nazaret", "Lic. Nazaret, contadora (por medio de Jaime)", null]];
   var REQ = [
-    { id: "G1", q: "gabriela", t: "Matriz de costos de importación en CSV, sin celdas combinadas", para: "cargar los costos y calcular el costo puesto en almacén por producto (A6).", f: "20/10", src: "Minuta" },
-    { id: "G2", q: "gabriela", t: "Listas de precios de los aliados: RG, Fabrilara/Magnus y radiadores (Jair Moreno)", para: "cargarlas al sistema con la fórmula (A8).", f: "23/10", src: "Minuta" },
+    { id: "G1", q: "gabriela", t: "Matriz de costos de importación en CSV, sin celdas combinadas", para: "cargar los costos y calcular el costo puesto en almacén por producto (A6).", f: "20/10", src: "Minuta", est: "recibido",
+      nota: "Llegó el 17/10 (Liquidación CSV.zip, 4 archivos). Es preliminar: los montos definitivos se piden en G7, G8 y G13." },
+    { id: "G2", q: "gabriela", t: "Listas de precios de Fabrilara/Magnus y de los radiadores (Jair Moreno)", para: "cargarlas al sistema con la fórmula (A8). La de RG ya está cargada (lista vigente del 21/09).", f: "23/10", src: "Minuta" },
     { id: "G3", q: "gabriela", t: "Porcentaje que se aplica al costo puesto en almacén para el precio mayor y gran mayor (preliminar, junto con Jaime)", para: "calcular los precios de venta.", f: "30/10", src: "Minuta" },
     { id: "G4", q: "gabriela", t: "Nombre, especificaciones e imágenes de los productos", para: "armar el catálogo y la página web (A13).", f: "23/10", src: "Minuta" },
     { id: "G5", q: "gabriela", t: "Línea Digitel 0422 comprada y activa", para: "vincularla a la API de Meta (A10).", f: "23/10", src: "Minuta" },
