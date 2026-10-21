@@ -146,16 +146,34 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
 .acu .g .hoy b { color: var(--warn); }
 .cajaMsg { width: 100%; min-height: 220px; font: 14.5px/1.5 var(--sans); white-space: pre-wrap; margin-top: 10px; }
 .btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pt { display: grid; grid-template-columns: 28px 1fr; gap: 6px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.pt:first-of-type { border-top: 0; }
+.pt .tx { font-size: 16px; line-height: 1.4; }
+.pt .tx small { display: block; color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+.pt.ok .tx { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--ok); }
+.pt input[type=text] { grid-column: 2; min-height: 42px; }
+.hora { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; }
+.comp { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
+@media (min-width: 720px) { .comp { grid-template-columns: 170px 1fr 150px 44px; } }
 </style>
 
 <div class="bar">
   <div class="bar-in">
     <div class="tabs" role="tablist" aria-label="Secciones de la libreta">
-      <button type="button" role="tab" id="tabBtn-acciones" data-tab="acciones" aria-selected="true">Después del 16/10</button>
+      <button type="button" role="tab" id="tabBtn-j22" data-tab="j22" aria-selected="true">Jueves 22/10</button>
+      <button type="button" role="tab" id="tabBtn-acciones" data-tab="acciones" aria-selected="false">Después del 16/10</button>
       <button type="button" role="tab" id="tabBtn-reunion" data-tab="reunion" aria-selected="false">Reunión · puntos 5 y 6</button>
     </div>
     <div class="bar-top"><b id="avance">Cargando…</b><span class="sync" id="sync"></span></div>
     <div class="meter" aria-hidden="true"><i id="meterFill"></i></div>
+    <nav class="chips" id="chips-j22" aria-label="Secciones de la reunión del jueves">
+      <a href="#j-naz">Nazaret</a>
+      <a href="#j-yo">Mi estatus</a>
+      <a href="#j-ali">Alirio</a>
+      <a href="#j-gab">Gabriela</a>
+      <a href="#j-jai">Jaime</a>
+      <a href="#j-cie">Cierre</a>
+    </nav>
     <nav class="chips" id="chips-reunion" aria-label="Secciones de la reunión" hidden>
       <a href="#antes">Antes</a>
       <a href="#pedir">Pedir</a>
@@ -164,7 +182,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
       <a href="#calc">Costos</a>
       <a href="#resumen">Resumen</a>
     </nav>
-    <nav class="chips" id="chips-acciones" aria-label="Secciones de después de la reunión">
+    <nav class="chips" id="chips-acciones" aria-label="Secciones de después de la reunión" hidden>
       <a href="#mis">Mis compromisos</a>
       <a href="#pedirb">Lo que debo pedir</a>
       <a href="#acuerdos">Acuerdos</a>
@@ -175,11 +193,30 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
 </div>
 
 <div class="wrap">
+
+<div id="tab-j22">
+<p class="eyebrow">Grupo Vextor · jueves 22 de octubre · 9:00 am · Yarapark</p>
+<h1>Reunión del jueves</h1>
+<p class="muted small lead">En el orden de la agenda. Marca cada punto cuando lo trates y escribe la respuesta en una línea. Al final, anota los compromisos y copia el resumen.</p>
+<div id="j22Secciones"></div>
+
+<h2 id="j-cie">Cierre · compromisos de la próxima semana</h2>
+<p class="muted small lead">Quién, qué y para cuándo. Una línea por compromiso.</p>
+<div class="card" id="j22Comp"></div>
+<div class="btnrow"><button type="button" id="j22AddComp">+ Añadir compromiso</button></div>
+
+<h2>Resumen para enviar</h2>
+<textarea class="resumen" id="j22Txt" readonly aria-label="Resumen de la reunión del jueves"></textarea>
+<div class="row">
+  <span class="small muted" id="j22Msg" role="status"></span>
+  <button type="button" class="primary" id="j22Copiar">Copiar resumen</button>
+</div>
+</div>
+
+<div id="tab-reunion" hidden>
 <p class="eyebrow">Grupo Vextor · viernes 16 de octubre</p>
 <h1>Libreta de la reunión: puntos 5 y 6</h1>
 <p class="muted small">Cada tema tiene su guía, un temporizador y sus campos. Lo que escribas se guarda solo. Al final, el resumen sale armado para copiarlo a la minuta.</p>
-
-<div id="tab-reunion" hidden>
 <h2 id="antes">Antes de la reunión</h2>
 <p class="muted small">Lo que hay que pedirle a Gabriela para poder cerrar los puntos en la sala.</p>
 <ul class="check" id="listaAntes"></ul>
@@ -216,7 +253,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
 <div class="note">Lo que dejes en "Escalar a Jaime" va aparte en el resumen: son las decisiones que no se toman en la sala.</div>
 </div>
 
-<div id="tab-acciones">
+<div id="tab-acciones" hidden>
 <h2 id="mis">Mis compromisos tras la reunión del 16/10</h2>
 <p class="muted small lead">Salen de la minuta ejecutiva y de la lista de acciones requeridas de Eliezer Alvarado. Van ordenados por fecha límite. Toca uno para ver qué se pide y anotar el avance.</p>
 <div class="filtros" id="filtrosAcc" role="group" aria-label="Filtrar compromisos"></div>
@@ -386,7 +423,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
   ];
 
   function vacio() {
-    return { v: 1, items: {}, antes: {}, campos: {}, form: {}, pedir: {}, acc: {}, req: {}, csv: {}, iva: 16, skus: [{}, {}, {}] };
+    return { v: 1, items: {}, antes: {}, campos: {}, form: {}, pedir: {}, acc: {}, req: {}, csv: {}, j22: { chk: {}, nota: {}, comp: [] }, iva: 16, skus: [{}, {}, {}] };
   }
   var state = vacio();
   var LKEY = "libreta-vextor-16oct";
@@ -846,10 +883,124 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
     cont.appendChild(ul);
   }
 
+
+  /* ======================= Jueves 22/10 ======================= */
+  var J22 = [
+    { id: "naz", t: "1 · Lic. Nazaret · aclaratoria de preguntas", hora: "Primero", pts: [
+      ["n1", "¿Se factura o se entrega nota de entrega? ¿Qué factura es válida para el Seniat?", "Define el módulo fiscal."],
+      ["n2", "¿El IVA de importación es crédito fiscal? ¿Grupo Vextor es contribuyente ordinario?", "Hoy el IVA no está en el costo."],
+      ["n3", "¿Es contribuyente especial (retenciones de IVA)?", ""],
+      ["n4", "¿Cómo se trata el IGTF del 3 % y la facturación en dólares a crédito?", ""],
+      ["n5", "¿Qué libros de compras y ventas deben llevarse?", ""],
+      ["n6", "El costo financiero (12 %) y las contingencias (1,5 %): ¿dentro del costo del producto o aparte?", "Suben cada precio un 2,8 %."],
+      ["n7", "Su contacto directo, para consultas sin esperar la reunión", ""]
+    ]},
+    { id: "yo", t: "2 · Mi estatus · formato de requerimientos, avance del sistema y pruebas de audio", hora: "Mi turno", pts: [
+      ["y1", "Formato de requerimientos: entregarlo y explicar qué información necesita cada módulo", "Es el compromiso A18, vencía el 20/10."],
+      ["y2", "Ya funciona: pedido mínimo ($500 o 100 unidades), reserva de 7 días con liberación automática y tasa BCV en dólares y euros visible en el CRM", "Probado con datos de prueba."],
+      ["y3", "Ya funciona: agente de importación. Auditó la liquidación preliminar: cuadra, con 8 puntos por confirmar", "No aprobar el embarque hasta los datos definitivos."],
+      ["y4", "Ya funciona: usuarios con claves temporales para Jaime, Gabriela, Alirio y Roberson", "Necesito sus correos y el rol de cada uno."],
+      ["y5", "Audio: decir la verdad. El módulo de voz todavía no existe en Ventas 24; solo hay un script antiguo de llamadas de salida", "Falta la fecha y el tipo del equipo (hardware)."],
+      ["y6", "Liquidación preliminar: confirmar que le respondí a Gabriela y que le envié la lista de pendientes", "Confirma que los correos salieron."]
+    ]},
+    { id: "ali", t: "3 · Alirio Aranguren · distribución y nuevos aliados en Valencia", hora: "Pregúntale", pts: [
+      ["a1", "¿Qué aliados nuevos hay en Valencia y qué productos manejan?", "Para cargar sus listas."],
+      ["a2", "¿Qué zonas atiende él y su número para derivarle las conversaciones?", "Escalamiento por zona."],
+      ["a3", "¿Qué zona atiende Roberson? ¿Es vendedor?", "Define su rol en el sistema."],
+      ["a4", "¿Aporta audios reales de clientes para las pruebas de voz?", ""]
+    ]},
+    { id: "gab", t: "4 · Gabriela Mujica · estatus varios", hora: "Recuérdale", pts: [
+      ["g1", "Listas de Fabrilara/Magnus y de los radiadores (23/10)", ""],
+      ["g2", "Nombre, especificaciones e imágenes de los productos (23/10)", ""],
+      ["g3", "Línea Digitel 0422 y cuentas de Meta y Drive (23/10)", ""],
+      ["g4", "Quién autoriza el uso de la tasa del BCV (30/10)", ""],
+      ["g5", "Liquidación definitiva: fecha estimada, flete real, arancel y gastos confirmados", "Sin fecha todavía."],
+      ["g6", "Fecha de llegada y tipo del equipo de voz", ""]
+    ]},
+    { id: "jai", t: "5 · Jaime García · decisiones y cierre", hora: "Que decida", pts: [
+      ["j1", "Margen definitivo (entre 20 % y 25 %) para las listas de aliados y la regla de gran mayor", "Sin esto no hay precios sugeridos."],
+      ["j2", "¿El catálogo vende por unidad o por caja de 12?", "El costo hoy está por unidad."],
+      ["j3", "Quién aprueba los precios sugeridos y cuándo se calcula la comisión (al facturar o al cobrar)", ""],
+      ["j4", "Qué zona atiende cada vendedor y cuándo el bot cierra la venta solo", ""],
+      ["j5", "Roles de las cuentas: quién ve costos y márgenes", "Hoy los administradores ven todo."],
+      ["j6", "Firma del acuerdo de protección de Ventas 24, antes de dar accesos de administración a Gabriela", ""],
+      ["j7", "¿Quiere la autorización de Mauri para Fram y Prestone en carta formal?", "Llegó por correo, sin exclusividad territorial."],
+      ["j8", "Cómo se sincronizan los inventarios de los proveedores terceros (conexión directa o correo semanal)", ""]
+    ]}
+  ];
+  var J22N = J22.reduce(function (n, s) { return n + s.pts.length; }, 0);
+  function jd() { if (!state.j22) state.j22 = { chk: {}, nota: {}, comp: [] }; return state.j22; }
+
+  function j22Secciones() {
+    var cont = document.getElementById("j22Secciones"); cont.textContent = "";
+    J22.forEach(function (s) {
+      var card = h("div", { "class": "card", id: "j-" + s.id });
+      card.appendChild(h("div", { "class": "hora", text: s.hora }));
+      card.appendChild(h("h3", { text: s.t, style: "margin:2px 0 6px" }));
+      s.pts.forEach(function (p) {
+        var fila = h("div", { "class": "pt" + (jd().chk[p[0]] ? " ok" : "") });
+        var cb = h("input", { type: "checkbox", id: "jc_" + p[0], "aria-label": "Tratado: " + p[1] });
+        cb.checked = !!jd().chk[p[0]];
+        var tx = h("label", { "class": "tx", "for": "jc_" + p[0], text: p[1] });
+        if (p[2]) tx.appendChild(h("small", { text: p[2] }));
+        var nota = h("input", { type: "text", id: "jn_" + p[0], placeholder: "Respuesta o decisión…", "aria-label": "Respuesta a: " + p[1] });
+        nota.value = jd().nota[p[0]] || "";
+        cb.addEventListener("change", function () { jd().chk[p[0]] = cb.checked; fila.classList.toggle("ok", cb.checked); guardar(); });
+        nota.addEventListener("input", function () { jd().nota[p[0]] = nota.value; guardar(); });
+        fila.appendChild(cb); fila.appendChild(tx); fila.appendChild(nota);
+        card.appendChild(fila);
+      });
+      cont.appendChild(card);
+    });
+  }
+  function j22Comp() {
+    var cont = document.getElementById("j22Comp"); cont.textContent = "";
+    var lista = jd().comp;
+    if (!lista.length) cont.appendChild(h("p", { "class": "muted small", text: "Aún no hay compromisos. Pulsa «Añadir compromiso»." }));
+    lista.forEach(function (x, i) {
+      var q = h("input", { type: "text", placeholder: "Quién", "aria-label": "Responsable " + (i + 1) }); q.value = x.q || "";
+      var t = h("input", { type: "text", placeholder: "Qué se compromete", "aria-label": "Compromiso " + (i + 1) }); t.value = x.t || "";
+      var f = h("input", { type: "date", "aria-label": "Fecha del compromiso " + (i + 1) }); f.value = x.f || "";
+      var b = h("button", { type: "button", text: "✕", "aria-label": "Quitar el compromiso " + (i + 1) });
+      q.addEventListener("input", function () { x.q = q.value; guardar(); });
+      t.addEventListener("input", function () { x.t = t.value; guardar(); });
+      f.addEventListener("input", function () { x.f = f.value; guardar(); });
+      b.addEventListener("click", function () { lista.splice(i, 1); j22Comp(); guardar(); });
+      cont.appendChild(h("div", { "class": "comp" }, q, t, f, b));
+    });
+  }
+  function j22Refrescar() {
+    var d = jd(), hechos = Object.keys(d.chk).filter(function (k) { return d.chk[k]; }).length;
+    textoBarra.j22 = [hechos + " de " + J22N + " puntos tratados", hechos / J22N * 100];
+    var tx = "REUNIÓN GRUPO VEXTOR · jueves 22/10/2026 · Yarapark\n";
+    J22.forEach(function (s) {
+      var lineas = s.pts.filter(function (p) { return d.chk[p[0]] || (d.nota[p[0]] || "").trim(); }).map(function (p) {
+        return "• " + (d.chk[p[0]] ? "" : "(pendiente) ") + p[1] + ((d.nota[p[0]] || "").trim() ? "\n   → " + d.nota[p[0]].trim() : "");
+      });
+      var sin = s.pts.length - s.pts.filter(function (p) { return d.chk[p[0]]; }).length;
+      if (lineas.length) tx += "\n" + s.t.toUpperCase() + "\n" + lineas.join("\n") + "\n";
+      else tx += "";
+    });
+    var comp = d.comp.filter(function (x) { return (x.t || "").trim(); });
+    if (comp.length) tx += "\nCOMPROMISOS PARA LA PRÓXIMA SEMANA\n" + comp.map(function (x) {
+      return "• " + (x.q ? x.q + ": " : "") + x.t.trim() + (x.f ? " (para el " + x.f.split("-").reverse().join("/") + ")" : "");
+    }).join("\n") + "\n";
+    var el = document.getElementById("j22Txt"); if (el) el.value = tx;
+    pintarBarra();
+  }
+  document.getElementById("j22AddComp").addEventListener("click", function () { jd().comp.push({ q: "", t: "", f: "" }); j22Comp(); guardar(); });
+  document.getElementById("j22Copiar").addEventListener("click", function () {
+    var ta = document.getElementById("j22Txt"), msg = document.getElementById("j22Msg");
+    function ok() { msg.textContent = "Resumen copiado."; }
+    function plan() { ta.focus(); ta.select(); msg.textContent = "Texto seleccionado: usa Ctrl+C o mantén pulsado para copiar."; }
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(ok, plan); else plan(); } catch (e) { plan(); }
+  });
+
   /* pestañas y barra superior */
-  var tabActiva = "acciones";
-  try { tabActiva = localStorage.getItem("libreta-tab") || "acciones"; } catch (e) { /* sin almacenamiento */ }
-  var textoBarra = { reunion: ["", 0], acciones: ["", 0] };
+  var TABS = ["j22", "acciones", "reunion"];
+  var tabActiva = "j22";
+  try { var guardada = localStorage.getItem("libreta-tab"); if (TABS.indexOf(guardada) >= 0) tabActiva = guardada; } catch (e) { /* sin almacenamiento */ }
+  var textoBarra = { j22: ["", 0], reunion: ["", 0], acciones: ["", 0] };
   function pintarBarra() {
     var t = textoBarra[tabActiva];
     document.getElementById("avance").textContent = t[0];
@@ -858,11 +1009,11 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
   function mostrarTab(t) {
     tabActiva = t;
     try { localStorage.setItem("libreta-tab", t); } catch (e) { /* sin almacenamiento */ }
-    document.getElementById("tab-reunion").hidden = t !== "reunion";
-    document.getElementById("tab-acciones").hidden = t !== "acciones";
-    document.getElementById("chips-reunion").hidden = t !== "reunion";
-    document.getElementById("chips-acciones").hidden = t !== "acciones";
-    ["reunion", "acciones"].forEach(function (k) { document.getElementById("tabBtn-" + k).setAttribute("aria-selected", String(k === t)); });
+    TABS.forEach(function (k) {
+      document.getElementById("tab-" + k).hidden = k !== t;
+      document.getElementById("chips-" + k).hidden = k !== t;
+      document.getElementById("tabBtn-" + k).setAttribute("aria-selected", String(k === t));
+    });
     pintarBarra();
     window.scrollTo(0, 0);
   }
@@ -873,6 +1024,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
     textoBarra.acciones = [listas + " de " + ACC.length + " compromisos listos · " + porPedir + " cosas por pedir" + (venc ? " · " + venc + " vencidos" : ""), listas / ACC.length * 100];
     pintarBarra();
   }
+  document.getElementById("tabBtn-j22").addEventListener("click", function () { mostrarTab("j22"); });
   document.getElementById("tabBtn-acciones").addEventListener("click", function () { mostrarTab("acciones"); });
   document.getElementById("tabBtn-reunion").addEventListener("click", function () { mostrarTab("reunion"); });
   document.getElementById("msgGabriela").addEventListener("click", function () { mensaje("gabriela"); });
@@ -956,7 +1108,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
     });
     var hechos = grupos.acordado.length + grupos.escalar.length;
     textoBarra.reunion = [hechos + " de " + TODOS.length + " temas con decisión o escalados", hechos / TODOS.length * 100];
-    refrescarAcc();
+    refrescarAcc(); j22Refrescar();
     var tx = "REUNIÓN GRUPO VEXTOR · 16/10/2026 · Puntos 5 y 6\n";
     function bloque(titulo, lista) { if (lista.length) tx += "\n" + titulo + "\n" + lista.map(etiqueta).join("\n") + "\n"; }
     bloque("ACUERDOS", grupos.acordado);
@@ -987,7 +1139,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
     var ordenadas = ACC.slice().sort(function (a, b) { return a.f < b.f ? -1 : a.f > b.f ? 1 : (a.p === b.p ? 0 : a.p === "Alta" ? -1 : 1); });
     document.getElementById("accLista").textContent = "";
     ordenadas.forEach(function (a) { document.getElementById("accLista").appendChild(fichaAcc(a)); });
-    filtrosAccBarra(); reqs(); acuerdos(); csvInfo();
+    filtrosAccBarra(); reqs(); acuerdos(); csvInfo(); j22Secciones(); j22Comp();
     ITEMS.forEach(function (item) { document.getElementById(item.p === 5 ? "fichas5" : "fichas6").appendChild(ficha(item)); });
     calc();
     refrescar();
