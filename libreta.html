@@ -121,7 +121,7 @@ details.viejo { margin-top: 18px; }
 details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted); padding: 10px 2px; }
 
 .tabs { display: flex; gap: 6px; margin-bottom: 2px; }
-.tabs button { flex: 1 1 0; min-height: 44px; border-radius: 10px 10px 0 0; border-bottom: 3px solid transparent; font-size: 14.5px; }
+.tabs button { flex: 1 1 0; min-height: 44px; border-radius: 10px 10px 0 0; border-bottom: 3px solid transparent; font-size: 13.5px; padding: 8px 4px; line-height: 1.2; }
 .tabs button[aria-selected="true"] { background: var(--card); color: var(--accent); border-color: var(--line); border-bottom-color: var(--accent); }
 .due { font-size: 12.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .due.v { color: var(--bad); } .due.h { color: var(--warn); } .due.ok { color: var(--muted); } .due.l { color: var(--ok); }
@@ -155,14 +155,17 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
 .hora { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; }
 .comp { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
 @media (min-width: 720px) { .comp { grid-template-columns: 170px 1fr 150px 44px; } }
+.ins { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; border: 1px solid currentColor; margin-right: 8px; vertical-align: 1px; }
+.ins.si { color: var(--ok); } .ins.med { color: var(--warn); } .ins.no { color: var(--bad); }
 </style>
 
 <div class="bar">
   <div class="bar-in">
     <div class="tabs" role="tablist" aria-label="Secciones de la libreta">
       <button type="button" role="tab" id="tabBtn-j22" data-tab="j22" aria-selected="true">Jueves 22/10</button>
-      <button type="button" role="tab" id="tabBtn-acciones" data-tab="acciones" aria-selected="false">Después del 16/10</button>
-      <button type="button" role="tab" id="tabBtn-reunion" data-tab="reunion" aria-selected="false">Reunión · puntos 5 y 6</button>
+      <button type="button" role="tab" id="tabBtn-avances" data-tab="avances" aria-selected="false">Avances</button>
+      <button type="button" role="tab" id="tabBtn-acciones" data-tab="acciones" aria-selected="false">Reunión anterior</button>
+      <button type="button" role="tab" id="tabBtn-reunion" data-tab="reunion" aria-selected="false">Puntos 5 y 6</button>
     </div>
     <div class="bar-top"><b id="avance">Cargando…</b><span class="sync" id="sync"></span></div>
     <div class="meter" aria-hidden="true"><i id="meterFill"></i></div>
@@ -173,6 +176,11 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
       <a href="#j-gab">Gabriela</a>
       <a href="#j-jai">Jaime</a>
       <a href="#j-cie">Cierre</a>
+    </nav>
+    <nav class="chips" id="chips-avances" aria-label="Secciones de avances" hidden>
+      <a href="#av-si">Puedo informar</a>
+      <a href="#av-med">En proceso</a>
+      <a href="#av-no">No decir que está hecho</a>
     </nav>
     <nav class="chips" id="chips-reunion" aria-label="Secciones de la reunión" hidden>
       <a href="#antes">Antes</a>
@@ -251,6 +259,18 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
   <button type="button" class="primary" id="copiar">Copiar resumen</button>
 </div>
 <div class="note">Lo que dejes en "Escalar a Jaime" va aparte en el resumen: son las decisiones que no se toman en la sala.</div>
+</div>
+
+<div id="tab-avances" hidden>
+<p class="eyebrow">Para tu turno de mañana</p>
+<h1>Avances que puedo informar</h1>
+<p class="muted small lead">Marca cada uno cuando lo informes. Probé todo lo verde con datos de prueba; antes de la reunión, abre el CRM y confirma que cargó.</p>
+<h2 id="av-si">Ya funciona</h2>
+<div class="card" id="avSi"></div>
+<h2 id="av-med">En proceso: depende de otros</h2>
+<div class="card" id="avMed"></div>
+<h2 id="av-no">No decir que está hecho</h2>
+<div class="card" id="avNo"></div>
 </div>
 
 <div id="tab-acciones" hidden>
@@ -996,11 +1016,59 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
     try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(ok, plan); else plan(); } catch (e) { plan(); }
   });
 
+
+  /* ======================= Avances que puedo informar ======================= */
+  var AVANCES = {
+    si: [
+      ["v1", "Pedido mínimo al mayor", "$500 o 100 unidades (lo que se cumpla primero). Salomón no registra pedidos por debajo: ayuda a completar y manda el detal a los distribuidores locales."],
+      ["v2", "Reserva de inventario por 7 días", "Si no hay pago en 7 días, el inventario se libera solo y se avisa al cliente. Con comprobante recibido ya no vence."],
+      ["v3", "Tasa del BCV en dólares y euros", "Se actualiza sola cada 3 horas, contrastada con otra fuente, y se ve arriba en el CRM. El total que recibe el cliente trae su equivalente en bolívares."],
+      ["v4", "Agente de importación", "Audita la liquidación, deja un borrador y no toca costos hasta que se aprueba. Al recibir la mercancía fija el costo promedio ponderado entre embarques. Auditó la liquidación preliminar de Gabriela: los números cuadran y hay 8 puntos por confirmar."],
+      ["v5", "Usuarios y roles", "Cuentas con clave temporal y cambio obligatorio en el primer ingreso. Administrador ve CRM y ERP; vendedor solo sus conversaciones. Necesito los correos de Jaime, Gabriela, Alirio y Roberson."],
+      ["v6", "Catálogo RG cargado", "12.118 productos con precio de mayor y detal, de la lista vigente del 21/09."],
+      ["v7", "Ya estaba antes de la reunión", "Ciclo de venta completo con avisos automáticos al cliente, agente de seguridad que revisa comprobantes (no se despacha sin pago confirmado), Salomón como vendedor al mayor, y el ERP: inventario, proveedores, compras, reportes, crédito, cobranza y auditoría."]
+    ],
+    med: [
+      ["m1", "Precios sugeridos con margen", "Listos para construirse cuando Jaime defina el margen (20 % a 25 %) y si se vende por unidad o por caja."],
+      ["m2", "Escalamiento por zona", "Falta saber qué zona atiende cada vendedor. Hoy la asignación de contactos es manual."],
+      ["m3", "Línea Digitel 0422 con Meta", "Depende de que Gabriela la active. Hoy el canal funciona por WeCall y hay que preguntarles cómo se incorpora un número nuevo."],
+      ["m4", "Listas de aliados", "Falta recibir las de Fabrilara/Magnus y los radiadores de Jair Moreno; la de RG ya está."],
+      ["m5", "Módulo fiscal", "Espera lo que diga hoy la Lic. Nazaret: factura o nota de entrega, IGTF y libros."],
+      ["m6", "Página web institucional", "Ya llegó la autorización de Mauri (Fram y Prestone, sin exclusividad territorial) y los logos de Prestone. Faltan los productos con imágenes."]
+    ],
+    no: [
+      ["x1", "Pruebas del bot en audio", "No existe el módulo de voz en Ventas 24. Solo hay un script antiguo de llamadas de salida. Falta el equipo y su calibración."],
+      ["x2", "Costos definitivos", "La liquidación es preliminar: flete, arancel y 13 gastos son estimados. No se debe aprobar el embarque ni fijar precios todavía."],
+      ["x3", "Descuento de stock", "El stock se descuenta al reservar el pedido, no al despachar. Si alguien pregunta cuándo se descuenta, esa es la respuesta."],
+      ["x4", "IVA en el bot", "El bot no tiene instrucciones sobre IVA: no prometer que cotiza con o sin IVA."]
+    ]
+  };
+  function avances() {
+    [["si", "avSi"], ["med", "avMed"], ["no", "avNo"]].forEach(function (g) {
+      var cont = document.getElementById(g[1]); cont.textContent = "";
+      var tag = { si: ["Funciona", "si"], med: ["En proceso", "med"], no: ["Aún no", "no"] }[g[0]];
+      AVANCES[g[0]].forEach(function (p) {
+        var fila = h("div", { "class": "pt" + (jd().chk[p[0]] ? " ok" : "") });
+        var cb = h("input", { type: "checkbox", id: "jc_" + p[0], "aria-label": "Informado: " + p[1] }); cb.checked = !!jd().chk[p[0]];
+        var tx = h("label", { "class": "tx", "for": "jc_" + p[0] }, h("span", { "class": "ins " + tag[1], text: tag[0] }), h("b", { text: p[1] }), h("small", { text: p[2] }));
+        cb.addEventListener("change", function () { jd().chk[p[0]] = cb.checked; fila.classList.toggle("ok", cb.checked); guardar(); });
+        fila.appendChild(cb); fila.appendChild(tx);
+        cont.appendChild(fila);
+      });
+    });
+  }
+  function avancesRefrescar() {
+    var todos = AVANCES.si.concat(AVANCES.med, AVANCES.no), d = jd();
+    var n = todos.filter(function (p) { return d.chk[p[0]]; }).length;
+    textoBarra.avances = [n + " de " + todos.length + " avances informados", n / todos.length * 100];
+    pintarBarra();
+  }
+
   /* pestañas y barra superior */
-  var TABS = ["j22", "acciones", "reunion"];
+  var TABS = ["j22", "avances", "acciones", "reunion"];
   var tabActiva = "j22";
   try { var guardada = localStorage.getItem("libreta-tab"); if (TABS.indexOf(guardada) >= 0) tabActiva = guardada; } catch (e) { /* sin almacenamiento */ }
-  var textoBarra = { j22: ["", 0], reunion: ["", 0], acciones: ["", 0] };
+  var textoBarra = { j22: ["", 0], avances: ["", 0], reunion: ["", 0], acciones: ["", 0] };
   function pintarBarra() {
     var t = textoBarra[tabActiva];
     document.getElementById("avance").textContent = t[0];
@@ -1025,6 +1093,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
     pintarBarra();
   }
   document.getElementById("tabBtn-j22").addEventListener("click", function () { mostrarTab("j22"); });
+  document.getElementById("tabBtn-avances").addEventListener("click", function () { mostrarTab("avances"); });
   document.getElementById("tabBtn-acciones").addEventListener("click", function () { mostrarTab("acciones"); });
   document.getElementById("tabBtn-reunion").addEventListener("click", function () { mostrarTab("reunion"); });
   document.getElementById("msgGabriela").addEventListener("click", function () { mensaje("gabriela"); });
@@ -1108,7 +1177,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
     });
     var hechos = grupos.acordado.length + grupos.escalar.length;
     textoBarra.reunion = [hechos + " de " + TODOS.length + " temas con decisión o escalados", hechos / TODOS.length * 100];
-    refrescarAcc(); j22Refrescar();
+    refrescarAcc(); j22Refrescar(); avancesRefrescar();
     var tx = "REUNIÓN GRUPO VEXTOR · 16/10/2026 · Puntos 5 y 6\n";
     function bloque(titulo, lista) { if (lista.length) tx += "\n" + titulo + "\n" + lista.map(etiqueta).join("\n") + "\n"; }
     bloque("ACUERDOS", grupos.acordado);
@@ -1139,7 +1208,7 @@ details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
     var ordenadas = ACC.slice().sort(function (a, b) { return a.f < b.f ? -1 : a.f > b.f ? 1 : (a.p === b.p ? 0 : a.p === "Alta" ? -1 : 1); });
     document.getElementById("accLista").textContent = "";
     ordenadas.forEach(function (a) { document.getElementById("accLista").appendChild(fichaAcc(a)); });
-    filtrosAccBarra(); reqs(); acuerdos(); csvInfo(); j22Secciones(); j22Comp();
+    filtrosAccBarra(); reqs(); acuerdos(); csvInfo(); j22Secciones(); j22Comp(); avances();
     ITEMS.forEach(function (item) { document.getElementById(item.p === 5 ? "fichas5" : "fichas6").appendChild(ficha(item)); });
     calc();
     refrescar();
