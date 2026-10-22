@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Prueba del bot de voz</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --fg:#1b1f27; --muted:#5b6472; --line:#d9dee7; --accent:#1f5eff; --ok:#1a7f4b; --bad:#b3261e; color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#10131a; --card:#181c25; --fg:#e8ebf1; --muted:#9aa4b5; --line:#2a3140; --accent:#6c93ff; --ok:#4cc38a; --bad:#ff8a80; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:16px; }
+  h1 { font-size:22px; margin:8px 0 4px; }
+  p { margin:6px 0; } .muted { color:var(--muted); font-size:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-top:12px; }
+  label { display:block; font-size:13px; font-weight:700; color:var(--muted); margin-bottom:4px; }
+  input[type=text] { width:100%; font:inherit; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--fg); min-height:46px; }
+  button { font:inherit; font-weight:700; min-height:46px; padding:8px 16px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.rec { background:var(--bad); color:#fff; border-color:var(--bad); }
+  .fila { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; align-items:center; }
+  .fila input { flex:1 1 240px; }
+  #log { display:grid; gap:10px; }
+  .msg { padding:10px 14px; border-radius:12px; max-width:92%; white-space:pre-wrap; }
+  .cli { background:var(--accent); color:#fff; justify-self:end; }
+  .bot { background:var(--bg); border:1px solid var(--line); }
+  .meta { font-size:12.5px; color:var(--muted); margin-top:4px; }
+  .aviso { border-left:5px solid var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Prueba del bot de voz</h1>
+  <p class="muted">Hablas o escribes como si fueras el cliente y escuchas la respuesta con la voz del navegador. No usa Twilio ni envía nada por WhatsApp. Para voz usa Chrome o Edge.</p>
+
+  <div class="card aviso">
+    <b>Ojo:</b> el cerebro sí trabaja con el sistema real. Si confirmas un pedido, queda registrado y reserva stock con el teléfono de prueba. Cancélalo después desde el CRM (Pedidos).
+  </div>
+
+  <div class="card">
+    <label for="tel">Teléfono de prueba (nunca el de un cliente real)</label>
+    <input type="text" id="tel" value="+580000000001" inputmode="tel">
+    <div class="fila">
+      <button class="primary" id="iniciar" type="button">Empezar llamada</button>
+      <button id="colgar" type="button">Colgar</button>
+      <label style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="vozOn" checked> Escuchar respuestas</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="log" aria-live="polite"></div>
+    <div class="fila">
+      <button id="mic" type="button" title="Habla">🎤 Hablar</button>
+      <input type="text" id="texto" placeholder="o escribe lo que diría el cliente…" autocomplete="off">
+      <button class="primary" id="enviar" type="button">Enviar</button>
+    </div>
+    <p class="meta" id="estado" role="status"></p>
+  </div>
+</main>
+<script>
+(function () {
+  "use strict";
+  var callsid = null, activo = false, escuchando = false, reco = null;
+  var $ = function (id) { return document.getElementById(id); };
+  var log = $("log");
+
+  function linea(clase, texto, meta) {
+    var d = document.createElement("div"); d.className = "msg " + clase; d.textContent = texto;
+    if (meta) { var m = document.createElement("div"); m.className = "meta"; m.textContent = meta; d.appendChild(m); }
+    log.appendChild(d); d.scrollIntoView({ block: "nearest" });
+  }
+  function decir(texto) {
+    if (!$("vozOn").checked || !window.speechSynthesis) return;
+    speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(texto); u.lang = "es-MX"; u.rate = 1.02;
+    var v = speechSynthesis.getVoices().filter(function (x) { return /^es/i.test(x.lang); });
+    var m = v.filter(function (x) { return /male|hombre|jorge|diego|pablo|raul/i.test(x.name); })[0] || v[0];
+    if (m) u.voice = m;
+    speechSynthesis.speak(u);
+  }
+  function api(cuerpo) {
+    return fetch("/api/voz/simular", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) })
+      .then(function (r) {
+        if (r.status === 401) { location.href = "/login?next=/voz-prueba"; return null; }
+        return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "HTTP " + r.status); return d; });
+      });
+  }
+  function respuesta(d) {
+    if (!d) return;
+    callsid = d.callsid;
+    var meta = [];
+    if (d.whatsapp_que_saldria && d.whatsapp_que_saldria.length) meta.push("📱 Saldría por WhatsApp: " + d.whatsapp_que_saldria[0].replace(/\n/g, " ").slice(0, 160));
+    if (d.colgar) meta.push("☎️ El vendedor cuelga");
+    linea("bot", d.dice, meta.join("\n"));
+    decir(d.dice);
+    if (d.colgar) activo = false;
+  }
+  $("iniciar").addEventListener("click", function () {
+    log.textContent = ""; callsid = null; activo = true; $("estado").textContent = "Llamando…";
+    api({ telefono: $("tel").value.trim() }).then(function (d) { $("estado").textContent = ""; respuesta(d); }).catch(function (e) { $("estado").textContent = e.message; });
+  });
+  $("colgar").addEventListener("click", function () { activo = false; if (window.speechSynthesis) speechSynthesis.cancel(); $("estado").textContent = "Llamada terminada."; });
+  function enviar(t) {
+    t = (t || "").trim();
+    if (!t) return;
+    if (!activo) { $("estado").textContent = "Pulsa «Empezar llamada» primero."; return; }
+    linea("cli", t); $("texto").value = ""; $("estado").textContent = "Pensando…";
+    var t0 = Date.now();
+    api({ telefono: $("tel").value.trim(), callsid: callsid, texto: t }).then(function (d) {
+      $("estado").textContent = "Respondió en " + ((Date.now() - t0) / 1000).toFixed(1) + " s";
+      respuesta(d);
+    }).catch(function (e) { $("estado").textContent = e.message; });
+  }
+  $("enviar").addEventListener("click", function () { enviar($("texto").value); });
+  $("texto").addEventListener("keydown", function (e) { if (e.key === "Enter") enviar($("texto").value); });
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { $("mic").disabled = true; $("mic").title = "Este navegador no reconoce voz: usa Chrome o Edge"; }
+  else {
+    reco = new SR(); reco.lang = "es-MX"; reco.interimResults = false; reco.maxAlternatives = 1;
+    reco.onresult = function (e) { enviar(e.results[0][0].transcript); };
+    reco.onend = function () { escuchando = false; $("mic").classList.remove("rec"); $("mic").textContent = "🎤 Hablar"; };
+    reco.onerror = function (e) { $("estado").textContent = "Micrófono: " + e.error; };
+    $("mic").addEventListener("click", function () {
+      if (escuchando) { reco.stop(); return; }
+      if (window.speechSynthesis) speechSynthesis.cancel();
+      escuchando = true; $("mic").classList.add("rec"); $("mic").textContent = "● Escuchando…"; reco.start();
+    });
+  }
+})();
+</script>
+</body>
+</html>

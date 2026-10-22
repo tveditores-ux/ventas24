@@ -624,6 +624,19 @@ def voz_estado():
     return ("", 204)
 
 
+@app.route("/voz-prueba", methods=["GET"])
+def voz_prueba_page():
+    """Pantalla para probar el bot de voz con el micrófono y los altavoces del navegador (sin Twilio)."""
+    usuario = _usuario_actual()
+    if not usuario:
+        return redirect("/login?next=/voz-prueba")
+    if usuario["rol"] not in ROLES_ADMIN:
+        return "No autorizado", 403
+    resp = send_from_directory(os.path.dirname(os.path.abspath(__file__)), "voz_prueba.html")
+    resp.headers["Cache-Control"] = "no-store"; resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resp
+
+
 @app.route("/api/voz/simular", methods=["POST"])
 @requiere_sesion(roles=ROLES_ADMIN)
 def api_voz_simular():
