@@ -27,6 +27,7 @@ import hmac
 import os
 import sys
 import threading
+import uuid
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -44,6 +45,7 @@ import analista
 import ciclo
 import bcv
 import erp
+import voz
 import importacion
 import zipfile
 import eventos
@@ -544,6 +546,124 @@ def erp_tasa_actualizar():
     if r["ok"]:
         db.registrar_accion("Administración", None, "actualizar_tasa_bcv", r, request.usuario["nombre"])
     return jsonify({**r, "tasa": db.tasa_vigente()}), (200 if r["ok"] else 502)
+
+
+# ---------------------------------------------------------------------
+# Canal de voz (Twilio). Ver voz.py.
+# ---------------------------------------------------------------------
+
+def _url_voz(ruta: str) -> str:
+    base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/") or request.url_root.rstrip("/")
+    return base + ruta
+
+
+def _twiml(xml: str):
+    return Response(xml, mimetype="text/xml")
+
+
+def _voz_protegida(f):
+    @wraps(f)
+    def envoltura(*args, **kwargs):
+        if not voz.firma_valida(request):
+            return Response("firma de Twilio inválida o canal de voz sin configurar", status=403)
+        return f(*args, **kwargs)
+    return envoltura
+
+
+@app.route("/voz/entrante", methods=["POST"])
+@_voz_protegida
+def voz_entrante():
+    telefono = request.form.get("To") if request.args.get("saliente") else request.form.get("From")
+    callsid = request.form.get("CallSid", "")
+    saludo = voz.iniciar(telefono or "desconocido", callsid, saliente=bool(request.args.get("saliente")))
+    return _twiml(voz.twiml_hablar(voz.voz_vigilante.para_hablar(saludo), _url_voz("/voz/turno")))
+
+
+@app.route("/voz/turno", methods=["POST"])
+@_voz_protegida
+def voz_turno():
+    callsid = request.form.get("CallSid", "")
+    telefono = (request.form.get("To") if request.form.get("Direction", "").startswith("outbound") else request.form.get("From")) or "desconocido"
+    texto = (request.form.get("SpeechResult") or "").strip()
+    try:
+        confianza = float(request.form.get("Confidence") or 1)
+    except ValueError:
+        confianza = 1.0
+    url = _url_voz("/voz/turno")
+    try:
+        if not texto:
+            if voz.contar(callsid, "silencios") > voz.MAX_SILENCIOS:
+                return _twiml(voz.twiml_hablar("Parece que no te escucho. Te escribo por WhatsApp. Un saludo.", url, colgar=True))
+            return _twiml(voz.twiml_hablar("¿Sigues ahí? Cuéntame qué necesitas.", url))
+        if confianza < voz.CONFIANZA_MINIMA and voz.contar(callsid, "incomprendidos") <= voz.MAX_INCOMPRENDIDOS:
+            return _twiml(voz.twiml_hablar("Disculpa, no te escuché bien. ¿Me lo repites?", url))
+        voz.reiniciar_contadores(callsid)
+        r = voz.responder(telefono, callsid, texto)
+        return _twiml(voz.twiml_hablar(r["texto"], url, colgar=r["colgar"]))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        eventos.registrar("error", telefono, f"voz: {e}", ok=False)
+        try:
+            cid = db.obtener_o_crear_contacto(telefono, tipo="mayorista")
+            db.crear_solicitud(cid, "otro", "Llamada con falla técnica: escribirle por WhatsApp", f"El cliente dijo: {texto[:300]}")
+        except Exception:
+            pass
+        return _twiml(voz.twiml_hablar("Tuve un problema técnico. Una persona del equipo te escribe por WhatsApp. Disculpa y gracias por llamar.", url, colgar=True))
+
+
+@app.route("/voz/estado", methods=["POST"])
+@_voz_protegida
+def voz_estado():
+    if request.form.get("CallStatus") in ("completed", "busy", "no-answer", "failed", "canceled"):
+        try:
+            seg = int(request.form.get("CallDuration") or 0)
+        except ValueError:
+            seg = 0
+        voz.terminar(request.form.get("CallSid", ""), seg)
+    return ("", 204)
+
+
+@app.route("/api/voz/simular", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def api_voz_simular():
+    """Prueba el cerebro de voz sin Twilio: manda texto como si fuera lo que el cliente dijo. No envía WhatsApp."""
+    d = request.get_json(silent=True) or {}
+    telefono = db.normalizar_telefono((d.get("telefono") or "").strip())
+    if not telefono:
+        return jsonify({"error": "falta el teléfono de prueba (formato +58…)"}), 400
+    callsid = d.get("callsid") or "SIM" + uuid.uuid4().hex[:12]
+    texto = (d.get("texto") or "").strip()
+    if not texto:
+        saludo = voz.iniciar(telefono, callsid)
+        return jsonify({"callsid": callsid, "dice": voz.voz_vigilante.para_hablar(saludo), "colgar": False})
+    r = voz.responder(telefono, callsid, texto, simulacion=True)
+    return jsonify({"callsid": callsid, "dice": r["texto"], "crudo": r["crudo"], "colgar": r["colgar"], "whatsapp_que_saldria": r["whatsapp"],
+                    "twiml": voz.twiml_hablar(r["texto"], _url_voz("/voz/turno"), colgar=r["colgar"])})
+
+
+@app.route("/api/voz/llamar", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def api_voz_llamar():
+    """Llamada saliente: solo a quien la espera (prueba o seguimiento acordado)."""
+    d = request.get_json(silent=True) or {}
+    try:
+        sid = voz.llamar((d.get("telefono") or "").strip())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    db.registrar_accion("Administración", None, "llamada_saliente", {"telefono": d.get("telefono")}, request.usuario["nombre"])
+    return jsonify({"callsid": sid})
+
+
+@app.route("/api/voz/llamadas", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def api_voz_llamadas():
+    voz.asegurar_tablas()
+    with db.conectar() as con:
+        filas = con.execute(
+            "SELECT v.*, c.nombre, c.telefono FROM voz_llamadas v LEFT JOIN contactos c ON c.id = v.contacto_id ORDER BY v.inicio DESC LIMIT 50"
+        ).fetchall()
+    return jsonify([dict(f) for f in filas])
 
 
 @app.route("/api/erp/cobranza", methods=["GET"])

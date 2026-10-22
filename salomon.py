@@ -139,6 +139,23 @@ class Salomon(base.Agente):
         self._precios = set()        # precios y totales vistos en este turno
         self._resultados = []        # resultados de herramientas de este turno (para el revisor)
         self._registro_hecho = False
+        self.max_tokens = MAX_TOKENS
+        self.mensaje_derivacion = MENSAJE_DERIVACION
+
+    def _herramientas(self):
+        return [
+            base.HERRAMIENTA_CATALOGO, base.HERRAMIENTA_LISTA_ESPERA,
+            HERRAMIENTA_PEDIDO, HERRAMIENTA_MIS_PEDIDOS, HERRAMIENTA_EQUIPO, HERRAMIENTA_HUMANO,
+        ]
+
+    def _vigilar(self, texto, historial, equipo_avisado):
+        """Las dos capas del vigilante. El canal de voz agrega sus propias reglas."""
+        veredicto = vigilante.revisar_reglas(texto, self._precios, self._registro_hecho, equipo_avisado)
+        if veredicto.ok:
+            veredicto = vigilante.revisar_con_modelo(
+                self.client, self.modelo_vigilante, texto, historial, self._resultados
+            )
+        return veredicto
 
     # -- herramientas ---------------------------------------------------
     def _ejecutar_herramienta(self, nombre, params):
@@ -315,17 +332,14 @@ class Salomon(base.Agente):
             if msg["role"] == "assistant" and isinstance(msg["content"], str):
                 self._precios |= vigilante.montos_en(msg["content"])
 
-        herramientas = [
-            base.HERRAMIENTA_CATALOGO, base.HERRAMIENTA_LISTA_ESPERA,
-            HERRAMIENTA_PEDIDO, HERRAMIENTA_MIS_PEDIDOS, HERRAMIENTA_EQUIPO, HERRAMIENTA_HUMANO,
-        ]
+        herramientas = self._herramientas()
         reintentos = 0
 
         for _ in range(MAX_VUELTAS):
             eventos.registrar("claude_llamado", self.telefono, self.modelo, agente_tipo=self.tipo)
             respuesta = self.client.messages.create(
                 model=self.modelo,
-                max_tokens=MAX_TOKENS,
+                max_tokens=self.max_tokens,
                 system=self.system_prompt,
                 tools=herramientas,
                 messages=historial,
@@ -339,7 +353,7 @@ class Salomon(base.Agente):
                 if reintentos_corte > 1:
                     self._cortes = 0
                     self._derivar("la respuesta salió cortada dos veces")
-                    return self._guardar(texto_usuario, MENSAJE_DERIVACION)
+                    return self._guardar(texto_usuario, self.mensaje_derivacion)
                 continue
             self._cortes = 0
             historial.append({"role": "assistant", "content": respuesta.content})
@@ -364,18 +378,14 @@ class Salomon(base.Agente):
 
             # Si Salomón pasó la conversación a una persona, no se vigila ni se reintenta.
             if any(r["herramienta"] == "pasar_a_humano" for r in self._resultados):
-                return self._guardar(texto_usuario, texto or MENSAJE_DERIVACION)
+                return self._guardar(texto_usuario, texto or self.mensaje_derivacion)
 
             # Puede decir que avisó al equipo si lo hizo en este turno o si ya hay una solicitud abierta suya.
             equipo_avisado = (
                 any(r["herramienta"] == "solicitar_al_equipo" for r in self._resultados)
                 or db.tiene_solicitud_abierta(self.contacto_id)
             )
-            veredicto = vigilante.revisar_reglas(texto, self._precios, self._registro_hecho, equipo_avisado)
-            if veredicto.ok:
-                veredicto = vigilante.revisar_con_modelo(
-                    self.client, self.modelo_vigilante, texto, historial, self._resultados
-                )
+            veredicto = self._vigilar(texto, historial, equipo_avisado)
             if veredicto.ok:
                 return self._guardar(texto_usuario, texto)
 
@@ -389,7 +399,7 @@ class Salomon(base.Agente):
             if reintentos > self.perfil.max_reintentos:
                 _bitacora(self.contacto_id, veredicto.capa, veredicto.motivo, texto, "derivado a humano")
                 self._derivar("el vigilante rechazó la respuesta varias veces: " + veredicto.motivo)
-                return self._guardar(texto_usuario, MENSAJE_DERIVACION)
+                return self._guardar(texto_usuario, self.mensaje_derivacion)
 
             _bitacora(self.contacto_id, veredicto.capa, veredicto.motivo, texto, "reintento")
             historial.append({
@@ -400,7 +410,7 @@ class Salomon(base.Agente):
 
         # Demasiadas vueltas de herramientas sin una respuesta final: mejor una persona.
         self._derivar("Salomón no llegó a una respuesta final")
-        return self._guardar(texto_usuario, MENSAJE_DERIVACION)
+        return self._guardar(texto_usuario, self.mensaje_derivacion)
 
     def _guardar(self, texto_usuario, texto):
         db.registrar_interaccion(self.contacto_id, "user", texto_usuario)
