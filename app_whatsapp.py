@@ -269,6 +269,19 @@ def libreta_page():
     return resp
 
 
+@app.route("/reunion-22", methods=["GET"])
+def reunion22_page():
+    """Hoja de la reunión del jueves 22/10: solo administración, con sesión del CRM."""
+    usuario = _usuario_actual()
+    if not usuario:
+        return redirect("/login?next=/reunion-22")
+    if usuario["rol"] not in ROLES_ADMIN:
+        return "No autorizado", 403
+    resp = send_from_directory(os.path.dirname(os.path.abspath(__file__)), "reunion22.html")
+    resp.headers["Cache-Control"] = "no-store"; resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resp
+
+
 @app.route("/hub", methods=["GET"])
 def hub_page():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "hub.html")
@@ -610,6 +623,11 @@ def api_libreta():
     """Notas personales de cada usuario: se guardan atadas a su id, nadie más las ve."""
     import json
     clave = f"libreta_{request.usuario['id']}"
+    sub = request.args.get("k", "")
+    if sub:   # otra hoja de notas del mismo usuario (por ejemplo la reunión del 22/10)
+        if not sub.isalnum() or len(sub) > 12:
+            return jsonify({"error": "hoja inválida"}), 400
+        clave += f"_{sub}"
     if request.method == "GET":
         crudo = db.obtener_config(clave)
         try:

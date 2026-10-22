@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Reunión del jueves 22/10</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* Libreta de mano para la reunión: una ficha por tema, campos grandes para tablet y celular, y un resumen que se copia al final. */
+:root {
+  --bg: #FBFBF8; --fg: #14213D; --muted: #4A5568; --card: #FFFFFF; --line: #DCE3E2; --field: #FFFFFF;
+  --accent: #A4500F; --accent-ink: #FFFFFF; --ok: #1F6F68; --warn: #8A5A00; --bad: #9B2C2C;
+  --head: #14213D; --head-ink: #FBFBF8; --bar: #EEF1EF; --soft: #F4F1EA;
+  --serif: "Source Serif 4", Georgia, serif; --sans: "DM Sans", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1A2E; --fg: #FBFBF8; --muted: #BFD8D5; --card: #1C2D4F; --line: #2E4468; --field: #16243F;
+    --accent: #F2A65A; --accent-ink: #14213D; --ok: #6FD1C4; --warn: #F2C56B; --bad: #F08A8A;
+    --head: #2E4468; --head-ink: #FBFBF8; --bar: #16243F; --soft: #223457; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1A2E; --fg: #FBFBF8; --muted: #BFD8D5; --card: #1C2D4F; --line: #2E4468; --field: #16243F;
+  --accent: #F2A65A; --accent-ink: #14213D; --ok: #6FD1C4; --warn: #F2C56B; --bad: #F08A8A;
+  --head: #2E4468; --head-ink: #FBFBF8; --bar: #16243F; --soft: #223457; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 var(--sans); padding-inline: 16px; }
+.wrap { max-width: 920px; margin: 0 auto; padding-block: 0 80px; }
+h1 { font-family: var(--serif); font-size: clamp(25px, 4vw, 34px); line-height: 1.15; margin: 18px 0 6px; text-wrap: balance; }
+h2 { font-family: var(--serif); font-size: clamp(21px, 2.6vw, 25px); margin: 38px 0 6px; scroll-margin-top: 120px; text-wrap: balance; }
+h3 { font-size: 18px; margin: 0; }
+p { margin: 0 0 8px; }
+.eyebrow { color: var(--accent); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; font-weight: 700; margin-top: 18px; }
+.muted { color: var(--muted); } .small { font-size: 14.5px; }
+
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bar); border-bottom: 1px solid var(--line); margin-inline: -16px; padding: 9px 16px 7px; }
+.bar-in { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 6px; }
+.bar-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bar-top b { font-size: 15px; }
+.sync { font-size: 12.5px; color: var(--muted); }
+.meter { height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .3s; }
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: thin; }
+.chips a { flex: none; color: var(--fg); text-decoration: none; font-size: 14px; font-weight: 500; padding: 8px 13px; min-height: 36px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
+.chips a:hover, .chips a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin-top: 12px; }
+.card.hecho { border-left: 6px solid var(--ok); }
+.card.escalar { border-left: 6px solid var(--warn); }
+.card.falta { border-left: 6px solid var(--bad); }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px 14px; flex-wrap: wrap; }
+.head .num { color: var(--accent); font-weight: 700; font-size: 13px; letter-spacing: 1.5px; }
+.timer { display: inline-flex; align-items: center; gap: 8px; }
+.timer .t { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 19px; min-width: 56px; text-align: right; }
+.timer .t.over { color: var(--bad); }
+button { font: inherit; font-size: 15px; font-weight: 700; min-height: 44px; padding: 8px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
+button:hover, button:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.primary:hover, button.primary:focus-visible { filter: brightness(1.08); color: var(--accent-ink); }
+.guia { margin: 10px 0 12px; display: grid; gap: 6px; }
+.guia div { background: var(--soft); border-radius: 10px; padding: 9px 12px; font-size: 15px; }
+.guia b { display: block; font-size: 11.5px; letter-spacing: 1.3px; text-transform: uppercase; color: var(--accent); margin-bottom: 1px; }
+.campos { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 640px) { .campos { grid-template-columns: 1.1fr 1.4fr 1fr; } .campos .ancho { grid-column: 1 / -1; } }
+label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); min-width: 0; }
+input, select, textarea { font: inherit; font-size: 16px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--fg); background: var(--field); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-height: 46px; width: 100%; min-width: 0; }
+textarea { min-height: 110px; resize: vertical; line-height: 1.45; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[type=checkbox] { width: 24px; height: 24px; min-height: 0; flex: none; accent-color: var(--accent); padding: 0; margin-top: 2px; }
+
+ul.check { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+ul.check li { display: flex; gap: 12px; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+ul.check label { cursor: pointer; min-width: 0; }
+ul.check li.done label { text-decoration: line-through; color: var(--muted); }
+
+.sku-grid { display: grid; gap: 12px; margin-top: 10px; }
+@media (min-width: 900px) { .sku-grid { grid-template-columns: repeat(3, 1fr); } }
+.sku .nums { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-top: 10px; }
+.sku .res { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; display: grid; gap: 4px; font-size: 15px; }
+.sku .res div { display: flex; justify-content: space-between; gap: 10px; }
+.sku .res b { font-variant-numeric: tabular-nums; }
+.sku .res .key { font-size: 17px; color: var(--accent); }
+.iva-fila { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-top: 8px; }
+.iva-fila label.f { width: 140px; }
+
+.resumen { width: 100%; min-height: 260px; font: 14.5px/1.5 var(--sans); white-space: pre-wrap; }
+.row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin-top: 10px; }
+.note { border-left: 4px solid var(--accent); padding: 10px 14px; background: var(--card); border-radius: 6px; color: var(--muted); margin-top: 12px; }
+@media (prefers-reduced-motion: reduce) { .meter i { transition: none; } }
+
+[hidden] { display: none !important; }
+details.f { padding: 0; overflow: hidden; }
+details.f > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 14px 18px; min-height: 52px; }
+details.f > summary::-webkit-details-marker { display: none; }
+details.f > summary::after { content: "▾"; margin-left: auto; color: var(--muted); }
+details.f[open] > summary::after { content: "▴"; }
+details.f .num { font-size: 15px; letter-spacing: 0; min-width: 38px; }
+details.f .tt { font-weight: 700; flex: 1 1 220px; min-width: 0; }
+details.f .cuerpo { padding: 0 18px 18px; border-top: 1px solid var(--line); }
+details.f .guia { margin-top: 12px; }
+details.f.hecho { border-left: 6px solid var(--ok); }
+details.f.escalar { border-left: 6px solid var(--warn); }
+details.f.falta { border-left: 6px solid var(--bad); }
+.bd { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.bd.ok { color: var(--ok); } .bd.comp { color: var(--warn); } .bd.pend { color: var(--bad); }
+.guia .ojo { background: transparent; border: 1px dashed var(--warn); }
+.guia .ojo b { color: var(--warn); }
+.marca { background: #FFE98A; color: #14213D; padding: 0 5px; border-radius: 4px; font-weight: 700; }
+.filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 4px; }
+.filtro { min-height: 40px; padding: 6px 14px; border-radius: 999px; font-size: 14px; }
+.filtro.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+details.viejo { margin-top: 18px; }
+details.viejo > summary { cursor: pointer; font-weight: 700; color: var(--muted); padding: 10px 2px; }
+
+.tabs { display: flex; gap: 6px; margin-bottom: 2px; }
+.tabs button { flex: 1 1 0; min-height: 44px; border-radius: 10px 10px 0 0; border-bottom: 3px solid transparent; font-size: 14.5px; }
+.tabs button[aria-selected="true"] { background: var(--card); color: var(--accent); border-color: var(--line); border-bottom-color: var(--accent); }
+.due { font-size: 12.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.due.v { color: var(--bad); } .due.h { color: var(--warn); } .due.ok { color: var(--muted); } .due.l { color: var(--ok); }
+.pr { font-size: 11.5px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+.pr.alta { color: var(--bad); }
+details.f.pend-ac { border-left: 6px solid transparent; }
+details.f.curso { border-left: 6px solid var(--warn); }
+details.f.bloq { border-left: 6px solid var(--bad); }
+details.f.listo { border-left: 6px solid var(--ok); opacity: .82; }
+.dep { margin-top: 8px; font-size: 14px; color: var(--warn); font-weight: 600; }
+.req { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-top: 10px; display: grid; gap: 8px; }
+.req.recibido { opacity: .6; }
+.req .rt { font-weight: 700; }
+.req .rp { font-size: 14.5px; color: var(--muted); }
+.req .rm { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; font-size: 13px; color: var(--muted); }
+.req select { width: auto; min-height: 42px; }
+.acu { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-top: 10px; }
+.acu h3 { font-size: 16.5px; }
+.acu .g { margin-top: 8px; display: grid; gap: 6px; }
+.acu .g div { background: var(--soft); border-radius: 10px; padding: 8px 12px; font-size: 14.5px; }
+.acu .g b { display: block; font-size: 11px; letter-spacing: 1.3px; text-transform: uppercase; color: var(--accent); }
+.acu .g .hoy b { color: var(--warn); }
+.cajaMsg { width: 100%; min-height: 220px; font: 14.5px/1.5 var(--sans); white-space: pre-wrap; margin-top: 10px; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pt { display: grid; grid-template-columns: 28px 1fr; gap: 6px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.pt:first-of-type { border-top: 0; }
+.pt .tx { font-size: 16px; line-height: 1.4; }
+.pt .tx small { display: block; color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+.pt.ok .tx { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--ok); }
+.pt input[type=text] { grid-column: 2; min-height: 42px; }
+.hora { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; }
+.comp { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
+@media (min-width: 720px) { .comp { grid-template-columns: 170px 1fr 150px 44px; } }
+</style>
+<style>
+details.sec { padding: 0; overflow: hidden; }
+details.sec > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 6px 12px; padding: 16px 18px; min-height: 56px; }
+details.sec > summary::-webkit-details-marker { display: none; }
+details.sec > summary::after { content: "▾"; margin-left: auto; color: var(--muted); }
+details.sec[open] > summary::after { content: "▴"; }
+details.sec .cuerpo { padding: 0 18px 12px; }
+details.sec .cuenta { font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+details.sec.completo { border-left: 6px solid var(--ok); }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="bar-in">
+    <div class="bar-top"><b id="avance">Cargando…</b><span class="sync" id="sync"></span></div>
+    <div class="meter" aria-hidden="true"><i id="meterFill"></i></div>
+  </div>
+</div>
+
+<div class="wrap">
+<p class="eyebrow">Grupo Vextor · jueves 22 de octubre · 9:00 am · Yarapark</p>
+<h1>Reunión del jueves</h1>
+<p class="muted small lead">Toca un bloque para abrirlo. Marca cada punto cuando lo trates y escribe la respuesta en una línea. Al final, anota los compromisos y copia el resumen.</p>
+<div id="secciones"></div>
+
+<h2 id="cierre">Cierre · compromisos de la próxima semana</h2>
+<div class="card" id="comp"></div>
+<div class="btnrow"><button type="button" id="addComp">+ Añadir compromiso</button></div>
+
+<h2>Resumen para enviar</h2>
+<textarea class="resumen" id="txt" readonly aria-label="Resumen de la reunión del jueves"></textarea>
+<div class="row">
+  <span class="small muted" id="msg" role="status"></span>
+  <button type="button" class="primary" id="copiar">Copiar resumen</button>
+</div>
+<p class="small muted" style="margin-top:24px"><a href="/libreta">Ir a la libreta completa</a></p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var J22 = [
+    { id: "naz", t: "1 · Lic. Nazaret · aclaratoria de preguntas", hora: "Primero", pts: [
+      ["n1", "¿Se factura o se entrega nota de entrega? ¿Qué factura es válida para el Seniat?", "Define el módulo fiscal."],
+      ["n2", "¿El IVA de importación es crédito fiscal? ¿Grupo Vextor es contribuyente ordinario?", "Hoy el IVA no está en el costo."],
+      ["n3", "¿Es contribuyente especial (retenciones de IVA)?", ""],
+      ["n4", "¿Cómo se trata el IGTF del 3 % y la facturación en dólares a crédito?", ""],
+      ["n5", "¿Qué libros de compras y ventas deben llevarse?", ""],
+      ["n6", "El costo financiero (12 %) y las contingencias (1,5 %): ¿dentro del costo del producto o aparte?", "Suben cada precio un 2,8 %."],
+      ["n7", "Su contacto directo, para consultas sin esperar la reunión", ""]
+    ]},
+    { id: "yo", t: "2 · Mi estatus · formato de requerimientos, avance del sistema y pruebas de audio", hora: "Mi turno", pts: [
+      ["y1", "Formato de requerimientos: entregarlo y explicar qué información necesita cada módulo", "Es el compromiso A18, vencía el 20/10."],
+      ["y2", "Ya funciona: pedido mínimo ($500 o 100 unidades), reserva de 7 días con liberación automática y tasa BCV en dólares y euros visible en el CRM", "Probado con datos de prueba."],
+      ["y3", "Ya funciona: agente de importación. Auditó la liquidación preliminar: cuadra, con 8 puntos por confirmar", "No aprobar el embarque hasta los datos definitivos."],
+      ["y4", "Ya funciona: usuarios con claves temporales para Jaime, Gabriela, Alirio y Roberson", "Necesito sus correos y el rol de cada uno."],
+      ["y5", "Audio: decir la verdad. El módulo de voz todavía no existe en Ventas 24; solo hay un script antiguo de llamadas de salida", "Falta la fecha y el tipo del equipo (hardware)."],
+      ["y6", "Liquidación preliminar: confirmar que le respondí a Gabriela y que le envié la lista de pendientes", "Confirma que los correos salieron."]
+    ]},
+    { id: "ali", t: "3 · Alirio Aranguren · distribución y nuevos aliados en Valencia", hora: "Pregúntale", pts: [
+      ["a1", "¿Qué aliados nuevos hay en Valencia y qué productos manejan?", "Para cargar sus listas."],
+      ["a2", "¿Qué zonas atiende él y su número para derivarle las conversaciones?", "Escalamiento por zona."],
+      ["a3", "¿Qué zona atiende Roberson? ¿Es vendedor?", "Define su rol en el sistema."],
+      ["a4", "¿Aporta audios reales de clientes para las pruebas de voz?", ""]
+    ]},
+    { id: "gab", t: "4 · Gabriela Mujica · estatus varios", hora: "Recuérdale", pts: [
+      ["g1", "Listas de Fabrilara/Magnus y de los radiadores (23/10)", ""],
+      ["g2", "Nombre, especificaciones e imágenes de los productos (23/10)", ""],
+      ["g3", "Línea Digitel 0422 y cuentas de Meta y Drive (23/10)", ""],
+      ["g4", "Quién autoriza el uso de la tasa del BCV (30/10)", ""],
+      ["g5", "Liquidación definitiva: fecha estimada, flete real, arancel y gastos confirmados", "Sin fecha todavía."],
+      ["g6", "Fecha de llegada y tipo del equipo de voz", ""]
+    ]},
+    { id: "jai", t: "5 · Jaime García · decisiones y cierre", hora: "Que decida", pts: [
+      ["j1", "Margen definitivo (entre 20 % y 25 %) para las listas de aliados y la regla de gran mayor", "Sin esto no hay precios sugeridos."],
+      ["j2", "¿El catálogo vende por unidad o por caja de 12?", "El costo hoy está por unidad."],
+      ["j3", "Quién aprueba los precios sugeridos y cuándo se calcula la comisión (al facturar o al cobrar)", ""],
+      ["j4", "Qué zona atiende cada vendedor y cuándo el bot cierra la venta solo", ""],
+      ["j5", "Roles de las cuentas: quién ve costos y márgenes", "Hoy los administradores ven todo."],
+      ["j6", "Firma del acuerdo de protección de Ventas 24, antes de dar accesos de administración a Gabriela", ""],
+      ["j7", "¿Quiere la autorización de Mauri para Fram y Prestone en carta formal?", "Llegó por correo, sin exclusividad territorial."],
+      ["j8", "Cómo se sincronizan los inventarios de los proveedores terceros (conexión directa o correo semanal)", ""]
+    ]}
+  ];
+
+  var N = J22.reduce(function (n, s) { return n + s.pts.length; }, 0);
+  var KEY = "reunion-22oct";
+  var state = { chk: {}, nota: {}, comp: [] };
+  try { var l = JSON.parse(localStorage.getItem(KEY) || "null"); if (l && l.chk) state = l; } catch (e) { /* sin almacenamiento */ }
+  var ref = false, escribiendo = false, pendiente = false, timer = null, dirty = false;
+  var syncEl = document.getElementById("sync");
+  function setSync(t) { syncEl.textContent = t; }
+  function lsSet() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* sin almacenamiento */ } }
+  function push() {
+    if (!ref) return Promise.resolve();
+    if (escribiendo) { pendiente = true; return Promise.resolve(); }
+    escribiendo = true;
+    return fetch("/api/libreta?k=22oct", { method: "PUT", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ estado: state }) })
+      .then(function (r) { setSync(r.status === 401 ? "La sesión venció: entra de nuevo; tus notas siguen en este navegador" : r.ok ? "Guardado en el servidor" : "No se pudo guardar en el servidor; queda en este navegador"); },
+            function () { setSync("Sin conexión: queda en este navegador"); })
+      .then(function () { escribiendo = false; if (pendiente) { pendiente = false; return push(); } });
+  }
+  function guardar() { dirty = true; lsSet(); refrescar(); clearTimeout(timer); timer = setTimeout(push, 700); }
+
+  function h(tag, attrs) {
+    var el = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      if (k === "text") el.textContent = attrs[k]; else if (k === "class") el.className = attrs[k]; else el.setAttribute(k, attrs[k]);
+    });
+    for (var i = 2; i < arguments.length; i++) if (arguments[i]) el.appendChild(arguments[i]);
+    return el;
+  }
+
+  var cuentas = {};
+  function cuenta(s) { var n = s.pts.filter(function (p) { return state.chk[p[0]]; }).length; return n; }
+  function pintarCuenta(s) {
+    var c = cuentas[s.id]; if (!c) return;
+    var n = cuenta(s); c.el.textContent = n + " de " + s.pts.length;
+    c.det.classList.toggle("completo", n === s.pts.length);
+  }
+  function secciones() {
+    var cont = document.getElementById("secciones"); cont.textContent = ""; cuentas = {};
+    J22.forEach(function (s, idx) {
+      var det = h("details", { "class": "card sec", id: "j-" + s.id });
+      if (idx === 0) det.open = true;
+      var cu = h("span", { "class": "cuenta" });
+      det.appendChild(h("summary", null, h("span", null, h("span", { "class": "hora", text: s.hora }), h("b", { text: s.t, style: "display:block;font-size:17px" })), cu));
+      var cuerpo = h("div", { "class": "cuerpo" });
+      s.pts.forEach(function (p) {
+        var fila = h("div", { "class": "pt" + (state.chk[p[0]] ? " ok" : "") });
+        var cb = h("input", { type: "checkbox", id: "c_" + p[0], "aria-label": "Tratado: " + p[1] }); cb.checked = !!state.chk[p[0]];
+        var tx = h("label", { "class": "tx", "for": "c_" + p[0], text: p[1] });
+        if (p[2]) tx.appendChild(h("small", { text: p[2] }));
+        var nota = h("input", { type: "text", id: "n_" + p[0], placeholder: "Respuesta o decisión…", "aria-label": "Respuesta a: " + p[1] }); nota.value = state.nota[p[0]] || "";
+        cb.addEventListener("change", function () { state.chk[p[0]] = cb.checked; fila.classList.toggle("ok", cb.checked); pintarCuenta(s); guardar(); });
+        nota.addEventListener("input", function () { state.nota[p[0]] = nota.value; guardar(); });
+        fila.appendChild(cb); fila.appendChild(tx); fila.appendChild(nota); cuerpo.appendChild(fila);
+      });
+      det.appendChild(cuerpo); cont.appendChild(det);
+      cuentas[s.id] = { el: cu, det: det }; pintarCuenta(s);
+    });
+  }
+  function compromisos() {
+    var cont = document.getElementById("comp"); cont.textContent = "";
+    if (!state.comp.length) cont.appendChild(h("p", { "class": "muted small", text: "Aún no hay compromisos. Pulsa «Añadir compromiso»." }));
+    state.comp.forEach(function (x, i) {
+      var q = h("input", { type: "text", placeholder: "Quién", "aria-label": "Responsable " + (i + 1) }); q.value = x.q || "";
+      var t = h("input", { type: "text", placeholder: "Qué se compromete", "aria-label": "Compromiso " + (i + 1) }); t.value = x.t || "";
+      var f = h("input", { type: "date", "aria-label": "Fecha del compromiso " + (i + 1) }); f.value = x.f || "";
+      var b = h("button", { type: "button", text: "✕", "aria-label": "Quitar el compromiso " + (i + 1) });
+      q.addEventListener("input", function () { x.q = q.value; guardar(); });
+      t.addEventListener("input", function () { x.t = t.value; guardar(); });
+      f.addEventListener("input", function () { x.f = f.value; guardar(); });
+      b.addEventListener("click", function () { state.comp.splice(i, 1); compromisos(); guardar(); });
+      cont.appendChild(h("div", { "class": "comp" }, q, t, f, b));
+    });
+  }
+  function refrescar() {
+    var hechos = Object.keys(state.chk).filter(function (k) { return state.chk[k]; }).length;
+    document.getElementById("avance").textContent = hechos + " de " + N + " puntos tratados";
+    document.getElementById("meterFill").style.width = (hechos / N * 100) + "%";
+    var tx = "REUNIÓN GRUPO VEXTOR · jueves 22/10/2026 · Yarapark\n";
+    J22.forEach(function (s) {
+      var lineas = s.pts.filter(function (p) { return state.chk[p[0]] || (state.nota[p[0]] || "").trim(); }).map(function (p) {
+        return "• " + (state.chk[p[0]] ? "" : "(pendiente) ") + p[1] + ((state.nota[p[0]] || "").trim() ? "\n   → " + state.nota[p[0]].trim() : "");
+      });
+      if (lineas.length) tx += "\n" + s.t.toUpperCase() + "\n" + lineas.join("\n") + "\n";
+    });
+    var comp = state.comp.filter(function (x) { return (x.t || "").trim(); });
+    if (comp.length) tx += "\nCOMPROMISOS PARA LA PRÓXIMA SEMANA\n" + comp.map(function (x) {
+      return "• " + (x.q ? x.q + ": " : "") + x.t.trim() + (x.f ? " (para el " + x.f.split("-").reverse().join("/") + ")" : "");
+    }).join("\n") + "\n";
+    document.getElementById("txt").value = tx;
+  }
+  document.getElementById("addComp").addEventListener("click", function () { state.comp.push({ q: "", t: "", f: "" }); compromisos(); guardar(); });
+  document.getElementById("copiar").addEventListener("click", function () {
+    var ta = document.getElementById("txt"), msg = document.getElementById("msg");
+    function ok() { msg.textContent = "Resumen copiado."; }
+    function plan() { ta.focus(); ta.select(); msg.textContent = "Texto seleccionado: usa Ctrl+C o mantén pulsado para copiar."; }
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(ok, plan); else plan(); } catch (e) { plan(); }
+  });
+
+  secciones(); compromisos(); refrescar(); setSync("Guardado en este navegador");
+  fetch("/api/libreta?k=22oct", { credentials: "same-origin" }).then(function (r) {
+    if (r.status === 401) { location.href = "/login?next=/reunion-22"; return null; }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  }).then(function (d) {
+    if (d === null) return;
+    ref = true;
+    if (d.estado && d.estado.chk && !dirty) { state = d.estado; lsSet(); secciones(); compromisos(); refrescar(); setSync("Guardado en el servidor"); }
+    else if (dirty) return push();
+    else setSync("Guardado en el servidor");
+  }).catch(function () { setSync("Sin conexión con el servidor: queda en este navegador"); });
+})();
+</script>
+</body>
+</html>
