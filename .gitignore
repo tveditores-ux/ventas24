@@ -16,3 +16,7 @@ __pycache__/
 salida.txt
 salida2.txt
 test_simple.py
+
+# la libreta personal vive en su propio repositorio privado, no aquí
+libreta*.html
+reunion22.html

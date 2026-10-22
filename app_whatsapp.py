@@ -173,6 +173,30 @@ def _clave_temporal() -> str:
     return "".join(secrets.choice(alfabeto) for _ in range(12))
 
 
+@app.route("/api/admin/respaldo", methods=["GET"])
+@requiere_sesion(roles=["super_admin"])
+def api_respaldo():
+    """Descarga una copia completa de la base de datos (SQLite, comprimida). Solo super administrador."""
+    import gzip, sqlite3, tempfile
+    fd, ruta = tempfile.mkstemp(suffix=".db"); os.close(fd)
+    try:
+        origen = sqlite3.connect(db.RUTA_DB)
+        destino = sqlite3.connect(ruta)
+        with destino:
+            origen.backup(destino)       # copia consistente aunque el sistema esté escribiendo
+        origen.close(); destino.close()
+        with open(ruta, "rb") as f:
+            datos = gzip.compress(f.read(), compresslevel=6)
+    finally:
+        try:
+            os.remove(ruta)
+        except OSError:
+            pass
+    db.registrar_accion("Respaldo", None, "descargar_respaldo", {"bytes": len(datos)}, request.usuario["nombre"])
+    nombre = "ventas24-respaldo-" + time.strftime("%Y%m%d-%H%M") + ".db.gz"
+    return Response(datos, mimetype="application/gzip", headers={"Content-Disposition": f'attachment; filename="{nombre}"', "Cache-Control": "no-store"})
+
+
 @app.route("/api/crm/usuarios", methods=["GET", "POST"])
 @requiere_sesion(roles=["super_admin"])
 def api_usuarios():
@@ -255,33 +279,6 @@ def crm_page():
 @app.route("/monitor", methods=["GET"])
 def monitor_page():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "monitor.html")
-
-
-@app.route("/libreta", methods=["GET"])
-def libreta_page():
-    """Libreta personal de la reunión: solo administración, con sesión del CRM."""
-    usuario = _usuario_actual()
-    if not usuario:
-        return redirect("/login?next=/libreta")
-    if usuario["rol"] not in ROLES_ADMIN:
-        return "No autorizado", 403
-    resp = send_from_directory(os.path.dirname(os.path.abspath(__file__)), "libreta.html")
-    resp.headers["Cache-Control"] = "no-store"
-    resp.headers["X-Robots-Tag"] = "noindex, nofollow"
-    return resp
-
-
-@app.route("/reunion-22", methods=["GET"])
-def reunion22_page():
-    """Hoja de la reunión del jueves 22/10: solo administración, con sesión del CRM."""
-    usuario = _usuario_actual()
-    if not usuario:
-        return redirect("/login?next=/reunion-22")
-    if usuario["rol"] not in ROLES_ADMIN:
-        return "No autorizado", 403
-    resp = send_from_directory(os.path.dirname(os.path.abspath(__file__)), "reunion22.html")
-    resp.headers["Cache-Control"] = "no-store"; resp.headers["X-Robots-Tag"] = "noindex, nofollow"
-    return resp
 
 
 @app.route("/hub", methods=["GET"])
@@ -748,33 +745,6 @@ def documento_control(documento_id):
 <tr><td></td><td class="n">IGTF {doc['igtf_pct']:g} %</td><td class="n">${doc['igtf']:.2f}</td></tr>
 <tr class="g"><td></td><td class="n">Total</td><td class="n">${doc['total']:.2f}</td></tr></table>
 <button onclick="window.print()">Imprimir</button></body></html>""", mimetype="text/html")
-
-
-@app.route("/api/libreta", methods=["GET", "PUT"])
-@requiere_sesion(roles=ROLES_ADMIN)
-def api_libreta():
-    """Notas personales de cada usuario: se guardan atadas a su id, nadie más las ve."""
-    import json
-    clave = f"libreta_{request.usuario['id']}"
-    sub = request.args.get("k", "")
-    if sub:   # otra hoja de notas del mismo usuario (por ejemplo la reunión del 22/10)
-        if not sub.isalnum() or len(sub) > 12:
-            return jsonify({"error": "hoja inválida"}), 400
-        clave += f"_{sub}"
-    if request.method == "GET":
-        crudo = db.obtener_config(clave)
-        try:
-            return jsonify({"estado": json.loads(crudo) if crudo else None})
-        except ValueError:
-            return jsonify({"estado": None})
-    estado = (request.get_json(silent=True) or {}).get("estado")
-    if not isinstance(estado, dict):
-        return jsonify({"error": "falta el estado de la libreta"}), 400
-    texto = json.dumps(estado, ensure_ascii=False)
-    if len(texto) > 200_000:
-        return jsonify({"error": "la libreta es demasiado grande"}), 413
-    db.guardar_config(clave, texto)
-    return jsonify({"ok": True})
 
 
 @app.route("/api/erp/proveedores", methods=["GET", "POST"])
