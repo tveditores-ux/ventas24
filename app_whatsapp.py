@@ -265,11 +265,26 @@ def debug_crear_usuario():
         return jsonify({"error": "faltan nombre/email, o la contraseña tiene menos de 8 caracteres"}), 400
     if rol not in db.ROLES_VALIDOS:
         return jsonify({"error": f"rol inválido, usa uno de {db.ROLES_VALIDOS}"}), 400
+    previo = db.obtener_usuario_por_email(email) if datos.get("reiniciar") else None
+    if previo:   # restablecer la clave de una cuenta que ya existe: queda con clave temporal y pide cambiarla al entrar
+        db.actualizar_usuario(previo["id"], password_hash=generate_password_hash(password), debe_cambiar=1)
+        db.registrar_accion("Usuarios", None, "reiniciar_clave_token", {"email": email}, "token de mantenimiento")
+        return jsonify({"id": previo["id"], "email": email, "rol": previo["rol"], "reiniciada": True})
     try:
         usuario_id = db.crear_usuario(nombre, email, generate_password_hash(password), rol)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-    return jsonify({"id": usuario_id, "nombre": nombre, "email": email, "rol": rol})
+    db.actualizar_usuario(usuario_id, debe_cambiar=1)
+    db.registrar_accion("Usuarios", None, "crear_usuario_token", {"email": email, "rol": rol}, "token de mantenimiento")
+    return jsonify({"id": usuario_id, "nombre": nombre, "email": email, "rol": rol, "creada": True})
+
+
+@app.route("/debug/usuarios", methods=["GET"])
+def debug_usuarios():
+    """ADMIN — lista las cuentas (sin claves) para saber con qué correo entra cada persona. Protegido con el token."""
+    if not _token_valido():
+        return jsonify({"error": "no autorizado"}), 401
+    return jsonify([{k: u[k] for k in ("id", "nombre", "email", "rol", "activo", "debe_cambiar")} for u in db.listar_usuarios()])
 
 
 @app.route("/crm", methods=["GET"])
