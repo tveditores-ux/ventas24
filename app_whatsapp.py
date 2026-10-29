@@ -44,6 +44,7 @@ import db
 import analista
 import ciclo
 import bcv
+import contable
 import erp
 import voz
 import importacion
@@ -473,14 +474,14 @@ def erp_reglas():
                 db.guardar_config("tasa_auto", "0"); hecho["tasa"] = d["tasa"]   # a mano: el automático no la pisa hasta que lo reactives
             for k, clave in (("reserva_dias", "reserva_dias"), ("pedido_minimo_usd", "pedido_minimo_usd"),
                              ("pedido_minimo_unidades", "pedido_minimo_unidades"), ("tasa_vigencia_dias", "tasa_vigencia_dias"),
-                             ("margen_max_pct", "margen_max_pct")):
+                             ("margen_max_pct", "margen_max_pct"), ("nota_entrega_alerta_pct", "nota_entrega_alerta_pct")):
                 if d.get(k) not in (None, ""):
                     db.guardar_config(clave, str(num(k))); hecho[k] = d[k]
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
         db.registrar_accion("Administración", None, "cambiar_reglas", hecho, request.usuario["nombre"])
     return jsonify({"tasa": db.tasa_vigente(), "reserva_dias": db.reserva_dias(), "pedido_minimo": db.pedido_minimo(),
-                    "tasa_vigencia_dias": db._num_config("tasa_vigencia_dias", 1), "margen_max_pct": db._num_config("margen_max_pct", 30)})
+                    "tasa_vigencia_dias": db._num_config("tasa_vigencia_dias", 1), "margen_max_pct": db._num_config("margen_max_pct", 30), "nota_entrega_alerta_pct": db._num_config("nota_entrega_alerta_pct", 10)})
 
 
 @app.route("/api/erp/importacion", methods=["GET"])
@@ -718,6 +719,108 @@ def erp_nota_cambiaria(nid):
         return jsonify({"error": str(e)}), 400
     db.registrar_accion("Administración", None, "nota_cambiaria", {"id": nid, "estado": d.get("estado")}, request.usuario["nombre"])
     return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------
+# Reportes y soportes para la contadora (ver contable.py)
+# ---------------------------------------------------------------------
+
+def _rango_args():
+    return request.args.get("desde") or None, request.args.get("hasta") or None
+
+
+@app.route("/api/erp/reportes/<nombre>", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_reporte(nombre):
+    if nombre not in contable.COLS:
+        return jsonify({"error": "reporte desconocido"}), 404
+    r = contable.reporte(nombre, *_rango_args())
+    if request.args.get("formato") == "csv":
+        return Response(contable.a_csv(contable.COLS[nombre], r["filas"]), mimetype="text/csv",
+                        headers={"Content-Disposition": f'attachment; filename="{nombre}.csv"'})
+    return jsonify(r)
+
+
+def _intentar(fn):
+    try:
+        return jsonify(fn())
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/erp/ventas-doc/<int:pedido_id>", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_venta_doc(pedido_id):
+    d = request.get_json(silent=True) or {}
+    def hacer():
+        did = contable.registrar_doc_venta(pedido_id, d.get("tipo"), d.get("numero"), d.get("control"), d.get("fecha"), d.get("motivo"), request.usuario["id"])
+        db.registrar_accion("Administración", None, "documento_venta", {"pedido": pedido_id, "tipo": d.get("tipo"), "motivo": d.get("motivo")}, request.usuario["nombre"])
+        return {"id": did}
+    return _intentar(hacer)
+
+
+@app.route("/api/erp/ventas-doc/<int:doc_id>/convertir", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_venta_doc_convertir(doc_id):
+    d = request.get_json(silent=True) or {}
+    def hacer():
+        contable.convertir_en_factura(doc_id, d.get("numero"), d.get("control"), d.get("fecha"), request.usuario["id"])
+        db.registrar_accion("Administración", None, "despacho_a_factura", {"doc": doc_id}, request.usuario["nombre"])
+        return {"ok": True}
+    return _intentar(hacer)
+
+
+@app.route("/api/erp/compras", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_compra_nueva():
+    d = request.get_json(silent=True) or {}
+    return _intentar(lambda: {"id": contable.registrar_compra(d, request.usuario["id"])})
+
+
+@app.route("/api/erp/bancos", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_banco_nuevo():
+    d = request.get_json(silent=True) or {}
+    return _intentar(lambda: {"id": contable.registrar_banco(d, request.usuario["id"])})
+
+
+@app.route("/api/erp/adjuntos", methods=["GET", "POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_adjuntos():
+    if request.method == "GET":
+        try:
+            return jsonify(contable.lista_adjuntos(request.args.get("entidad", ""), int(request.args.get("entidad_id", 0))))
+        except ValueError:
+            return jsonify({"error": "datos inválidos"}), 400
+    f = request.files.get("archivo")
+    if not f:
+        return jsonify({"error": "falta el archivo"}), 400
+    try:
+        eid = int(request.form.get("entidad_id", 0))
+    except ValueError:
+        return jsonify({"error": "datos inválidos"}), 400
+    return _intentar(lambda: contable.guardar_adjunto(request.form.get("entidad", ""), eid, f.filename or "", f.read(contable.MAX_ADJUNTO + 1), request.usuario["id"]))
+
+
+@app.route("/api/erp/adjuntos/<int:adj_id>", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_adjunto_ver(adj_id):
+    r = contable.leer_adjunto(adj_id)
+    if not r:
+        return jsonify({"error": "no encontrado"}), 404
+    meta, ruta = r
+    return send_from_directory(os.path.dirname(ruta), os.path.basename(ruta), mimetype=meta["mime"], as_attachment=False, download_name=meta["nombre"])
+
+
+@app.route("/api/erp/carpeta-mensual", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_carpeta_mensual():
+    try:
+        datos = contable.carpeta_mensual(request.args.get("mes", ""))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    db.registrar_accion("Administración", None, "carpeta_mensual", {"mes": request.args.get("mes")}, request.usuario["nombre"])
+    return Response(datos, mimetype="application/zip", headers={"Content-Disposition": f'attachment; filename="carpeta-{request.args.get("mes")}.zip"'})
 
 
 @app.route("/api/erp/cobranza", methods=["GET"])

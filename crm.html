@@ -324,6 +324,7 @@
     <button class="erp-solo" data-tab="reportes" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Reportes</button>
     <button class="erp-solo" data-tab="cobranza" type="button" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5C9.5 8.4 10.6 8 12 8s2.5.6 2.5 1.7c0 2.4-5 1.3-5 3.8 0 1.1 1.1 1.7 2.5 1.7s2.5-.5 2.5-1.7"/></svg>Cobranza</button>
     <button class="super-solo" data-tab="usuarios" type="button" hidden><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14c2.5 0 4.5 2 4.5 4.5"/></svg>Usuarios</button>
+    <button class="erp-solo" data-tab="libros" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h6M8 11h6"/></svg>Libros y soportes</button>
     <button class="erp-solo" data-tab="contabilidad" type="button" hidden><svg viewBox="0 0 24 24"><path d="M5 4h14v17H5z"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>Contabilidad</button>
     <button class="erp-solo" data-tab="importacion" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 15h13V6H3zM16 9h3l2 3v3h-5z"/><circle cx="7" cy="17" r="1.6"/><circle cx="17" cy="17" r="1.6"/></svg>Importación</button>
     <button class="erp-solo" data-tab="reglas" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Reglas</button>
@@ -452,6 +453,28 @@
   <p class="nota-erp">Al crear un usuario el sistema genera una clave temporal que se muestra una sola vez: envíasela por un canal privado. En su primer ingreso le pide crear una propia. Las claves nunca se guardan en claro.</p>
 </div>
 
+<div id="librosWrap" hidden>
+  <div class="toolbar" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+    <label>Desde<br><input type="date" id="libDesde"></label>
+    <label>Hasta<br><input type="date" id="libHasta"></label>
+    <button class="btn" id="libActualizar" type="button">Actualizar</button>
+    <label>Carpeta del mes<br><input type="month" id="libMes"></label>
+    <a class="btn ghost" id="libCarpeta" href="#">Descargar carpeta de soportes (ZIP)</a>
+  </div>
+  <div class="subnav" id="libSub" style="margin-top:14px;display:flex;gap:6px;flex-wrap:wrap">
+    <button class="btn sm" data-lib="ventas" type="button">Ventas</button><button class="btn ghost sm" data-lib="compras" type="button">Compras y gastos</button>
+    <button class="btn ghost sm" data-lib="inventario" type="button">Inventario</button><button class="btn ghost sm" data-lib="bancos" type="button">Bancos y caja chica</button>
+  </div>
+  <div id="libAviso"></div>
+  <div class="pend-resumen" id="libResumen" style="margin-top:14px"></div>
+  <div class="toolbar" id="libAcciones" style="margin-top:6px"></div>
+  <div class="table-wrap"><table style="min-width:0"><thead id="libHead"></thead><tbody id="libBody"></tbody></table></div>
+  <p class="nota-erp">Estos reportes son insumos administrativos para la contadora: no son libros contables ni documentos fiscales. «Con soporte» significa factura con número de control; ticket, recibo y nota de entrega quedan «sin soporte». La nota de entrega es una excepción: pide motivo y el reporte muestra qué porcentaje del total representa.</p>
+</div>
+<dialog id="dlgLib" style="border:1px solid var(--line-strong);border-radius:14px;background:var(--surface);color:var(--ink);width:min(520px,94vw);padding:18px"><form method="dialog" id="frmLib"><h3 id="dlgLibT"></h3><div id="dlgLibC"></div>
+  <div class="toolbar" style="margin-top:14px;justify-content:flex-end"><button class="btn ghost" type="button" id="dlgLibX">Cancelar</button><button class="btn" type="submit">Guardar</button></div></form></dialog>
+<input type="file" id="libArchivo" accept=".pdf,.png,.jpg,.jpeg,.webp" hidden>
+
 <div id="contabilidadWrap" hidden>
   <div class="toolbar" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
     <label>Desde<br><input type="date" id="contDesde"></label>
@@ -487,6 +510,7 @@
     <button class="btn ghost" type="button" id="btnBcv">Actualizar desde el BCV</button>
     <label>Vigencia de la tasa (días)<br><input type="text" inputmode="numeric" name="tasa_vigencia_dias" placeholder="1"></label>
     <label>Días de reserva sin pago<br><input type="text" inputmode="numeric" name="reserva_dias" placeholder="7"></label>
+    <label>Alerta de notas de entrega (% de ventas)<br><input type="text" inputmode="decimal" name="nota_entrega_alerta_pct" placeholder="10"></label>
     <label>Margen máximo permitido (%)<br><input type="text" inputmode="decimal" name="margen_max_pct" placeholder="30"></label>
     <label>Pedido mínimo (USD)<br><input type="text" inputmode="decimal" name="pedido_minimo_usd" placeholder="500"></label>
     <label>o mínimo de unidades<br><input type="text" inputmode="numeric" name="pedido_minimo_unidades" placeholder="100"></label>
@@ -620,7 +644,7 @@
     if (esAdmin()){
       document.querySelectorAll('.erp-solo').forEach(el => el.hidden = false);
       if (usuario.rol === 'super_admin') document.querySelectorAll('.super-solo').forEach(el => el.hidden = false);
-      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza(); iniciarReglas(); iniciarImportacion(); iniciarUsuarios(); iniciarContabilidad();
+      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza(); iniciarReglas(); iniciarImportacion(); iniciarUsuarios(); iniciarContabilidad(); iniciarLibros();
     }
     activarTab('pendientes');
     setInterval(refrescarInsignia, 30000);
@@ -633,7 +657,7 @@
   });
 
   // -------- pestañas --------
-  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza', 'reglas', 'importacion', 'usuarios', 'contabilidad'];
+  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza', 'reglas', 'importacion', 'usuarios', 'contabilidad', 'libros'];
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -651,6 +675,7 @@
     compras: ['Compras', 'Órdenes de compra: de borrador a mercancía recibida.'],
     reportes: ['Reportes', 'Cuánto se cobra, cuánto deja y qué se mueve.'],
     cobranza: ['Cobranza', 'Lo que los clientes deben por ventas a crédito.'],
+    libros: ['Libros y soportes', 'Ventas, compras, inventario y bancos para la contadora, con sus soportes.'],
     contabilidad: ['Contabilidad', 'Ingresos por moneda y tasa del día, y diferencial cambiario.'],
     usuarios: ['Usuarios', 'Quién entra al sistema y con qué permisos.'],
     importacion: ['Importación', 'Liquidación de embarques, costo puesto en almacén y costo promedio.'],
@@ -679,6 +704,7 @@
     else if (tab === 'importacion') cargarImportacion();
     else if (tab === 'usuarios') cargarUsuarios();
     else if (tab === 'contabilidad') cargarContabilidad();
+    else if (tab === 'libros') cargarLibros();
     else if (tab === 'reportes'){ cargarReportes(); cargarAuditoria(); }
   }
   document.querySelectorAll('#subnav button').forEach(b => {
@@ -1328,6 +1354,107 @@
   }
 
 
+
+  // -------- Libros y soportes (para la contadora) --------
+  let libActual = 'ventas', libDatos = null, libFormCb = null;
+  const SOP = { con: ['Con soporte', 'pago_confirmado'], pendiente: ['Por facturar', 'comprobante_recibido'], sin: ['Sin soporte', 'por_confirmar'] };
+  const pillSop = (x) => `<span class="pago-pill ${SOP[x][1]}">${SOP[x][0]}</span>`;
+  function dlgLib(titulo, campos, valores, cb){
+    document.getElementById('dlgLibT').textContent = titulo; const c = document.getElementById('dlgLibC'); c.innerHTML = ''; libFormCb = cb;
+    campos.forEach(([k, etq, tipo, op]) => {
+      const lab = document.createElement('label'); lab.style.cssText = 'display:block;margin-top:10px;font-size:12.5px;font-weight:700'; lab.textContent = etq;
+      let el; if (tipo === 'select'){ el = document.createElement('select'); op.forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; el.appendChild(o); }); }
+      else if (tipo === 'textarea'){ el = document.createElement('textarea'); el.rows = 3; } else { el = document.createElement('input'); el.type = tipo || 'text'; if (tipo === 'text' || !tipo) el.autocomplete = 'off'; }
+      el.name = k; el.style.cssText = 'width:100%;margin-top:4px;padding:8px 10px;border-radius:8px;border:1px solid var(--line-strong);background:var(--bg);color:var(--ink)'; if (valores && valores[k] != null) el.value = valores[k];
+      lab.appendChild(el); c.appendChild(lab);
+    });
+    document.getElementById('dlgLib').showModal();
+  }
+  async function libPost(ruta, cuerpo){
+    const rr = await api(ruta, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo) }); const dd = await rr.json().catch(()=>({}));
+    if (!rr.ok){ alert(dd.error || 'No se pudo guardar'); return false; } return true;
+  }
+  const hoyISO = () => rangoMes()[1];
+  async function cargarLibros(){
+    const d = document.getElementById('libDesde'), h = document.getElementById('libHasta'), m = document.getElementById('libMes');
+    if (!d.value){ const [a, b] = rangoMes(); d.value = a; h.value = b; m.value = b.slice(0, 7); }
+    document.querySelectorAll('#libSub [data-lib]').forEach(b => b.classList.toggle('ghost', b.dataset.lib !== libActual));
+    document.getElementById('libCarpeta').href = '/api/erp/carpeta-mensual?mes=' + m.value;
+    const body = document.getElementById('libBody');
+    try {
+      const rr = await api(`/api/erp/reportes/${libActual}?desde=${d.value}&hasta=${h.value}`);
+      if (rr.status === 401){ irALogin(); return; } if (!rr.ok) throw new Error('HTTP ' + rr.status);
+      libDatos = await rr.json(); pintarLibro();
+    } catch(e){ body.innerHTML = `<tr><td class="error">No pude cargar el reporte (${esc(e.message)}).</td></tr>`; }
+  }
+  function adjBtn(ent, id, n){ return `<button class="btn ghost sm" type="button" data-adj="${ent}:${id}" title="Adjuntar un soporte (PDF o foto)">📎 ${n || ''}</button>${n ? `<button class="btn ghost sm" type="button" data-ver="${ent}:${id}">Ver</button>` : ''}`; }
+  function pintarLibro(){
+    const f = libDatos.filas, x = libDatos.resumen, head = document.getElementById('libHead'), body = document.getElementById('libBody'), res = document.getElementById('libResumen'), acc = document.getElementById('libAcciones'), av = document.getElementById('libAviso');
+    const des = document.getElementById('libDesde').value, has = document.getElementById('libHasta').value; av.innerHTML = ''; acc.innerHTML = '';
+    acc.innerHTML = `<a class="btn ghost sm" href="/api/erp/reportes/${libActual}?formato=csv&desde=${des}&hasta=${has}">Descargar CSV</a>`;
+    const card = (b, t) => `<div class="pend-card"><b>${b}</b><span>${t}</span></div>`;
+    if (libActual === 'ventas'){
+      res.innerHTML = card(x.ordenes, 'órdenes cobradas o a crédito') + card('$' + fm(x.con_factura_usd), 'con factura') + card('$' + fm(x.despacho_pendiente_usd), 'notas de despacho por facturar') + card(x.nota_entrega_pct + ' %', 'en notas de entrega (límite ' + x.nota_entrega_limite_pct + ' %)');
+      if (x.alerta_nota_entrega) av.innerHTML = `<div class="card" style="margin-top:12px;border-left:5px solid var(--danger)"><b>Las notas de entrega pasan del límite (${x.nota_entrega_pct} % del total).</b> Son una excepción: revisa los motivos con la contadora.</div>`;
+      head.innerHTML = '<tr><th>Fecha</th><th>Cliente</th><th>USD</th><th>Documento</th><th>Soporte</th><th>Soportes</th><th></th></tr>';
+      body.innerHTML = f.length ? f.map(v => `<tr><td>${esc(v.fecha)}</td><td>${esc(v.cliente)}</td><td class="num">$${fm(v.total_usd)}</td>
+        <td>${v.documento ? esc({ factura: 'Factura', nota_despacho: 'Nota de despacho', nota_entrega: 'Nota de entrega' }[v.documento]) + (v.numero ? ' ' + esc(v.numero) : '') + (v.control ? '<br><span class="resuelto">control ' + esc(v.control) + '</span>' : '') + (v.motivo ? '<br><span class="resuelto">' + esc(v.motivo) + '</span>' : '') : '—'}</td>
+        <td>${pillSop(v.soporte)}</td><td>${adjBtn('venta', v.ref, v.adjuntos)}</td>
+        <td class="acciones-td">${!v.documento ? `<button class="btn sm" type="button" data-doc="${v.ref}">Registrar documento</button>` : v.documento === 'nota_despacho' ? `<button class="btn sm" type="button" data-conv="${v.doc_id}">Convertir en factura</button>` : ''}</td></tr>`).join('')
+        : '<tr><td colspan="7" class="empty">No hay ventas cobradas en el período.</td></tr>';
+    } else if (libActual === 'compras'){
+      res.innerHTML = card(x.registros, 'registros') + card(x.con_soporte + ' / ' + x.sin_soporte, 'con soporte / sin soporte') + card('Bs ' + fm(x.total_bs), '$' + fm(x.total_usd) + ' en total') + card('Bs ' + fm(x.iva), 'IVA · retenciones: ' + fm(x.ret_iva) + ' IVA, ' + fm(x.ret_islr) + ' ISLR');
+      acc.innerHTML += '<button class="btn sm" type="button" id="libNuevaCompra">+ Registrar compra o gasto</button>';
+      head.innerHTML = '<tr><th>Fecha</th><th>Proveedor</th><th>Tipo</th><th>Documento</th><th>Monto</th><th>Pago</th><th>Soporte</th><th>Soportes</th></tr>';
+      body.innerHTML = f.length ? f.map(c => `<tr><td>${esc(c.fecha)}</td><td>${esc(c.proveedor)}${c.rif ? '<br><span class="resuelto">' + esc(c.rif) + '</span>' : ''}</td><td>${esc(c.tipo)}</td>
+        <td>${esc(c.doc_tipo)}${c.numero ? ' ' + esc(c.numero) : ''}${c.control ? '<br><span class="resuelto">control ' + esc(c.control) + '</span>' : ''}</td><td class="num">${c.moneda === 'USD' ? '$' : 'Bs '}${fm(c.monto)}</td>
+        <td>${esc({ banco: 'Banco', caja_chica: 'Caja chica', pendiente: 'Por pagar' }[c.forma_pago])}</td><td>${pillSop(c.soporte)}</td><td>${adjBtn('compra', c.id, c.adjuntos)}</td></tr>`).join('')
+        : '<tr><td colspan="8" class="empty">No hay compras ni gastos en el período.</td></tr>';
+    } else if (libActual === 'bancos'){
+      res.innerHTML = card(x.movimientos, 'movimientos') + Object.entries(x.por_cuenta).map(([k, v]) => card('Bs ' + fm(v.ingresos_bs - v.egresos_bs), k + ' (neto) · $' + fm(v.ingresos_usd - v.egresos_usd))).join('');
+      acc.innerHTML += '<button class="btn sm" type="button" id="libNuevoBanco">+ Registrar movimiento</button>';
+      head.innerHTML = '<tr><th>Fecha</th><th>Cuenta</th><th>Tipo</th><th>Concepto</th><th>Monto</th><th>USD</th><th>Referencia</th><th>Soportes</th></tr>';
+      body.innerHTML = f.length ? f.map(b => `<tr><td>${esc(b.fecha)}</td><td>${esc(b.cuenta)}</td><td>${b.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</td><td>${esc(b.concepto)}</td><td class="num">${b.moneda === 'USD' ? '$' : 'Bs '}${fm(b.monto)}</td><td class="num">${b.monto_usd == null ? '—' : '$' + fm(b.monto_usd)}</td><td>${esc(b.referencia || '')}</td><td>${adjBtn('banco', b.id, b.adjuntos)}</td></tr>`).join('')
+        : '<tr><td colspan="8" class="empty">No hay movimientos en el período.</td></tr>';
+    } else {
+      const dd = x.despachadas_por_documento; const nom = { factura: 'con factura', nota_despacho: 'con nota de despacho', nota_entrega: 'con nota de entrega', sin_documento: 'sin documento registrado' };
+      res.innerHTML = card(x.unidades_despachadas, 'unidades despachadas') + Object.entries(dd).map(([k, v]) => card(v, nom[k] || k)).join('') + card(x.pct_sin_factura + ' %', 'despachado sin factura todavía');
+      head.innerHTML = '<tr><th>Fecha</th><th>Código</th><th>Producto</th><th>Movimiento</th><th>Cantidad</th><th>Existencia</th><th>Referencia</th></tr>';
+      body.innerHTML = f.length ? f.map(m => `<tr><td>${esc(m.f)}</td><td>${esc(m.codigo || '')}</td><td>${esc((m.nombre || '').slice(0, 50))}</td><td>${esc(m.tipo)}</td><td class="num">${m.cantidad}</td><td class="num">${m.stock_despues}</td><td>${esc(m.referencia || '')}</td></tr>`).join('')
+        : '<tr><td colspan="7" class="empty">No hay movimientos en el período.</td></tr>';
+    }
+  }
+  const COMPRA_CAMPOS = [['fecha', 'Fecha', 'date'], ['proveedor', 'Proveedor', 'text'], ['rif', 'RIF', 'text'], ['tipo', 'Tipo', 'select', [['gasto', 'Gasto'], ['servicio', 'Servicio'], ['mercancia', 'Mercancía']]],
+    ['doc_tipo', 'Documento', 'select', [['factura', 'Factura fiscal'], ['ticket', 'Ticket'], ['recibo', 'Recibo'], ['otro', 'Otro']]], ['numero', 'Número de factura', 'text'], ['control', 'Número de control', 'text'],
+    ['moneda', 'Moneda', 'select', [['VES', 'Bolívares'], ['USD', 'Dólares']]], ['monto', 'Monto total', 'text'], ['base', 'Base imponible (opcional)', 'text'], ['iva', 'IVA (opcional)', 'text'],
+    ['ret_iva', 'Retención de IVA (opcional)', 'text'], ['ret_islr', 'Retención de ISLR (opcional)', 'text'], ['forma_pago', 'Cómo se pagó', 'select', [['banco', 'Banco'], ['caja_chica', 'Caja chica'], ['pendiente', 'Todavía por pagar']]], ['nota', 'Nota', 'text']];
+  const BANCO_CAMPOS = [['fecha', 'Fecha', 'date'], ['cuenta', 'Cuenta (o «Caja chica»)', 'text'], ['tipo', 'Tipo', 'select', [['egreso', 'Egreso'], ['ingreso', 'Ingreso']]], ['concepto', 'Concepto', 'text'],
+    ['moneda', 'Moneda', 'select', [['VES', 'Bolívares'], ['USD', 'Dólares']]], ['monto', 'Monto', 'text'], ['referencia', 'Referencia', 'text']];
+  function iniciarLibros(){
+    document.getElementById('libActualizar').addEventListener('click', cargarLibros);
+    document.getElementById('libMes').addEventListener('change', () => { document.getElementById('libCarpeta').href = '/api/erp/carpeta-mensual?mes=' + document.getElementById('libMes').value; });
+    document.getElementById('libSub').addEventListener('click', (ev) => { const b = ev.target.closest('[data-lib]'); if (b){ libActual = b.dataset.lib; cargarLibros(); } });
+    document.getElementById('dlgLibX').addEventListener('click', () => document.getElementById('dlgLib').close());
+    document.getElementById('frmLib').addEventListener('submit', async (ev) => { ev.preventDefault(); const dat = Object.fromEntries(new FormData(ev.target)); if (libFormCb && await libFormCb(dat)){ document.getElementById('dlgLib').close(); cargarLibros(); } });
+    let pendienteAdj = null; const inp = document.getElementById('libArchivo');
+    inp.addEventListener('change', async () => {
+      if (!inp.files.length || !pendienteAdj) return; const fd = new FormData(); fd.append('archivo', inp.files[0]); fd.append('entidad', pendienteAdj[0]); fd.append('entidad_id', pendienteAdj[1]);
+      const rr = await fetch('/api/erp/adjuntos', { method:'POST', body: fd, credentials:'same-origin' }); const dd = await rr.json().catch(()=>({})); inp.value = '';
+      if (!rr.ok){ alert(dd.error || 'No se pudo adjuntar'); return; } cargarLibros();
+    });
+    document.getElementById('librosWrap').addEventListener('click', async (ev) => {
+      const t = ev.target;
+      if (t.id === 'libNuevaCompra') return dlgLib('Registrar compra o gasto', COMPRA_CAMPOS, { fecha: hoyISO() }, (d) => libPost('/api/erp/compras', d));
+      if (t.id === 'libNuevoBanco') return dlgLib('Registrar movimiento de banco o caja chica', BANCO_CAMPOS, { fecha: hoyISO() }, (d) => libPost('/api/erp/bancos', d));
+      const doc = t.closest('[data-doc]'), conv = t.closest('[data-conv]'), adj = t.closest('[data-adj]'), ver = t.closest('[data-ver]');
+      if (doc) dlgLib('Documento de la venta', [['tipo', 'Documento', 'select', [['factura', 'Factura (con número y control)'], ['nota_despacho', 'Nota de despacho (se factura después)'], ['nota_entrega', 'Nota de entrega (excepción: pide motivo)']]],
+        ['numero', 'Número de factura', 'text'], ['control', 'Número de control', 'text'], ['fecha', 'Fecha', 'date'], ['motivo', 'Motivo (solo nota de entrega)', 'textarea']], { fecha: hoyISO() }, (d) => libPost('/api/erp/ventas-doc/' + doc.dataset.doc, d));
+      else if (conv) dlgLib('Convertir la nota de despacho en factura', [['numero', 'Número de factura', 'text'], ['control', 'Número de control', 'text'], ['fecha', 'Fecha de la factura', 'date']], { fecha: hoyISO() }, (d) => libPost('/api/erp/ventas-doc/' + conv.dataset.conv + '/convertir', d));
+      else if (adj){ pendienteAdj = adj.dataset.adj.split(':'); inp.click(); }
+      else if (ver){ const [e, i] = ver.dataset.ver.split(':'); const l = await (await api(`/api/erp/adjuntos?entidad=${e}&entidad_id=${i}`)).json();
+        dlgLib('Soportes adjuntos', [], null, async () => true); document.getElementById('dlgLibC').innerHTML = l.map(a => `<p><a href="/api/erp/adjuntos/${a.id}" target="_blank" rel="noopener">${esc(a.nombre)}</a> <span class="resuelto">${Math.round(a.bytes / 1024)} KB · ${esc((a.fecha || '').slice(0, 10))}</span></p>`).join('') || '<p>Sin soportes.</p>'; }
+    });
+  }
 
   // -------- Contabilidad: ingresos y diferencial cambiario --------
   function rangoMes(){ const h = new Date(), d1 = new Date(h.getFullYear(), h.getMonth(), 1); const f = (x) => new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10); return [f(d1), f(h)]; }
