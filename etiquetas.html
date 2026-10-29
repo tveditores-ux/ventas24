@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Etiquetas QR · Ventas 24</title>
+<style>
+  :root { --bg:#f4f6fa; --card:#fff; --fg:#162032; --muted:#5a667b; --line:#d9e0ea; --accent:#0e7490; color-scheme: light; }
+  * { box-sizing:border-box; } body { margin:0; font:15px/1.45 system-ui,"Segoe UI",sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width:980px; margin:0 auto; padding:16px; } h1 { font-size:22px; margin:0 0 4px; } .muted { color:var(--muted); }
+  .barra { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin:14px 0; } label { font-size:12.5px; font-weight:700; color:var(--muted); display:block; }
+  input[type=search], select { min-height:42px; padding:8px 12px; border-radius:10px; border:1px solid var(--line); background:#fff; font:inherit; }
+  button { min-height:42px; padding:6px 16px; border-radius:10px; border:1px solid var(--line); background:#fff; font:inherit; font-weight:700; cursor:pointer; } button.pri { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .lista { background:var(--card); border:1px solid var(--line); border-radius:14px; max-height:42vh; overflow:auto; }
+  .fila { display:flex; gap:10px; align-items:center; padding:9px 14px; border-top:1px solid var(--line); } .fila:first-child { border-top:0; } .fila small { color:var(--muted); display:block; font-family:ui-monospace,Consolas,monospace; }
+  .hoja { display:grid; gap:0; margin-top:18px; background:#fff; border:1px dashed var(--line); padding:6mm; }
+  .eti { border:1px dashed #b9c2d0; padding:2mm; display:flex; align-items:center; gap:2mm; overflow:hidden; break-inside:avoid; background:#fff; color:#000; }
+  .eti svg, .eti img { flex:none; } .eti .t { min-width:0; } .eti b { display:block; font-family:ui-monospace,Consolas,monospace; word-break:break-all; } .eti span { display:block; line-height:1.15; overflow:hidden; }
+  .pequena { grid-template-columns:repeat(auto-fill,minmax(38mm,1fr)); } .pequena .eti { height:25mm; } .pequena .eti img { width:19mm; height:19mm; } .pequena b { font-size:8pt; } .pequena span { font-size:6.5pt; max-height:11mm; }
+  .mediana { grid-template-columns:repeat(auto-fill,minmax(50mm,1fr)); } .mediana .eti { height:30mm; } .mediana .eti img { width:24mm; height:24mm; } .mediana b { font-size:9.5pt; } .mediana span { font-size:7.5pt; max-height:14mm; }
+  .grande { grid-template-columns:repeat(auto-fill,minmax(70mm,1fr)); } .grande .eti { height:40mm; } .grande .eti img { width:34mm; height:34mm; } .grande b { font-size:12pt; } .grande span { font-size:9pt; max-height:20mm; }
+  @media print { body { background:#fff; } .no-imp { display:none !important; } main { max-width:none; padding:0; } .hoja { border:0; padding:0; margin:0; } @page { margin:8mm; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="no-imp">
+    <h1>Etiquetas QR de productos</h1>
+    <p class="muted">El QR lleva el <b>código del producto</b>. Pégalas en los estantes o las cajas y léelas con la pantalla «Inventario móvil» (<a href="/movil">/movil</a>) para contar o recibir mercancía.</p>
+    <div class="barra">
+      <div><label for="q">Buscar</label><input type="search" id="q" placeholder="Código, nombre o marca" autocomplete="off"></div>
+      <div><label for="tam">Tamaño</label><select id="tam"><option value="pequena">Pequeña (38 × 25 mm)</option><option value="mediana" selected>Mediana (50 × 30 mm)</option><option value="grande">Grande (70 × 40 mm)</option></select></div>
+      <div><label for="copias">Copias de cada una</label><select id="copias"><option>1</option><option>2</option><option>4</option><option>6</option></select></div>
+      <button id="todos" type="button">Marcar los visibles</button><button id="ninguno" type="button">Quitar marcas</button>
+      <button class="pri" id="imprimir" type="button">Imprimir etiquetas (<span id="n">0</span>)</button>
+    </div>
+    <div class="lista" id="lista"></div>
+  </div>
+  <div class="hoja mediana" id="hoja" aria-label="Vista previa de las etiquetas"></div>
+</main>
+<script src="/static/vendor/qrcode-generator-1.4.4.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); }, productos = [], marcados = {}, tm;
+  function qrImg(texto) { var q = qrcode(0, "M"); q.addData(texto); q.make(); var img = new Image(); img.src = q.createDataURL(6, 2); img.alt = "QR " + texto; return img; }
+  function cargar() {
+    fetch("/api/erp/movil/etiquetas?q=" + encodeURIComponent($("q").value.trim()), { credentials: "same-origin" }).then(function (r) {
+      if (r.status === 401) { location.href = "/login?next=/etiquetas"; throw new Error("sesión"); } return r.json(); }).then(function (l) { productos = l; pintarLista(); });
+  }
+  function pintarLista() {
+    var c = $("lista"); c.textContent = "";
+    if (!productos.length) { var p = document.createElement("p"); p.className = "muted"; p.style.padding = "14px"; p.textContent = "Sin productos con código."; c.appendChild(p); }
+    productos.forEach(function (p) {
+      var f = document.createElement("label"); f.className = "fila"; var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!marcados[p.id];
+      cb.addEventListener("change", function () { if (cb.checked) marcados[p.id] = p; else delete marcados[p.id]; vista(); });
+      var t = document.createElement("div"); var b = document.createElement("b"); b.textContent = p.nombre; var s = document.createElement("small"); s.textContent = p.codigo + (p.marca ? " · " + p.marca : "");
+      t.appendChild(b); t.appendChild(s); f.appendChild(cb); f.appendChild(t); c.appendChild(f);
+    });
+    vista();
+  }
+  function vista() {
+    var h = $("hoja"), copias = Number($("copias").value), sel = Object.keys(marcados).map(function (k) { return marcados[k]; }); h.className = "hoja " + $("tam").value; h.textContent = ""; $("n").textContent = String(sel.length * copias);
+    sel.forEach(function (p) { for (var i = 0; i < copias; i++) {
+      var e = document.createElement("div"); e.className = "eti"; e.appendChild(qrImg(p.codigo)); var t = document.createElement("div"); t.className = "t";
+      var b = document.createElement("b"); b.textContent = p.codigo; var s = document.createElement("span"); s.textContent = p.nombre; t.appendChild(b); t.appendChild(s); e.appendChild(t); h.appendChild(e); } });
+  }
+  $("q").addEventListener("input", function () { clearTimeout(tm); tm = setTimeout(cargar, 300); });
+  $("tam").addEventListener("change", vista); $("copias").addEventListener("change", vista);
+  $("todos").addEventListener("click", function () { productos.forEach(function (p) { marcados[p.id] = p; }); pintarLista(); });
+  $("ninguno").addEventListener("click", function () { marcados = {}; pintarLista(); });
+  $("imprimir").addEventListener("click", function () { if (!Object.keys(marcados).length) { alert("Marca al menos un producto."); return; } window.print(); });
+  cargar();
+})();
+</script>
+</body>
+</html>

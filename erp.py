@@ -408,3 +408,101 @@ def reportes(dias: int = 30):
         } for r in rot],
         "estados": [dict(r) for r in estados],
     }
+
+
+# ---------------------------------------------------------------------
+# Carga de inventario desde el teléfono (cámara, QR y códigos de barras)
+# ---------------------------------------------------------------------
+
+_CAMPOS_MOVIL = "id, codigo, nombre, marca, modelo, stock, stock_verificado, stock_minimo, costo, precio, precio_mayor, codigo_barras"
+
+
+def buscar_para_movil(q: str, limite: int = 8) -> list:
+    """Busca por lectura exacta (código del producto o código de barras/QR) y, si no hay, por texto."""
+    q = (q or "").strip()
+    if not q:
+        return []
+    with db.conectar() as con:
+        exactos = con.execute(
+            f"SELECT {_CAMPOS_MOVIL} FROM catalogo WHERE lower(codigo) = lower(?) OR codigo_barras = ? LIMIT ?", (q, q, limite)).fetchall()
+        if exactos:
+            return [dict(x, exacto=True) for x in exactos]
+        like = f"%{q.lower()}%"
+        filas = con.execute(
+            f"SELECT {_CAMPOS_MOVIL} FROM catalogo WHERE lower(codigo) LIKE ? OR lower(nombre) LIKE ? OR lower(marca) LIKE ? "
+            "ORDER BY (stock_verificado = 0), nombre LIMIT ?", (like, like, like, limite)).fetchall()
+    return [dict(x, exacto=False) for x in filas]
+
+
+def asociar_barras(catalogo_id: int, barras: str):
+    """Liga un código de barras o QR a un producto, para que la próxima lectura lo reconozca sola."""
+    barras = (barras or "").strip()
+    if not barras or len(barras) > 120:
+        raise ValueError("código inválido")
+    with db.conectar() as con:
+        if not con.execute("SELECT 1 FROM catalogo WHERE id = ?", (catalogo_id,)).fetchone():
+            raise ValueError("producto no encontrado")
+        otro = con.execute("SELECT codigo, nombre FROM catalogo WHERE codigo_barras = ? AND id != ?", (barras, catalogo_id)).fetchone()
+        if otro:
+            raise ValueError(f"ese código ya está ligado a {otro['codigo'] or ''} {otro['nombre'][:40]}")
+        con.execute("UPDATE catalogo SET codigo_barras = ? WHERE id = ?", (barras, catalogo_id))
+
+
+def aplicar_lote_movil(lote_id: str, modo: str, items: list, usuario_id: int) -> dict:
+    """Aplica un lote enviado desde el teléfono.
+    modo 'conteo': fija la existencia con lo contado (inventario físico).
+    modo 'recepcion': suma a lo que hay (mercancía que llega); si trae costo, recalcula el costo promedio ponderado.
+    El mismo `lote_id` nunca se aplica dos veces."""
+    if modo not in ("conteo", "recepcion"):
+        raise ValueError("el modo es 'conteo' o 'recepcion'")
+    if not isinstance(items, list) or not items:
+        raise ValueError("el lote está vacío")
+    if len(items) > 500:
+        raise ValueError("un lote admite hasta 500 productos")
+    if not lote_id or len(lote_id) > 64:
+        raise ValueError("falta el identificador del lote")
+    with db.conectar() as con:
+        previo = con.execute("SELECT resultado FROM erp_lotes_moviles WHERE lote_id = ?", (lote_id,)).fetchone()
+    if previo:
+        import json
+        return {**json.loads(previo["resultado"] or "{}"), "repetido": True}
+    aplicados, errores, repuestos = [], [], []
+    for it in items:
+        try:
+            cid, cant = int(it["catalogo_id"]), int(it["cantidad"])
+            if not 0 <= cant <= 1_000_000:
+                raise ValueError("cantidad fuera de rango")
+            costo = it.get("costo")
+            costo = float(str(costo).replace(",", ".")) if costo not in (None, "") else None
+            if costo is not None and costo < 0:
+                raise ValueError("costo inválido")
+            if modo == "conteo":
+                r = contar(cid, cant, usuario_id, "conteo desde el teléfono", None, costo)
+                aplicados.append({"catalogo_id": cid, "stock": r["stock"], "diferencia": r["diferencia"]})
+            else:
+                if cant == 0:
+                    continue
+                with db.conectar() as con:
+                    p = con.execute("SELECT * FROM catalogo WHERE id = ?", (cid,)).fetchone()
+                    if not p:
+                        raise ValueError("producto no encontrado")
+                    antes = p["stock"] if p["stock_verificado"] else 0
+                    nuevo_costo = p["costo"]
+                    if costo is not None:
+                        nuevo_costo = round((antes * p["costo"] + cant * costo) / (antes + cant), 4) if antes > 0 and p["costo"] else costo
+                    con.execute("UPDATE catalogo SET stock = ?, stock_verificado = 1, stock_prueba = 0, costo = ? WHERE id = ?", (antes + cant, nuevo_costo, cid))
+                    db.registrar_movimiento(con, cid, "recepcion", cant, referencia=f"lote móvil {lote_id[:8]}", usuario_id=usuario_id, costo=costo)
+                    if antes <= 0:
+                        repuesto = {"catalogo_id": cid, "codigo": p["codigo"], "nombre": p["nombre"]}
+                        db.emitir_evento(con, "stock.repuesto", repuesto)
+                        repuestos.append(repuesto)
+                aplicados.append({"catalogo_id": cid, "stock": antes + cant, "diferencia": cant})
+        except (KeyError, TypeError, ValueError) as e:
+            errores.append({"catalogo_id": it.get("catalogo_id") if isinstance(it, dict) else None, "error": str(e)})
+    import json
+    resultado = {"modo": modo, "aplicados": len(aplicados), "errores": errores, "detalle": aplicados, "repuestos": len(repuestos)}
+    with db.conectar() as con:
+        con.execute("INSERT INTO erp_lotes_moviles (lote_id, modo, usuario_id, items, resultado) VALUES (?, ?, ?, ?, ?)",
+                    (lote_id, modo, usuario_id, len(items), json.dumps(resultado, ensure_ascii=False)))
+    db.registrar_accion("Inventario móvil", None, "lote_movil", {"lote": lote_id[:8], "modo": modo, "items": len(items)}, {"aplicados": len(aplicados), "errores": len(errores)})
+    return resultado

@@ -177,6 +177,16 @@ CREATE TABLE IF NOT EXISTS solicitudes_equipo (
     resuelta_en TEXT
 );
 
+-- Lotes de inventario cargados desde el teléfono: el identificador evita aplicar dos veces el mismo lote si se reintenta el envío.
+CREATE TABLE IF NOT EXISTS erp_lotes_moviles (
+    lote_id TEXT PRIMARY KEY,
+    modo TEXT NOT NULL,                          -- conteo / recepcion
+    usuario_id INTEGER REFERENCES usuarios(id),
+    items INTEGER NOT NULL,
+    resultado TEXT,
+    fecha TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Relación de ingresos: cada pago confirmado, con su moneda, método y la tasa del día del pago.
 CREATE TABLE IF NOT EXISTS erp_pagos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -304,6 +314,7 @@ def inicializar():
             ("costo", "REAL"),                                    # último costo de compra
             ("proveedor_id", "INTEGER"),                          # proveedor habitual (el último que surtió)
             ("stock_minimo", "INTEGER NOT NULL DEFAULT 0"),       # por debajo de esto hay que reponer
+            ("codigo_barras", "TEXT"),                            # código de barras o QR de la etiqueta (carga desde el teléfono)
         ):
             if col not in cols_catalogo:
                 con.execute(f"ALTER TABLE catalogo ADD COLUMN {col} {ddl}")

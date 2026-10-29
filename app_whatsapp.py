@@ -823,6 +823,74 @@ def erp_carpeta_mensual():
     return Response(datos, mimetype="application/zip", headers={"Content-Disposition": f'attachment; filename="carpeta-{request.args.get("mes")}.zip"'})
 
 
+# ---------------------------------------------------------------------
+# Inventario desde el teléfono: página /movil y /etiquetas, y sus datos
+# ---------------------------------------------------------------------
+
+def _pagina_admin(archivo: str, ruta: str):
+    usuario = _usuario_actual()
+    if not usuario:
+        return redirect("/login?next=" + ruta)
+    if usuario["rol"] not in ROLES_ADMIN:
+        return "No autorizado", 403
+    resp = send_from_directory(os.path.dirname(os.path.abspath(__file__)), archivo)
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["Permissions-Policy"] = "camera=(self)"
+    resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resp
+
+
+@app.route("/movil", methods=["GET"])
+def movil_pagina():
+    return _pagina_admin("movil.html", "/movil")
+
+
+@app.route("/etiquetas", methods=["GET"])
+def etiquetas_pagina():
+    return _pagina_admin("etiquetas.html", "/etiquetas")
+
+
+@app.route("/api/erp/movil/buscar", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_movil_buscar():
+    return jsonify(erp.buscar_para_movil(request.args.get("q", "")))
+
+
+@app.route("/api/erp/movil/asociar", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_movil_asociar():
+    d = request.get_json(silent=True) or {}
+    try:
+        erp.asociar_barras(int(d.get("catalogo_id")), d.get("codigo"))
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": str(e) if isinstance(e, ValueError) else "datos inválidos"}), 400
+    db.registrar_accion("Inventario móvil", None, "asociar_codigo", {"catalogo_id": d.get("catalogo_id")}, request.usuario["nombre"])
+    return jsonify({"ok": True})
+
+
+@app.route("/api/erp/movil/lote", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_movil_lote():
+    d = request.get_json(silent=True) or {}
+    try:
+        return jsonify(erp.aplicar_lote_movil(str(d.get("lote_id") or ""), d.get("modo"), d.get("items"), request.usuario["id"]))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/erp/movil/etiquetas", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_movil_etiquetas():
+    """Productos para imprimir etiquetas QR (el QR lleva el código del producto)."""
+    q = (request.args.get("q") or "").strip().lower()
+    with db.conectar() as con:
+        filas = con.execute(
+            "SELECT id, codigo, nombre, marca, codigo_barras FROM catalogo WHERE codigo IS NOT NULL AND codigo != '' "
+            + ("AND (lower(codigo) LIKE ? OR lower(nombre) LIKE ? OR lower(marca) LIKE ?) " if q else "") + "ORDER BY nombre LIMIT 300",
+            ((f"%{q}%",) * 3) if q else ()).fetchall()
+    return jsonify([dict(f) for f in filas])
+
+
 @app.route("/api/erp/cobranza", methods=["GET"])
 @requiere_sesion(roles=ROLES_ADMIN)
 def erp_cobranza():
