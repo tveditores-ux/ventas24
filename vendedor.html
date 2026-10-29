@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#05070d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>V24 · Vendedor</title>
+<script>try{var t=localStorage.getItem('v24v-tema');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+<style>
+  :root {
+    --bg:#05070d; --panel:rgba(14,24,44,.62); --panel-solid:#0e182c; --line:rgba(34,240,255,.28); --line-soft:rgba(140,170,220,.16);
+    --fg:#e6f1ff; --muted:#8aa0c2; --cyan:#22f0ff; --violet:#8b5cf6; --ok:#4ade80; --warn:#fbbf24; --bad:#ff4d6d; --glow:0 0 22px rgba(34,240,255,.2); --grid:rgba(34,240,255,.05); color-scheme: dark;
+    --fuente: Bahnschrift, "DIN Alternate", "Segoe UI", system-ui, -apple-system, sans-serif; --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#eef3fb; --panel:rgba(255,255,255,.8); --panel-solid:#fff; --line:rgba(8,145,178,.4); --line-soft:rgba(60,90,140,.18);
+    --fg:#0b1a33; --muted:#51688c; --cyan:#0891b2; --violet:#6d3fe0; --ok:#15803d; --warn:#b45309; --bad:#c81e4a; --glow:0 0 18px rgba(8,145,178,.15); --grid:rgba(8,145,178,.07); color-scheme: light; } }
+  :root[data-theme="light"] { --bg:#eef3fb; --panel:rgba(255,255,255,.8); --panel-solid:#fff; --line:rgba(8,145,178,.4); --line-soft:rgba(60,90,140,.18);
+    --fg:#0b1a33; --muted:#51688c; --cyan:#0891b2; --violet:#6d3fe0; --ok:#15803d; --warn:#b45309; --bad:#c81e4a; --glow:0 0 18px rgba(8,145,178,.15); --grid:rgba(8,145,178,.07); color-scheme: light; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; } [hidden] { display:none !important; }
+  html, body { height:100%; margin:0; }
+  body { background:radial-gradient(1100px 560px at 85% -10%, rgba(139,92,246,.18), transparent 60%), radial-gradient(800px 480px at -10% 110%, rgba(34,240,255,.13), transparent 55%), var(--bg); color:var(--fg); font:15px/1.45 var(--fuente); overflow:hidden; }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; background-image:linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size:34px 34px; mask-image:radial-gradient(circle at 50% 25%, #000 15%, transparent 75%); }
+  button, input, select, textarea { font:inherit; color:inherit; }
+  button { border:1px solid var(--line-soft); background:var(--panel); border-radius:14px; min-height:46px; padding:6px 16px; font-weight:700; letter-spacing:.3px; cursor:pointer; backdrop-filter:blur(10px); }
+  button:active { transform:scale(.97); } button:disabled { opacity:.45; }
+  button.neon { background:linear-gradient(135deg, rgba(34,240,255,.2), rgba(139,92,246,.28)); border-color:var(--line); box-shadow:var(--glow); }
+  button.pri { background:linear-gradient(135deg, var(--cyan), var(--violet)); color:#04101c; border:0; box-shadow:0 0 26px rgba(34,240,255,.32); }
+  button.chico { min-height:38px; padding:3px 12px; font-size:13px; border-radius:11px; }
+  input[type=text], input[type=search], input[type=number], input[type=tel], input[type=date], select, textarea { width:100%; min-height:46px; padding:9px 14px; border-radius:12px; border:1px solid var(--line-soft); background:var(--panel-solid); outline:none; }
+  textarea { min-height:84px; resize:vertical; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+  .app { position:relative; height:100dvh; display:grid; grid-template-rows:auto 1fr auto; max-width:640px; margin:0 auto; }
+  header { padding:calc(10px + env(safe-area-inset-top)) 14px 8px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .marca { display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:2.2px; font-size:13px; text-transform:uppercase; }
+  .marca i { width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg, var(--cyan), var(--violet)); box-shadow:var(--glow); display:grid; place-items:center; font-style:normal; color:#04101c; font-size:12px; letter-spacing:0; }
+  .marca small { display:block; color:var(--muted); font-weight:600; letter-spacing:1.4px; font-size:10px; }
+  .chip { font:700 11px var(--mono); letter-spacing:.8px; text-transform:uppercase; padding:5px 10px; border-radius:999px; border:1px solid var(--line-soft); background:var(--panel); white-space:nowrap; }
+  .chip.on { color:var(--cyan); border-color:var(--line); } .chip.ok { color:var(--ok); border-color:var(--ok); } .chip.warn { color:var(--warn); border-color:var(--warn); } .chip.mal { color:var(--bad); border-color:var(--bad); }
+  main { overflow-y:auto; padding:4px 14px 18px; -webkit-overflow-scrolling:touch; }
+  nav.dock { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; padding:8px 10px calc(8px + env(safe-area-inset-bottom)); background:linear-gradient(to top, var(--bg) 60%, transparent); }
+  nav.dock button { display:flex; flex-direction:column; align-items:center; gap:2px; min-height:56px; padding:4px 2px; font-size:10px; letter-spacing:1.1px; text-transform:uppercase; color:var(--muted); border-radius:15px; position:relative; }
+  nav.dock button svg { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  nav.dock button[aria-selected="true"] { color:var(--cyan); border-color:var(--line); box-shadow:var(--glow); background:linear-gradient(180deg, rgba(34,240,255,.12), transparent); }
+  nav.dock .n { position:absolute; top:3px; right:10px; background:var(--violet); color:#fff; font:800 10px var(--mono); min-width:18px; height:18px; border-radius:9px; display:grid; place-items:center; padding:0 4px; }
+  .glass { background:var(--panel); border:1px solid var(--line-soft); border-radius:18px; backdrop-filter:blur(14px); padding:14px; margin-top:12px; } .glass.hl { border-color:var(--line); box-shadow:var(--glow); }
+  .eti { font:700 10.5px var(--mono); letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); }
+  .nombre { font-weight:800; font-size:16px; line-height:1.25; } .cod { font:600 12px var(--mono); color:var(--muted); letter-spacing:.5px; }
+  .cl2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .num { font:800 30px/1 var(--mono); color:var(--cyan); text-shadow:0 0 16px rgba(34,240,255,.4); }
+  .fila { display:flex; align-items:center; gap:10px; } .fila.sep { justify-content:space-between; } .envolver { flex-wrap:wrap; }
+  .kpi { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; } .kpi button { text-align:left; padding:12px 14px; display:block; min-height:84px; }
+  .kpi .num { font-size:28px; display:block; } .kpi span.t { font:600 11.5px var(--fuente); color:var(--muted); letter-spacing:.3px; display:block; margin-top:4px; }
+  .acciones { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; } .acciones button { min-height:64px; }
+  .item { padding:12px 0; border-top:1px solid var(--line-soft); } .item:first-child { border-top:0; }
+  .tarjeta { width:100%; text-align:left; display:block; margin-top:10px; padding:12px 14px; border-radius:16px; }
+  .paso { display:flex; align-items:center; gap:8px; } .paso button { width:46px; min-height:46px; padding:0; font-size:22px; } .paso input { text-align:center; font:800 20px var(--mono); max-width:84px; min-height:46px; padding:4px; }
+  .est { font:800 11px var(--mono); letter-spacing:.6px; text-transform:uppercase; padding:3px 9px; border-radius:999px; border:1px solid currentColor; white-space:nowrap; }
+  .est.disponible, .est.pago_confirmado, .est.a_credito { color:var(--ok); } .est.poco, .est.por_pagar, .est.comprobante_recibido { color:var(--warn); } .est.agotado, .est.por_confirmar { color:var(--bad); }
+  .barra { height:9px; border-radius:99px; background:var(--panel-solid); overflow:hidden; border:1px solid var(--line-soft); } .barra i { display:block; height:100%; width:0; background:linear-gradient(90deg, var(--cyan), var(--violet)); transition:width .3s; } .barra.ok i { background:var(--ok); }
+  .hoja { position:fixed; inset:0; z-index:30; background:rgba(2,4,10,.72); backdrop-filter:blur(6px); display:flex; align-items:flex-end; justify-content:center; }
+  .hoja > div { width:100%; max-width:640px; background:var(--panel-solid); border:1px solid var(--line); border-radius:24px 24px 0 0; padding:18px 16px calc(18px + env(safe-area-inset-bottom)); box-shadow:0 -10px 50px rgba(34,240,255,.2); max-height:90dvh; overflow:auto; }
+  label.c { display:block; font:700 10.5px var(--mono); letter-spacing:1.4px; text-transform:uppercase; color:var(--muted); margin:12px 0 5px; }
+  #toast { position:fixed; left:50%; top:calc(66px + env(safe-area-inset-top)); transform:translateX(-50%); z-index:60; max-width:92vw; padding:10px 18px; border-radius:999px; background:var(--panel-solid); border:1px solid var(--line); box-shadow:var(--glow); font-weight:700; font-size:14px; text-align:center; }
+  #toast.mal { border-color:var(--bad); color:var(--bad); }
+  .vacio { text-align:center; color:var(--muted); padding:28px 10px; } a { color:var(--cyan); }
+  .visor { position:relative; aspect-ratio:3/3.4; max-height:52vh; width:100%; border-radius:20px; overflow:hidden; background:#000; border:1px solid var(--line); box-shadow:var(--glow); } .visor video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .visor .marco { position:absolute; inset:16% 12%; border:2px solid var(--cyan); border-radius:16px; box-shadow:0 0 20px var(--cyan) inset, 0 0 20px var(--cyan); opacity:.7; pointer-events:none; }
+  .visor .msg { position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:20px; color:var(--muted); }
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="marca"><i>V24</i><div>Vendedor<small id="sub">remoto</small></div></div>
+    <div class="fila"><span class="chip on" id="chTasa">tasa —</span><span class="chip ok" id="chRed">en línea</span></div>
+  </header>
+  <main id="vista"></main>
+  <nav class="dock" id="dock" role="tablist" aria-label="Secciones"></nav>
+</div>
+<div id="toast" hidden role="status"></div>
+<div class="hoja" id="hoja" hidden></div>
+<script src="/static/vendor/zxing-library-0.21.3.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  function h(tag, a) {
+    var el = document.createElement(tag);
+    if (a) Object.keys(a).forEach(function (k) {
+      if (k === "text") el.textContent = a[k]; else if (k === "class") el.className = a[k]; else if (k === "html") el.innerHTML = a[k];
+      else if (k.slice(0, 2) === "on") el.addEventListener(k.slice(2), a[k]); else if (a[k] !== false && a[k] != null) el.setAttribute(k, a[k]);
+    });
+    (function add(list) { for (var i = 0; i < list.length; i++) { var c = list[i]; if (c == null || c === false) continue; if (Array.isArray(c)) add(c); else el.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } })(Array.prototype.slice.call(arguments, 2));
+    return el;
+  }
+  var CLAVE = "v24vend";
+  var S = { vista: "hoy", yo: null, resumen: null, cart: { cliente: null, items: [] }, filtroPed: "todos", cacheC: [] };
+  try { var g = JSON.parse(localStorage.getItem(CLAVE) || "null"); if (g && g.cart) S.cart = g.cart; } catch (e) { /* sin almacenamiento */ }
+  function guardar() { try { localStorage.setItem(CLAVE, JSON.stringify({ cart: S.cart })); } catch (e) { /* sin almacenamiento */ } }
+  var tToast = null;
+  function toast(t, mal) { var el = $("toast"); el.textContent = t; el.className = mal ? "mal" : ""; el.hidden = false; clearTimeout(tToast); tToast = setTimeout(function () { el.hidden = true; }, 2600); }
+  function api(ruta, op) {
+    op = Object.assign({ credentials: "same-origin" }, op || {});
+    if (op.body && typeof op.body !== "string") { op.headers = { "Content-Type": "application/json" }; op.body = JSON.stringify(op.body); }
+    return fetch(ruta, op).then(function (r) {
+      if (r.status === 401) { location.href = "/login?next=/vendedor"; throw new Error("sesión"); }
+      return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(d.error || ("Error " + r.status)); return d; });
+    });
+  }
+  var $$ = function (n, d) { return n == null ? "—" : Number(n).toLocaleString("es-VE", { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 2 : d }); };
+  var esc = function (s) { return String(s == null ? "" : s); };
+  var tasa = function () { return S.resumen && S.resumen.tasa && S.resumen.tasa.vigente ? S.resumen.tasa.tasa : null; };
+  var bs = function (usd) { var t = tasa(); return t ? "≈ Bs " + $$(usd * t) : ""; };
+  var tipoCart = function () { return S.cart.cliente && S.cart.cliente.tipo === "mayorista" ? "mayorista" : ""; };
+  var totalCart = function () { return Math.round(S.cart.items.reduce(function (s, i) { return s + i.cantidad * i.precio; }, 0) * 100) / 100; };
+  var unidadesCart = function () { return S.cart.items.reduce(function (s, i) { return s + i.cantidad; }, 0); };
+  var ESTADOS = { por_confirmar: "Por confirmar existencia", por_pagar: "Por pagar", comprobante_recibido: "Pago en revisión", pago_confirmado: "Pagado", a_credito: "A crédito" };
+
+  function hoja(contenido) { var o = $("hoja"); o.textContent = ""; o.appendChild(h("div", null, contenido)); o.hidden = false; o.onclick = function (e) { if (e.target === o) cerrar(); }; }
+  function cerrar() { $("hoja").hidden = true; detenerCam(); }
+  function campo(etq, el) { return h("div", null, h("label", { class: "c", text: etq }), el); }
+
+  /* ---------- navegación ---------- */
+  var VISTAS = [["hoy", "Hoy", '<svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/></svg>'],
+                ["clientes", "Clientes", '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14c2.5 0 4.5 2 4.5 4.5"/></svg>'],
+                ["pedido", "Pedido", '<svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>'],
+                ["stock", "Stock", '<svg viewBox="0 0 24 24"><path d="M4 7l8-4 8 4v10l-8 4-8-4z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>'],
+                ["mas", "Más", '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>']];
+  function pintarDock() {
+    var d = $("dock"); d.textContent = "";
+    VISTAS.forEach(function (v) {
+      var b = h("button", { type: "button", role: "tab", "aria-selected": String(S.vista === v[0]), html: v[2] + "<span>" + v[1] + "</span>", onclick: function () { irA(v[0]); } });
+      if (v[0] === "pedido" && S.cart.items.length) b.appendChild(h("span", { class: "n", text: String(S.cart.items.length) }));
+      d.appendChild(b);
+    });
+    var t = tasa(); $("chTasa").textContent = t ? "Bs " + $$(t) + "/$" : "sin tasa"; $("chTasa").className = "chip " + (t ? "on" : "warn");
+  }
+  function irA(v) { S.vista = v; detenerCam(); pintarDock(); var m = $("vista"); m.textContent = ""; ({ hoy: vHoy, clientes: vClientes, pedido: vPedido, stock: vStock, mas: vMas })[v](m); m.scrollTop = 0; }
+
+  /* ---------- HOY ---------- */
+  function cargarResumen() { return api("/api/vend/resumen").then(function (r) { S.resumen = r; S.yo = r; $("sub").textContent = r.nombre; pintarDock(); }); }
+  function vHoy(m) {
+    var r = S.resumen; if (!r) { m.appendChild(h("div", { class: "vacio", text: "Cargando…" })); cargarResumen().then(function () { if (S.vista === "hoy") irA("hoy"); }).catch(function () { }); return; }
+    var hora = new Date().getHours(), saludo = hora < 12 ? "Buenos días" : hora < 19 ? "Buenas tardes" : "Buenas noches";
+    m.appendChild(h("div", { class: "glass hl" }, h("div", { class: "eti", text: saludo }), h("div", { class: "nombre", style: "font-size:20px;margin-top:4px", text: r.nombre.split(" ")[0] }),
+      h("div", { class: "fila sep", style: "margin-top:12px" }, h("div", null, h("div", { class: "eti", text: "Ventas del mes (USD)" }), h("div", { class: "num", text: "$" + $$(r.ventas_mes_usd, 0) })),
+        h("div", { style: "text-align:right" }, h("div", { class: "eti", text: "Tasa BCV" }), h("div", { class: "cod", text: r.tasa && r.tasa.tasa ? "USD " + $$(r.tasa.tasa) + (r.tasa.eur ? " · EUR " + $$(r.tasa.eur) : "") : "sin tasa cargada" })))));
+    var kp = function (n, t, f, clase) { return h("button", { type: "button", class: clase || "", onclick: f }, h("span", { class: "num", text: String(n) }), h("span", { class: "t", text: t })); };
+    m.appendChild(h("div", { class: "kpi" }, kp(r.por_pagar, "pedidos esperando pago", function () { S.filtroPed = "por_pagar"; irA("mas"); pedidosVista(); }),
+      kp(r.en_revision, "pagos en revisión", function () { S.filtroPed = "comprobante_recibido"; irA("mas"); pedidosVista(); }),
+      kp(r.por_confirmar, "esperan confirmar existencia", function () { S.filtroPed = "por_confirmar"; irA("mas"); pedidosVista(); }),
+      kp(r.credito_vencido, "créditos vencidos", function () { S.filtroPed = "a_credito"; irA("mas"); pedidosVista(); }, r.credito_vencido ? "neon" : "")));
+    m.appendChild(h("div", { class: "acciones" }, h("button", { type: "button", class: "pri", text: "＋ Nuevo pedido", onclick: function () { irA("pedido"); } }), h("button", { type: "button", class: "neon", text: "▦ Escanear producto", onclick: function () { irA("stock"); setTimeout(abrirEscaner, 120); } }),
+      h("button", { type: "button", text: "Mis clientes (" + r.clientes + ")", onclick: function () { irA("clientes"); } }), h("button", { type: "button", text: r.por_tomar ? "Por tomar (" + r.por_tomar + ")" : "Buscar stock", onclick: function () { if (r.por_tomar) { irA("clientes"); modoCli = "libres"; vClientes($("vista")); } else irA("stock"); } })));
+  }
+
+  /* ---------- STOCK / DISPONIBILIDAD ---------- */
+  var tmStock = null;
+  function vStock(m) {
+    var q = h("input", { type: "search", id: "qStock", placeholder: "Código, nombre, marca o modelo…", autocomplete: "off", "aria-label": "Buscar producto" }), lista = h("div", { id: "resStock" });
+    m.appendChild(h("div", { class: "glass hl" }, h("div", { class: "fila sep" }, h("div", { class: "eti", text: "Disponibilidad y precios" }), h("button", { type: "button", class: "chico neon", text: "▦ Escanear", onclick: abrirEscaner })), h("div", { style: "margin-top:8px" }, q),
+      S.cart.cliente ? h("p", { class: "cod", text: "Precios para " + (S.cart.cliente.nombre || S.cart.cliente.telefono) + (tipoCart() ? " (mayor)" : " (detal)") }) : h("p", { class: "cod", text: "Sin cliente elegido: se muestra el precio de detal. Elige uno en «Pedido» para ver su precio." })));
+    m.appendChild(lista);
+    q.addEventListener("input", function () { clearTimeout(tmStock); tmStock = setTimeout(function () { buscarStock(q.value, lista); }, 280); });
+    setTimeout(function () { q.focus(); }, 60);
+  }
+  function buscarStock(texto, lista) {
+    if (texto.trim().length < 2) { lista.textContent = ""; return; }
+    api("/api/vend/disponibilidad?q=" + encodeURIComponent(texto.trim()) + "&tipo=" + tipoCart()).then(function (res) {
+      lista.textContent = ""; if (!res.length) { lista.appendChild(h("div", { class: "vacio", text: "Sin resultados." })); return; }
+      res.forEach(function (p) { lista.appendChild(tarjetaProducto(p)); });
+    }).catch(function (e) { toast(e.message, true); });
+  }
+  function tarjetaProducto(p) {
+    var disp = p.estado_stock === "por_confirmar" ? "por confirmar" : p.stock + " en existencia";
+    return h("div", { class: "glass" }, h("div", { class: "nombre cl2", text: p.nombre, title: p.nombre }), h("div", { class: "cod", text: (p.codigo || "") + (p.marca ? " · " + p.marca : "") }),
+      h("div", { class: "fila sep envolver", style: "margin-top:10px" }, h("span", { class: "est " + p.estado_stock, text: { disponible: "disponible", poco: "poco", agotado: "agotado", por_confirmar: "por confirmar" }[p.estado_stock] }), h("span", { class: "cod", text: disp }),
+        h("div", { style: "text-align:right" }, h("div", { class: "num", style: "font-size:22px", text: "$" + $$(p.precio_cliente) }), h("div", { class: "cod", text: bs(p.precio_cliente) }))),
+      h("div", { class: "cod", style: "margin-top:6px", text: "Detal $" + $$(p.precio) + (p.precio_mayor ? " · Mayor $" + $$(p.precio_mayor) : "") }),
+      h("div", { class: "fila", style: "margin-top:10px" }, h("button", { type: "button", class: "neon", style: "flex:1", text: "＋ Añadir al pedido", disabled: p.estado_stock === "agotado", onclick: function () { añadir(p); } })));
+  }
+  function añadir(p, n) {
+    var it = S.cart.items.filter(function (x) { return x.id === p.id; })[0];
+    if (it) it.cantidad += (n || 1); else S.cart.items.unshift({ id: p.id, codigo: p.codigo, nombre: p.nombre, marca: p.marca, stock: p.stock_verificado ? p.stock : null, precio: p.precio_cliente, cantidad: n || 1 });
+    guardar(); pintarDock(); toast("Añadido: " + p.nombre.slice(0, 34));
+  }
+
+  /* ---------- escáner (para buscar un producto) ---------- */
+  var cam = { stream: null, activo: false, timer: null, detector: null, lector: null, lienzo: document.createElement("canvas") };
+  function abrirEscaner() {
+    var video = h("video", { playsinline: "", muted: "" }), msg = h("div", { class: "msg", hidden: "hidden" });
+    hoja(h("div", null, h("div", { class: "eti", text: "Apunta a un QR o código de barras" }), h("div", { class: "visor", style: "margin-top:10px" }, video, h("div", { class: "marco" }), msg),
+      h("div", { class: "fila", style: "margin-top:12px" }, h("button", { type: "button", style: "flex:1", text: "Cerrar", onclick: cerrar }))));
+    if (window.BarcodeDetector && !cam.detector) { try { cam.detector = new BarcodeDetector({ formats: ["qr_code", "ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "codabar", "data_matrix"] }); } catch (e) { cam.detector = null; } }
+    if (window.ZXing && !cam.lector) { var Z = ZXing, hs = new Map(); hs.set(Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.QR_CODE, Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E, Z.BarcodeFormat.CODE_128, Z.BarcodeFormat.CODE_39, Z.BarcodeFormat.ITF, Z.BarcodeFormat.CODABAR, Z.BarcodeFormat.DATA_MATRIX]); hs.set(Z.DecodeHintType.TRY_HARDER, true); cam.lector = new Z.MultiFormatReader(); cam.lector.setHints(hs); }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { msg.hidden = false; msg.textContent = "Este navegador no permite usar la cámara."; return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }).then(function (st) {
+      cam.stream = st; cam.activo = true; video.srcObject = st; video.muted = true; return video.play();
+    }).then(function () { bucleCam(video); }).catch(function (e) { msg.hidden = false; msg.textContent = e && e.name === "NotAllowedError" ? "Permiso de cámara denegado: actívalo en los ajustes del navegador." : "No pude abrir la cámara."; });
+  }
+  function bucleCam(video) {
+    if (!cam.activo) return;
+    var fin = function (c) { if (c) { var codigo = String(c).trim(); cerrar(); leido(codigo); return; } cam.timer = setTimeout(function () { bucleCam(video); }, 120); };
+    if (video.readyState < 2) { cam.timer = setTimeout(function () { bucleCam(video); }, 200); return; }
+    var recorte = function () {
+      var vw = video.videoWidth, vh = video.videoHeight, lado = Math.min(vw, vh) * .9, tam = Math.min(720, Math.round(lado)), cv = cam.lienzo; cv.width = tam; cv.height = tam;
+      cv.getContext("2d", { willReadFrequently: true }).drawImage(video, (vw - lado) / 2, (vh - lado) / 2, lado, lado, 0, 0, tam, tam);
+      try { var Z = ZXing; return cam.lector.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(cv)))).getText(); } catch (e) { return null; }
+    };
+    if (cam.detector) cam.detector.detect(video).then(function (r) { fin(r && r.length ? r[0].rawValue : (cam.lector ? recorte() : null)); }).catch(function () { cam.detector = null; fin(cam.lector ? recorte() : null); });
+    else fin(cam.lector ? recorte() : null);
+  }
+  function detenerCam() { cam.activo = false; clearTimeout(cam.timer); if (cam.stream) cam.stream.getTracks().forEach(function (t) { t.stop(); }); cam.stream = null; }
+  function leido(codigo) {
+    toast("Leído: " + codigo.slice(0, 30));
+    if (S.vista !== "stock") irA("stock");
+    var q = $("qStock"); if (q) { q.value = codigo; q.dispatchEvent(new Event("input")); }
+  }
+  document.addEventListener("visibilitychange", function () { if (document.hidden) detenerCam(); });
+
+  /* ---------- CLIENTES ---------- */
+  var modoCli = "mios", tmCli = null;
+  function vClientes(m) {
+    m.textContent = "";
+    var q = h("input", { type: "search", placeholder: "Buscar por nombre, negocio o teléfono…", autocomplete: "off", "aria-label": "Buscar cliente" }), lista = h("div");
+    var seg = h("div", { class: "fila", style: "margin-top:10px" }, [["mios", "Míos"], ["libres", "Por tomar"]].map(function (x) {
+      return h("button", { type: "button", class: "chico " + (modoCli === x[0] ? "neon" : ""), style: "flex:1", text: x[1], onclick: function () { modoCli = x[0]; vClientes($("vista")); } }); }));
+    m.appendChild(h("div", { class: "glass hl" }, h("div", { class: "fila sep" }, h("div", { class: "eti", text: modoCli === "mios" ? "Mis clientes" : "Conversaciones sin dueño" }), h("button", { type: "button", class: "chico pri", text: "＋ Cliente", onclick: nuevoCliente })), h("div", { style: "margin-top:8px" }, q), seg));
+    m.appendChild(lista);
+    var cargar = function () { api("/api/vend/clientes?modo=" + modoCli + "&q=" + encodeURIComponent(q.value.trim())).then(function (l) { S.cacheC = l; pintarClientes(lista, l); }).catch(function (e) { lista.textContent = ""; lista.appendChild(h("div", { class: "vacio", text: e.message })); }); };
+    q.addEventListener("input", function () { clearTimeout(tmCli); tmCli = setTimeout(cargar, 280); }); cargar();
+  }
+  function pintarClientes(c, l) {
+    c.textContent = ""; if (!l.length) { c.appendChild(h("div", { class: "vacio", text: modoCli === "mios" ? "Aún no tienes clientes. Crea uno con «＋ Cliente»." : "No hay conversaciones sin dueño." })); return; }
+    l.forEach(function (x) {
+      c.appendChild(h("button", { type: "button", class: "tarjeta glass", style: "margin-top:10px", onclick: function () { detalleCliente(x.id); } },
+        h("div", { class: "fila sep" }, h("div", { class: "nombre cl2", text: x.nombre || x.telefono }), h("span", { class: "chip", text: x.tipo === "mayorista" ? "mayor" : "detal" })),
+        h("div", { class: "cod", text: (x.negocio ? x.negocio + " · " : "") + x.telefono }),
+        h("div", { class: "fila envolver", style: "margin-top:6px" }, x.abiertos ? h("span", { class: "chip warn", text: x.abiertos + " pedido(s) abierto(s)" }) : null, x.saldo ? h("span", { class: "chip mal", text: "debe $" + $$(x.saldo) }) : null,
+          x.fecha_ultimo_contacto ? h("span", { class: "cod", text: "último: " + x.fecha_ultimo_contacto.slice(0, 10) }) : null)));
+    });
+  }
+  function nuevoCliente() {
+    var n = h("input", { type: "text", placeholder: "Nombre de la persona", autocomplete: "off" }), t = h("input", { type: "tel", placeholder: "0412 123 4567" }), ng = h("input", { type: "text", placeholder: "Taller, repuestos, flota… (opcional)" }), ci = h("input", { type: "text", placeholder: "Ciudad (opcional)" });
+    var tp = h("select", null, h("option", { value: "mayorista", text: "Mayorista (precio al mayor)" }), h("option", { value: "cliente", text: "Detal" })), nt = h("textarea", { placeholder: "Nota (opcional)" }), err = h("div", { class: "cod", style: "color:var(--bad)" });
+    hoja(h("div", null, h("div", { class: "eti", text: "Cliente nuevo" }), campo("Nombre", n), campo("Teléfono (WhatsApp)", t), campo("Tipo", tp), campo("Negocio", ng), campo("Ciudad", ci), campo("Nota", nt), err,
+      h("div", { class: "fila", style: "margin-top:14px" }, h("button", { type: "button", style: "flex:1", text: "Cancelar", onclick: cerrar }), h("button", { type: "button", class: "pri", style: "flex:2", text: "Guardar cliente", onclick: function () {
+        api("/api/vend/clientes", { method: "POST", body: { nombre: n.value, telefono: t.value, tipo: tp.value, negocio: ng.value, ciudad: ci.value, notas: nt.value } }).then(function (r) { cerrar(); toast("Cliente creado"); cargarResumen(); modoCli = "mios"; vClientes($("vista")); detalleCliente(r.id); }).catch(function (e) { err.textContent = e.message; }); } }))));
+  }
+  function detalleCliente(id) {
+    api("/api/vend/clientes/" + id).then(function (c) {
+      var wa = "https://wa.me/" + c.telefono.replace(/\D/g, "");
+      var cont = h("div", null, h("div", { class: "eti", text: c.tipo === "mayorista" ? "Cliente · mayor" : "Cliente · detal" }), h("div", { class: "nombre", style: "font-size:19px;margin-top:4px", text: c.nombre || c.telefono }),
+        h("div", { class: "cod", text: (c.negocio ? c.negocio + " · " : "") + c.telefono + (c.ciudad ? " · " + c.ciudad : "") }),
+        h("div", { class: "fila envolver", style: "margin-top:8px" }, c.saldo ? h("span", { class: "chip mal", text: "debe $" + $$(c.saldo) }) : null, c.limite_credito ? h("span", { class: "chip", text: "crédito hasta $" + $$(c.limite_credito, 0) }) : null),
+        h("div", { class: "acciones" }, h("a", { href: wa, target: "_blank", rel: "noopener" }, h("button", { type: "button", style: "width:100%", text: "WhatsApp" })), h("a", { href: "tel:" + c.telefono }, h("button", { type: "button", style: "width:100%", text: "Llamar" })),
+          h("button", { type: "button", class: "pri", text: "＋ Pedido", onclick: function () { S.cart.cliente = { id: c.id, nombre: c.nombre, telefono: c.telefono, tipo: c.tipo }; guardar(); cerrar(); irA("pedido"); toast("Cliente elegido"); } }),
+          h("button", { type: "button", text: "Pedir al equipo", onclick: function () { pedirEquipo(c); } })));
+      cont.appendChild(h("label", { class: "c", text: "Pedidos recientes" }));
+      if (!c.pedidos.length) cont.appendChild(h("div", { class: "cod", text: "Sin pedidos todavía." }));
+      c.pedidos.forEach(function (p) { cont.appendChild(h("div", { class: "item" }, h("div", { class: "fila sep" }, h("b", { text: "$" + $$(p.total) }), h("span", { class: "est " + p.estado_pago, text: ESTADOS[p.estado_pago] || p.estado_pago })), h("div", { class: "cod", text: (p.fecha || "").slice(0, 10) + " · " + p.lineas }))); });
+      var nota = h("input", { type: "text", placeholder: "Añadir una nota (visita, acuerdo…)", maxlength: "600" });
+      cont.appendChild(h("label", { class: "c", text: "Notas" })); cont.appendChild(h("pre", { class: "cod", style: "white-space:pre-wrap;margin:0 0 8px;font-family:var(--mono)", text: c.notas || "Sin notas." }));
+      cont.appendChild(h("div", { class: "fila" }, h("div", { style: "flex:1" }, nota), h("button", { type: "button", class: "chico", text: "Guardar", onclick: function () { api("/api/vend/clientes/" + id + "/nota", { method: "POST", body: { texto: nota.value } }).then(function () { toast("Nota guardada"); detalleCliente(id); }).catch(function (e) { toast(e.message, true); }); } })));
+      cont.appendChild(h("div", { style: "margin-top:14px" }, h("button", { type: "button", style: "width:100%", text: "Cerrar", onclick: cerrar }))); hoja(cont);
+    }).catch(function (e) { if (modoCli === "libres") tomarCliente(id); else toast(e.message, true); });
+  }
+  function tomarCliente(id) {
+    hoja(h("div", null, h("div", { class: "eti", text: "Conversación sin dueño" }), h("p", { text: "Si la tomas, queda asignada a ti y sale de la lista de los demás. ¿La tomas?" }),
+      h("div", { class: "fila" }, h("button", { type: "button", style: "flex:1", text: "No", onclick: cerrar }), h("button", { type: "button", class: "pri", style: "flex:2", text: "Tomar cliente", onclick: function () {
+        api("/api/vend/clientes/" + id + "/tomar", { method: "POST" }).then(function () { cerrar(); toast("Cliente tuyo"); modoCli = "mios"; cargarResumen(); vClientes($("vista")); }).catch(function (e) { toast(e.message, true); }); } }))));
+  }
+  function pedirEquipo(c) {
+    var tp = h("select", null, h("option", { value: "condiciones", text: "Condiciones o descuento" }), h("option", { value: "existencia", text: "Confirmar existencia" }), h("option", { value: "pago", text: "Pago o crédito" }), h("option", { value: "otro", text: "Otro" }));
+    var as = h("input", { type: "text", placeholder: "¿Qué necesitas? (en una frase)" }), dt = h("textarea", { placeholder: "Detalles: productos, cantidades, qué te pidió el cliente" }), err = h("div", { class: "cod", style: "color:var(--bad)" });
+    hoja(h("div", null, h("div", { class: "eti", text: "Pedir al equipo · " + (c.nombre || c.telefono) }), campo("Tipo", tp), campo("Asunto", as), campo("Detalle", dt), err,
+      h("div", { class: "fila", style: "margin-top:14px" }, h("button", { type: "button", style: "flex:1", text: "Cancelar", onclick: cerrar }), h("button", { type: "button", class: "pri", style: "flex:2", text: "Enviar", onclick: function () {
+        api("/api/vend/solicitud", { method: "POST", body: { contacto_id: c.id, tipo: tp.value, asunto: as.value, detalle: dt.value } }).then(function () { cerrar(); toast("Solicitud enviada al equipo"); }).catch(function (e) { err.textContent = e.message; }); } }))));
+  }
+
+  /* ---------- PEDIDO ---------- */
+  function vPedido(m) {
+    var cl = S.cart.cliente;
+    m.appendChild(h("div", { class: "glass hl" }, h("div", { class: "fila sep" }, h("div", null, h("div", { class: "eti", text: "Cliente del pedido" }), h("div", { class: "nombre", text: cl ? (cl.nombre || cl.telefono) : "Sin elegir" }), cl ? h("div", { class: "cod", text: cl.telefono + " · " + (cl.tipo === "mayorista" ? "precio mayor" : "precio detal") }) : null),
+      h("button", { type: "button", class: "chico neon", text: cl ? "Cambiar" : "Elegir", onclick: elegirCliente }))));
+    if (!S.cart.items.length) { m.appendChild(h("div", { class: "glass vacio" }, h("p", { text: "Aún no hay productos. Búscalos o escanéalos en «Stock» y toca «Añadir al pedido»." }), h("button", { type: "button", class: "neon", text: "Buscar productos", onclick: function () { irA("stock"); } }))); return; }
+    var lista = h("div", { class: "glass" });
+    S.cart.items.forEach(function (it) {
+      var inp = h("input", { type: "number", inputmode: "numeric", min: "1", value: String(it.cantidad), "aria-label": "Cantidad" }), sub = h("div", { class: "cod", text: "" });
+      var fijar = function (v) { it.cantidad = Math.max(1, Math.min(100000, Math.round(Number(v) || 1))); inp.value = String(it.cantidad); sub.textContent = linea(it); guardar(); totales(); };
+      sub.textContent = linea(it); inp.addEventListener("change", function () { fijar(inp.value); }); inp.addEventListener("focus", function () { inp.select(); });
+      lista.appendChild(h("div", { class: "item" }, h("div", { class: "nombre cl2", style: "font-size:15px", text: it.nombre }), h("div", { class: "cod", text: (it.codigo || "") + " · $" + $$(it.precio) + " c/u" + (it.stock != null && it.cantidad > it.stock ? " · ⚠ solo hay " + it.stock : "") }),
+        h("div", { class: "fila sep", style: "margin-top:8px" }, h("div", { class: "paso" }, h("button", { type: "button", text: "−", onclick: function () { fijar(it.cantidad - 1); } }), inp, h("button", { type: "button", text: "+", onclick: function () { fijar(it.cantidad + 1); } })), sub,
+          h("button", { type: "button", class: "chico", text: "Quitar", onclick: function () { S.cart.items = S.cart.items.filter(function (x) { return x !== it; }); guardar(); irA("pedido"); } }))));
+    });
+    m.appendChild(lista);
+    var tot = h("div", { class: "glass hl" }), barra = h("i"), msg = h("div", { class: "cod", style: "margin-top:6px" });
+    var totales = function () {
+      var t = totalCart(), u = unidadesCart(), may = tipoCart() === "mayorista"; tot.textContent = "";
+      tot.appendChild(h("div", { class: "fila sep" }, h("div", null, h("div", { class: "eti", text: "Total · " + u + " unidades" }), h("div", { class: "num", text: "$" + $$(t) }), h("div", { class: "cod", text: bs(t) })),
+        h("div", { style: "text-align:right" }, h("div", { class: "eti", text: "tasa del día" }), h("div", { class: "cod", text: tasa() ? "Bs " + $$(tasa()) : "sin cargar" }))));
+      if (may) { var p = Math.min(100, Math.max(t / 500, u / 100) * 100), ok = p >= 100; var bd = h("div", { class: "barra" + (ok ? " ok" : ""), style: "margin-top:10px" }, h("i", { style: "width:" + p + "%" }));
+        tot.appendChild(bd); tot.appendChild(h("div", { class: "cod", style: "margin-top:6px;color:" + (ok ? "var(--ok)" : "var(--warn)"), text: ok ? "Cumple el pedido mínimo al mayor ($500 o 100 unidades)." : "Mínimo al mayor: $500 o 100 unidades. Te faltan $" + $$(Math.max(0, 500 - t)) + " o " + Math.max(0, 100 - u) + " unidades." })); }
+      tot.appendChild(h("div", { class: "fila", style: "margin-top:12px" }, h("button", { type: "button", style: "flex:1", text: "Cotizar por WhatsApp", disabled: !S.cart.cliente, onclick: cotizar }), h("button", { type: "button", class: "pri", style: "flex:1", text: "Crear pedido", disabled: !S.cart.cliente, onclick: confirmarPedido })));
+      if (!S.cart.cliente) tot.appendChild(h("div", { class: "cod", style: "margin-top:8px;color:var(--warn)", text: "Elige el cliente para cotizar o crear el pedido." }));
+      tot.appendChild(h("div", { class: "fila", style: "margin-top:10px" }, h("button", { type: "button", class: "chico", text: "Vaciar", onclick: function () { if (confirm("¿Vaciar el pedido?")) { S.cart.items = []; guardar(); irA("pedido"); } } })));
+    };
+    totales(); m.appendChild(tot);
+  }
+  function linea(it) { return "$" + $$(it.cantidad * it.precio); }
+  function elegirCliente() {
+    var q = h("input", { type: "search", placeholder: "Buscar mi cliente…", autocomplete: "off" }), lista = h("div"), tm;
+    var cargar = function () { api("/api/vend/clientes?modo=mios&q=" + encodeURIComponent(q.value.trim())).then(function (l) { lista.textContent = ""; if (!l.length) lista.appendChild(h("div", { class: "vacio", text: "Sin clientes. Crea uno en «Clientes»." }));
+      l.forEach(function (c) { lista.appendChild(h("button", { type: "button", class: "tarjeta", onclick: function () { S.cart.cliente = { id: c.id, nombre: c.nombre, telefono: c.telefono, tipo: c.tipo }; guardar(); cerrar(); repreciar().then(function () { irA("pedido"); }); } },
+        h("b", { text: c.nombre || c.telefono }), h("div", { class: "cod", text: c.telefono + " · " + (c.tipo === "mayorista" ? "mayor" : "detal") }))); }); }).catch(function (e) { toast(e.message, true); }); };
+    q.addEventListener("input", function () { clearTimeout(tm); tm = setTimeout(cargar, 250); });
+    hoja(h("div", null, h("div", { class: "eti", text: "Elegir cliente" }), h("div", { style: "margin-top:8px" }, q), lista, h("div", { style: "margin-top:12px" }, h("button", { type: "button", style: "width:100%", text: "Cerrar", onclick: cerrar })))); cargar();
+  }
+  function repreciar() {   // al cambiar de cliente, los precios se recalculan según su tipo
+    return Promise.all(S.cart.items.map(function (it) { return api("/api/vend/disponibilidad?q=" + encodeURIComponent(it.codigo || it.nombre) + "&tipo=" + tipoCart()).then(function (r) { var f = r.filter(function (x) { return x.id === it.id; })[0]; if (f) { it.precio = f.precio_cliente; it.stock = f.stock_verificado ? f.stock : null; } }).catch(function () { }); })).then(guardar);
+  }
+  function textoCotizacion() {
+    var c = S.cart.cliente, t = totalCart(), f = new Date(), l = ["*Cotización · Ventas 24*", f.toLocaleDateString("es-VE") + " · para " + (c.nombre || c.telefono), ""];
+    S.cart.items.forEach(function (i) { l.push("• " + i.cantidad + " x " + i.nombre.replace(/^\[[^\]]*\]\s*/, "").slice(0, 60) + " — $" + $$(i.precio) + " c/u = $" + $$(i.cantidad * i.precio)); });
+    l.push("", "*Total: $" + $$(t) + "*" + (tasa() ? " (" + bs(t) + " a la tasa de hoy, Bs " + $$(tasa()) + ")" : ""), "", "Cotización válida por 24 horas. El pago se realiza a la tasa del día. Disponibilidad sujeta a existencia al momento del pedido.");
+    return l.join("\n");
+  }
+  function cotizar() {
+    var texto = textoCotizacion(), wa = "https://wa.me/" + S.cart.cliente.telefono.replace(/\D/g, "") + "?text=" + encodeURIComponent(texto);
+    var ta = h("textarea", { style: "min-height:200px;font:13px/1.45 var(--mono)", readonly: "readonly" }); ta.value = texto;
+    hoja(h("div", null, h("div", { class: "eti", text: "Cotización lista" }), h("div", { style: "margin-top:8px" }, ta), h("p", { class: "cod", text: "Una cotización no reserva inventario. Para apartar la mercancía crea el pedido." }),
+      h("div", { class: "fila", style: "margin-top:10px" }, h("button", { type: "button", style: "flex:1", text: "Copiar", onclick: function () { try { navigator.clipboard.writeText(texto).then(function () { toast("Copiado"); }, function () { ta.select(); }); } catch (e) { ta.select(); } } }),
+        h("a", { href: wa, target: "_blank", rel: "noopener", style: "flex:2" }, h("button", { type: "button", class: "pri", style: "width:100%", text: "Abrir WhatsApp" })))));
+  }
+  function confirmarPedido() {
+    var t = totalCart(), c = S.cart.cliente;
+    hoja(h("div", null, h("div", { class: "eti", text: "Confirmar pedido" }), h("div", { class: "nombre", style: "margin:8px 0", text: (c.nombre || c.telefono) + " · $" + $$(t) }), h("div", { class: "cod", text: unidadesCart() + " unidades en " + S.cart.items.length + " producto(s). Si hay existencia verificada se reserva por 7 días hasta que se pague." }),
+      h("div", { class: "fila", style: "margin-top:14px" }, h("button", { type: "button", style: "flex:1", text: "Cancelar", onclick: cerrar }), h("button", { type: "button", class: "pri", style: "flex:2", text: "Crear pedido", onclick: crearPedido }))));
+  }
+  function crearPedido() {
+    var cont = $("hoja").firstChild; cont.textContent = "Creando el pedido…";
+    api("/api/vend/pedido", { method: "POST", body: { contacto_id: S.cart.cliente.id, items: S.cart.items.map(function (i) { return { catalogo_id: i.id, cantidad: i.cantidad }; }) } }).then(function (r) {
+      S.cart.items = []; guardar(); cargarResumen();
+      var c = h("div", { style: "text-align:center" }, h("div", { class: "num", style: "font-size:38px", text: "✔" }), h("div", { class: "nombre", style: "margin-top:6px", text: "Pedido creado · $" + $$(r.total) }), h("p", { class: "cod", text: r.mensaje }));
+      if (r.estado_pago === "por_pagar") {
+        c.appendChild(h("button", { type: "button", class: "pri", style: "width:100%;margin-top:6px", text: "Enviar total y datos de pago al cliente", onclick: function () { avisar(r.pedido_id, c); } }));
+        c.appendChild(h("p", { class: "cod", text: "Se lo manda el sistema por WhatsApp. Si la ventana de 24 h está cerrada, te dejo el mensaje listo para enviarlo tú." }));
+      }
+      c.appendChild(h("button", { type: "button", style: "width:100%;margin-top:8px", text: "Ver mis pedidos", onclick: function () { cerrar(); S.filtroPed = "todos"; irA("mas"); pedidosVista(); } }));
+      $("hoja").firstChild.textContent = ""; $("hoja").firstChild.appendChild(c); irA("pedido");
+    }).catch(function (e) { $("hoja").firstChild.textContent = ""; $("hoja").firstChild.appendChild(h("div", null, h("p", { style: "color:var(--bad);font-weight:700", text: e.message }), h("button", { type: "button", style: "width:100%", text: "Entendido", onclick: cerrar }))); });
+  }
+  function avisar(pid, cont) {
+    api("/api/vend/pedido/" + pid + "/avisar", { method: "POST" }).then(function (r) {
+      cont.textContent = ""; if (r.enviado) { cont.appendChild(h("div", { class: "num", style: "font-size:34px", text: "✔" })); cont.appendChild(h("div", { class: "nombre", text: "Enviado al cliente por WhatsApp" })); }
+      else { var wa = "https://wa.me/" + r.telefono.replace(/\D/g, "") + "?text=" + encodeURIComponent(r.texto); cont.appendChild(h("p", { class: "cod", text: "El sistema no pudo escribirle (" + (r.motivo || "ventana cerrada") + "). Envíaselo tú:" }));
+        cont.appendChild(h("a", { href: wa, target: "_blank", rel: "noopener" }, h("button", { type: "button", class: "pri", style: "width:100%", text: "Abrir WhatsApp con el mensaje" }))); }
+      cont.appendChild(h("button", { type: "button", style: "width:100%;margin-top:10px", text: "Cerrar", onclick: cerrar }));
+    }).catch(function (e) { toast(e.message, true); });
+  }
+
+  /* ---------- MÁS: pedidos, solicitudes, ajustes ---------- */
+  function vMas(m) {
+    m.appendChild(h("div", { class: "glass hl" }, h("div", { class: "eti", text: "Mis pedidos" }), h("div", { id: "boxPed" })));
+    pedidosVista();
+    var T = ["auto", "light", "dark"], X = { auto: "◐ Automático", light: "☀ Claro", dark: "☾ Oscuro" };
+    var tb = h("button", { type: "button", text: X[temaActual()], onclick: function () { var t = T[(T.indexOf(temaActual()) + 1) % 3]; aplicarTema(t); tb.textContent = X[t]; } });
+    m.appendChild(h("div", { class: "glass" }, h("div", { class: "eti", text: "Atajos y apariencia" }), h("div", { class: "fila envolver", style: "margin-top:8px" }, tb, h("a", { href: "/crm" }, h("button", { type: "button", text: "Abrir el CRM" })), h("button", { type: "button", text: "Cerrar sesión", onclick: function () { fetch("/api/crm/logout", { method: "POST", credentials: "same-origin" }).then(function () { location.href = "/login?next=/vendedor"; }); } }))));
+  }
+  function pedidosVista() {
+    var box = $("boxPed"); if (!box) return; box.textContent = "";
+    var filtros = [["todos", "Todos"], ["por_pagar", "Por pagar"], ["comprobante_recibido", "En revisión"], ["por_confirmar", "Por confirmar"], ["pago_confirmado", "Pagados"], ["a_credito", "Crédito"]];
+    box.appendChild(h("div", { class: "fila envolver", style: "margin:8px 0" }, filtros.map(function (f) { return h("button", { type: "button", class: "chico " + (S.filtroPed === f[0] ? "neon" : ""), text: f[1], onclick: function () { S.filtroPed = f[0]; pedidosVista(); } }); })));
+    var lista = h("div", null, h("div", { class: "vacio", text: "Cargando…" })); box.appendChild(lista);
+    api("/api/vend/pedidos").then(function (l) {
+      lista.textContent = ""; var v = l.filter(function (p) { return S.filtroPed === "todos" || p.estado_pago === S.filtroPed; });
+      if (!v.length) { lista.appendChild(h("div", { class: "vacio", text: "No hay pedidos en esta lista." })); return; }
+      v.forEach(function (p) {
+        lista.appendChild(h("div", { class: "item" }, h("div", { class: "fila sep" }, h("b", { text: p.cliente }), h("span", { class: "est " + p.estado_pago, text: ESTADOS[p.estado_pago] || p.estado_pago })), h("div", { class: "fila sep" }, h("span", { class: "num", style: "font-size:20px", text: "$" + $$(p.total) }), h("span", { class: "cod", text: (p.fecha || "").slice(0, 10) })),
+          h("div", { class: "cod cl2", text: p.lineas }), p.estado_pago === "por_pagar" && p.reservado_hasta ? h("div", { class: "cod", style: "color:var(--warn)", text: "Reserva hasta " + p.reservado_hasta.slice(0, 10) }) : null,
+          p.estado_pago === "a_credito" && p.credito_hasta ? h("div", { class: "cod", text: "Vence " + p.credito_hasta }) : null,
+          p.estado_pago === "por_pagar" ? h("div", { class: "fila envolver", style: "margin-top:8px" }, h("button", { type: "button", class: "chico pri", text: "Cargar comprobante", onclick: function () { comprobante(p); } }), h("button", { type: "button", class: "chico", text: "Enviar datos de pago", onclick: function () { var c = h("div"); hoja(c); avisar(p.id, c); } })) : null));
+      });
+    }).catch(function (e) { lista.textContent = ""; lista.appendChild(h("div", { class: "vacio", text: e.message })); });
+  }
+  function comprobante(p) {
+    var hoy = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    var bn = h("input", { type: "text", placeholder: "Banco o Zelle" }), rf = h("input", { type: "text", placeholder: "Número de referencia" }), mt = h("input", { type: "text", inputmode: "decimal", placeholder: "Monto pagado" }),
+      mo = h("select", null, h("option", { value: "USD", text: "Dólares" }), h("option", { value: "VES", text: "Bolívares" })), fe = h("input", { type: "date", value: hoy }), err = h("div", { class: "cod", style: "color:var(--bad)" });
+    hoja(h("div", null, h("div", { class: "eti", text: "Comprobante · " + p.cliente + " · $" + $$(p.total) }), campo("Banco", bn), campo("Referencia", rf), campo("Monto", mt), campo("Moneda", mo), campo("Fecha del pago", fe), err,
+      h("p", { class: "cod", text: "El agente de seguridad lo revisa y la administración confirma el pago antes de despachar." }),
+      h("div", { class: "fila", style: "margin-top:12px" }, h("button", { type: "button", style: "flex:1", text: "Cancelar", onclick: cerrar }), h("button", { type: "button", class: "pri", style: "flex:2", text: "Enviar a revisión", onclick: function () {
+        api("/api/crm/pedidos/" + p.id + "/comprobante", { method: "POST", body: { banco: bn.value, referencia: rf.value, monto: mt.value, moneda: mo.value, fecha_pago: fe.value } }).then(function (r) { cerrar(); toast("Enviado a revisión (" + r.semaforo + ")"); cargarResumen(); pedidosVista(); }).catch(function (e) { err.textContent = e.message; }); } }))));
+  }
+  function temaActual() { try { var t = localStorage.getItem("v24v-tema"); return t === "light" || t === "dark" ? t : "auto"; } catch (e) { return "auto"; } }
+  function aplicarTema(t) { if (t === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", t); try { if (t === "auto") localStorage.removeItem("v24v-tema"); else localStorage.setItem("v24v-tema", t); } catch (e) { /* sin almacenamiento */ } }
+
+  /* ---------- arranque ---------- */
+  function pintarRed() { var c = $("chRed"); c.textContent = navigator.onLine ? "en línea" : "sin conexión"; c.className = "chip " + (navigator.onLine ? "ok" : "mal"); }
+  window.addEventListener("online", pintarRed); window.addEventListener("offline", pintarRed); window.addEventListener("pagehide", detenerCam);
+  window.__vend = { estado: S, irA: irA, añadir: añadir };
+  pintarRed(); pintarDock(); cargarResumen().catch(function () { }).then(function () { irA("hoy"); });
+})();
+</script>
+</body>
+</html>

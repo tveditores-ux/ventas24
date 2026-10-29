@@ -46,6 +46,7 @@ import ciclo
 import bcv
 import contable
 import erp
+import vendedor
 import voz
 import importacion
 import zipfile
@@ -904,6 +905,108 @@ def erp_movil_etiquetas():
             + ("AND (lower(codigo) LIKE ? OR lower(nombre) LIKE ? OR lower(marca) LIKE ?) " if q else "") + "ORDER BY nombre LIMIT 300",
             ((f"%{q}%",) * 3) if q else ()).fetchall()
     return jsonify([dict(f) for f in filas])
+
+
+# ---------------------------------------------------------------------
+# Remoto para vendedores humanos (página /vendedor; lógica en vendedor.py)
+# ---------------------------------------------------------------------
+
+@app.route("/vendedor", methods=["GET"])
+def vendedor_pagina():
+    usuario = _usuario_actual()
+    if not usuario:
+        return redirect("/login?next=/vendedor")
+    resp = send_from_directory(os.path.dirname(os.path.abspath(__file__)), "vendedor.html")
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["Permissions-Policy"] = "camera=(self)"
+    resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resp
+
+
+def _vend(fn):
+    """Corre una función de vendedor.py y traduce sus ValueError a un 400 con el motivo."""
+    try:
+        return jsonify(fn())
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/vend/resumen", methods=["GET"])
+@requiere_sesion()
+def vend_resumen():
+    return jsonify({**vendedor.resumen(request.usuario), "nombre": request.usuario["nombre"], "rol": request.usuario["rol"]})
+
+
+@app.route("/api/vend/disponibilidad", methods=["GET"])
+@requiere_sesion()
+def vend_disponibilidad():
+    return jsonify(vendedor.disponibilidad(request.args.get("q", ""), request.args.get("tipo")))
+
+
+@app.route("/api/vend/clientes", methods=["GET", "POST"])
+@requiere_sesion()
+def vend_clientes():
+    if request.method == "GET":
+        return jsonify(vendedor.clientes(request.usuario, request.args.get("q", ""), request.args.get("modo", "mios")))
+    d = request.get_json(silent=True) or {}
+    return _vend(lambda: {"id": vendedor.crear_cliente(request.usuario, d.get("nombre"), d.get("telefono"), d.get("tipo"), d.get("negocio", ""), d.get("ciudad", ""), d.get("notas", ""))})
+
+
+@app.route("/api/vend/clientes/<int:cid>", methods=["GET"])
+@requiere_sesion()
+def vend_cliente(cid):
+    return _vend(lambda: vendedor.cliente_detalle(request.usuario, cid))
+
+
+@app.route("/api/vend/clientes/<int:cid>/tomar", methods=["POST"])
+@requiere_sesion()
+def vend_tomar(cid):
+    return _vend(lambda: {"ok": vendedor.tomar_cliente(request.usuario, cid)})
+
+
+@app.route("/api/vend/clientes/<int:cid>/nota", methods=["POST"])
+@requiere_sesion()
+def vend_nota(cid):
+    d = request.get_json(silent=True) or {}
+    return _vend(lambda: (vendedor.nota_cliente(request.usuario, cid, d.get("texto")), {"ok": True})[1])
+
+
+@app.route("/api/vend/pedidos", methods=["GET"])
+@requiere_sesion()
+def vend_pedidos():
+    return jsonify(vendedor.pedidos(request.usuario))
+
+
+@app.route("/api/vend/pedido", methods=["POST"])
+@requiere_sesion()
+def vend_pedido():
+    d = request.get_json(silent=True) or {}
+    try:
+        return jsonify(vendedor.crear_pedido(request.usuario, int(d.get("contacto_id") or 0), d.get("items"), bool(d.get("forzar_minimo"))))
+    except ValueError as e:     # incluye "ya no alcanza el stock": la reserva es todo o nada
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/vend/pedido/<int:pedido_id>/texto", methods=["GET"])
+@requiere_sesion()
+def vend_pedido_texto(pedido_id):
+    def f():
+        texto, p = vendedor.texto_cliente(request.usuario, pedido_id)
+        return {"texto": texto, "telefono": p["telefono"]}
+    return _vend(f)
+
+
+@app.route("/api/vend/pedido/<int:pedido_id>/avisar", methods=["POST"])
+@requiere_sesion()
+def vend_pedido_avisar(pedido_id):
+    return _vend(lambda: vendedor.avisar_pedido(request.usuario, pedido_id))
+
+
+@app.route("/api/vend/solicitud", methods=["POST"])
+@requiere_sesion()
+def vend_solicitud():
+    d = request.get_json(silent=True) or {}
+    return _vend(lambda: {"id": vendedor.solicitud(request.usuario, int(d.get("contacto_id") or 0), d.get("tipo"), d.get("asunto"), d.get("detalle"))})
 
 
 @app.route("/api/erp/cobranza", methods=["GET"])
