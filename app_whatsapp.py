@@ -472,14 +472,15 @@ def erp_reglas():
                 db.guardar_tasa(num("tasa"), (d.get("fuente") or "manual").strip()[:40], eur=num("eur") if d.get("eur") not in (None, "") else None)
                 db.guardar_config("tasa_auto", "0"); hecho["tasa"] = d["tasa"]   # a mano: el automático no la pisa hasta que lo reactives
             for k, clave in (("reserva_dias", "reserva_dias"), ("pedido_minimo_usd", "pedido_minimo_usd"),
-                             ("pedido_minimo_unidades", "pedido_minimo_unidades"), ("tasa_vigencia_dias", "tasa_vigencia_dias")):
+                             ("pedido_minimo_unidades", "pedido_minimo_unidades"), ("tasa_vigencia_dias", "tasa_vigencia_dias"),
+                             ("margen_max_pct", "margen_max_pct")):
                 if d.get(k) not in (None, ""):
                     db.guardar_config(clave, str(num(k))); hecho[k] = d[k]
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
         db.registrar_accion("Administración", None, "cambiar_reglas", hecho, request.usuario["nombre"])
     return jsonify({"tasa": db.tasa_vigente(), "reserva_dias": db.reserva_dias(), "pedido_minimo": db.pedido_minimo(),
-                    "tasa_vigencia_dias": db._num_config("tasa_vigencia_dias", 1)})
+                    "tasa_vigencia_dias": db._num_config("tasa_vigencia_dias", 1), "margen_max_pct": db._num_config("margen_max_pct", 30)})
 
 
 @app.route("/api/erp/importacion", methods=["GET"])
@@ -510,6 +511,17 @@ def erp_importacion_analizar():
 def erp_importacion_ver(eid):
     e = importacion.obtener(eid)
     return (jsonify(e), 200) if e else (jsonify({"error": "no encontrado"}), 404)
+
+
+@app.route("/api/erp/importacion/<int:eid>/tasa-aduana", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_importacion_tasa_aduana(eid):
+    d = request.get_json(silent=True) or {}
+    try:
+        importacion.fijar_tasa_aduana(eid, float(str(d.get("tasa")).replace(",", ".")))
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": str(e) if isinstance(e, ValueError) else "la tasa debe ser un número"}), 400
+    return jsonify(importacion.obtener(eid))
 
 
 @app.route("/api/erp/importacion/<int:eid>/<accion>", methods=["POST"])
@@ -674,6 +686,38 @@ def api_voz_llamadas():
             "SELECT v.*, c.nombre, c.telefono FROM voz_llamadas v LEFT JOIN contactos c ON c.id = v.contacto_id ORDER BY v.inicio DESC LIMIT 50"
         ).fetchall()
     return jsonify([dict(f) for f in filas])
+
+
+@app.route("/api/erp/contabilidad", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_contabilidad():
+    """Relación de ingresos (por moneda, método y tasa del día) y notas por diferencial cambiario, para la contadora."""
+    return jsonify(db.relacion_ingresos(request.args.get("desde") or None, request.args.get("hasta") or None))
+
+
+@app.route("/api/erp/contabilidad.csv", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_contabilidad_csv():
+    import csv, io
+    r = db.relacion_ingresos(request.args.get("desde") or None, request.args.get("hasta") or None)
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(["fecha", "cliente", "orden", "metodo", "moneda", "monto_original", "tasa_pago", "monto_usd", "monto_bs", "banco", "referencia"])
+    for p in r["pagos"]:
+        w.writerow([p["fecha"], p["nombre"] or p["telefono"], p["orden"], p["metodo"], p["moneda"], p["monto_original"], p["tasa_pago"], p["monto_usd"], p["monto_bs"], p["banco"], p["referencia"]])
+    return Response("\ufeff" + buf.getvalue(), mimetype="text/csv", headers={"Content-Disposition": 'attachment; filename="relacion-ingresos.csv"'})
+
+
+@app.route("/api/erp/notas-cambiarias/<int:nid>", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_nota_cambiaria(nid):
+    d = request.get_json(silent=True) or {}
+    try:
+        db.estado_nota_cambiaria(nid, d.get("estado"), (d.get("nota") or "").strip() or None)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    db.registrar_accion("Administración", None, "nota_cambiaria", {"id": nid, "estado": d.get("estado")}, request.usuario["nombre"])
+    return jsonify({"ok": True})
 
 
 @app.route("/api/erp/cobranza", methods=["GET"])

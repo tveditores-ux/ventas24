@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS erp_embarque_lineas (
 def asegurar_tablas():
     with db.conectar() as con:
         con.executescript(ESQUEMA)
+        if "tasa_aduana" not in {f["name"] for f in con.execute("PRAGMA table_info(erp_embarques)")}:
+            con.execute("ALTER TABLE erp_embarques ADD COLUMN tasa_aduana REAL")   # Bs por USD del día de la declaración aduanera
 
 
 def _num(x):
@@ -203,7 +205,9 @@ def analizar(archivos: dict, usuario_id: int | None = None) -> dict:
         A("info", f"{len(nuevos_cat)} productos no están en el catálogo y se crearán al aprobar (sin precio ni existencia): {', '.join(nuevos_cat[:20])}.")
     A("info", "El costo guardado es por UNIDAD. Falta definir si el catálogo vende por unidad o por caja de 12.")
 
+    iva_imp = next((_num(g["monto"]) for g in gastos if g["concepto"].lower().startswith("iva de importaci") and g["tipo_linea"] == "detalle"), None)
     informe = {
+        "iva_importacion_usd": iva_imp,
         "referencia": ref, "proveedor": proveedor, "fob": round(fob, 2), "costo_total": round(asignado, 2), "factor": factor,
         "unidades": sum(l["unidades"] for l in lineas),
         "costo_promedio_unidad": round(asignado / sum(l["unidades"] for l in lineas), 4) if lineas else None,
@@ -236,6 +240,8 @@ def obtener(embarque_id: int) -> dict | None:
         ls = con.execute("SELECT * FROM erp_embarque_lineas WHERE embarque_id = ? ORDER BY id", (embarque_id,)).fetchall()
     d = dict(e)
     d["informe"] = json.loads(d["informe"])
+    iva = d["informe"].get("iva_importacion_usd")
+    d["iva_credito_bs"] = round(iva * d["tasa_aduana"], 2) if iva and d.get("tasa_aduana") else None
     d["lineas"] = [dict(l) for l in ls]
     return d
 
@@ -316,6 +322,17 @@ def recibir(embarque_id: int, usuario_id: int, recibidos: dict | None = None) ->
             db.emitir_evento(con, "stock.repuesto", r)
     db.registrar_accion("Importación", None, "recibir_embarque", {"id": embarque_id}, {"lineas": len(resultado)})
     return {"lineas": resultado}
+
+
+def fijar_tasa_aduana(embarque_id: int, tasa: float):
+    """El IVA de importación es crédito fiscal a la tasa del día de la declaración aduanera: no se reexpresa después."""
+    if not tasa or tasa <= 0:
+        raise ValueError("la tasa debe ser mayor que cero")
+    with db.conectar() as con:
+        cur = con.execute("UPDATE erp_embarques SET tasa_aduana = ? WHERE id = ? AND estado != 'descartado'", (round(tasa, 4), embarque_id))
+    if cur.rowcount == 0:
+        raise ValueError("embarque no encontrado")
+    db.registrar_accion("Importación", None, "tasa_aduana", {"id": embarque_id, "tasa": tasa}, "ok")
 
 
 def descartar(embarque_id: int):

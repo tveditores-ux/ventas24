@@ -324,6 +324,7 @@
     <button class="erp-solo" data-tab="reportes" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Reportes</button>
     <button class="erp-solo" data-tab="cobranza" type="button" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5C9.5 8.4 10.6 8 12 8s2.5.6 2.5 1.7c0 2.4-5 1.3-5 3.8 0 1.1 1.1 1.7 2.5 1.7s2.5-.5 2.5-1.7"/></svg>Cobranza</button>
     <button class="super-solo" data-tab="usuarios" type="button" hidden><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14c2.5 0 4.5 2 4.5 4.5"/></svg>Usuarios</button>
+    <button class="erp-solo" data-tab="contabilidad" type="button" hidden><svg viewBox="0 0 24 24"><path d="M5 4h14v17H5z"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>Contabilidad</button>
     <button class="erp-solo" data-tab="importacion" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 15h13V6H3zM16 9h3l2 3v3h-5z"/><circle cx="7" cy="17" r="1.6"/><circle cx="17" cy="17" r="1.6"/></svg>Importación</button>
     <button class="erp-solo" data-tab="reglas" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Reglas</button>
     <button class="erp-solo" data-tab="inventario" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 9l9-5 9 5v9l-9 5-9-5z"/><path d="M3 9l9 5 9-5"/><path d="M12 14v9"/></svg>Inventario</button>
@@ -451,6 +452,21 @@
   <p class="nota-erp">Al crear un usuario el sistema genera una clave temporal que se muestra una sola vez: envíasela por un canal privado. En su primer ingreso le pide crear una propia. Las claves nunca se guardan en claro.</p>
 </div>
 
+<div id="contabilidadWrap" hidden>
+  <div class="toolbar" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+    <label>Desde<br><input type="date" id="contDesde"></label>
+    <label>Hasta<br><input type="date" id="contHasta"></label>
+    <button class="btn" id="contActualizar" type="button">Actualizar</button>
+    <a class="btn ghost" id="contCsv" href="#" download>Descargar relación de ingresos (CSV)</a>
+  </div>
+  <div class="pend-resumen" id="contResumen" style="margin-top:14px"></div>
+  <h3 class="pend-h">Relación de ingresos</h3>
+  <div class="table-wrap"><table style="min-width:0"><thead><tr><th>Fecha</th><th>Cliente</th><th>Método</th><th>Monto</th><th>Tasa</th><th>USD</th><th>Bs</th><th>Banco / ref.</th></tr></thead><tbody id="contPagos"></tbody></table></div>
+  <h3 class="pend-h">Diferencial cambiario (borradores para la contadora)</h3>
+  <div class="table-wrap"><table style="min-width:0"><thead><tr><th>Cliente</th><th>Nota</th><th>Base USD</th><th>Tasa cotización → pago</th><th>Monto Bs</th><th>Estado</th><th></th></tr></thead><tbody id="contNotas"></tbody></table></div>
+  <p class="nota-erp">Cada pago confirmado queda con su moneda, método y la tasa del BCV del día del pago. Si la tasa cambió desde la cotización, se arma un borrador de nota de débito (el dólar subió) o de crédito (bajó). Son borradores de control: la contadora decide qué se emite y qué se declara.</p>
+</div>
+
 <div id="importacionWrap" hidden>
   <div class="toolbar">
     <button class="btn" id="btnImp" type="button">Subir liquidación (ZIP o 4 CSV)</button>
@@ -471,6 +487,7 @@
     <button class="btn ghost" type="button" id="btnBcv">Actualizar desde el BCV</button>
     <label>Vigencia de la tasa (días)<br><input type="text" inputmode="numeric" name="tasa_vigencia_dias" placeholder="1"></label>
     <label>Días de reserva sin pago<br><input type="text" inputmode="numeric" name="reserva_dias" placeholder="7"></label>
+    <label>Margen máximo permitido (%)<br><input type="text" inputmode="decimal" name="margen_max_pct" placeholder="30"></label>
     <label>Pedido mínimo (USD)<br><input type="text" inputmode="decimal" name="pedido_minimo_usd" placeholder="500"></label>
     <label>o mínimo de unidades<br><input type="text" inputmode="numeric" name="pedido_minimo_unidades" placeholder="100"></label>
     <button class="btn" type="submit">Guardar</button>
@@ -603,7 +620,7 @@
     if (esAdmin()){
       document.querySelectorAll('.erp-solo').forEach(el => el.hidden = false);
       if (usuario.rol === 'super_admin') document.querySelectorAll('.super-solo').forEach(el => el.hidden = false);
-      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza(); iniciarReglas(); iniciarImportacion(); iniciarUsuarios();
+      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza(); iniciarReglas(); iniciarImportacion(); iniciarUsuarios(); iniciarContabilidad();
     }
     activarTab('pendientes');
     setInterval(refrescarInsignia, 30000);
@@ -616,7 +633,7 @@
   });
 
   // -------- pestañas --------
-  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza', 'reglas', 'importacion', 'usuarios'];
+  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza', 'reglas', 'importacion', 'usuarios', 'contabilidad'];
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -634,6 +651,7 @@
     compras: ['Compras', 'Órdenes de compra: de borrador a mercancía recibida.'],
     reportes: ['Reportes', 'Cuánto se cobra, cuánto deja y qué se mueve.'],
     cobranza: ['Cobranza', 'Lo que los clientes deben por ventas a crédito.'],
+    contabilidad: ['Contabilidad', 'Ingresos por moneda y tasa del día, y diferencial cambiario.'],
     usuarios: ['Usuarios', 'Quién entra al sistema y con qué permisos.'],
     importacion: ['Importación', 'Liquidación de embarques, costo puesto en almacén y costo promedio.'],
     reglas: ['Reglas', 'Tasa del día, reserva de inventario y pedido mínimo al mayor.'],
@@ -660,6 +678,7 @@
     else if (tab === 'reglas') cargarReglas();
     else if (tab === 'importacion') cargarImportacion();
     else if (tab === 'usuarios') cargarUsuarios();
+    else if (tab === 'contabilidad') cargarContabilidad();
     else if (tab === 'reportes'){ cargarReportes(); cargarAuditoria(); }
   }
   document.querySelectorAll('#subnav button').forEach(b => {
@@ -1310,6 +1329,44 @@
 
 
 
+  // -------- Contabilidad: ingresos y diferencial cambiario --------
+  function rangoMes(){ const h = new Date(), d1 = new Date(h.getFullYear(), h.getMonth(), 1); const f = (x) => new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10); return [f(d1), f(h)]; }
+  const fm = (n, d = 2) => n == null ? '—' : Number(n).toLocaleString('es-VE', { minimumFractionDigits: d, maximumFractionDigits: d });
+  async function cargarContabilidad(){
+    const des = document.getElementById('contDesde'), has = document.getElementById('contHasta');
+    if (!des.value){ const [a, b] = rangoMes(); des.value = a; has.value = b; }
+    document.getElementById('contCsv').href = `/api/erp/contabilidad.csv?desde=${des.value}&hasta=${has.value}`;
+    try {
+      const r = await api(`/api/erp/contabilidad?desde=${des.value}&hasta=${has.value}`);
+      if (r.status === 401){ irALogin(); return; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json(), x = d.resumen;
+      document.getElementById('contResumen').innerHTML = `
+        <div class="pend-card"><b>${x.pagos}</b><span>pagos confirmados${x.sin_tasa ? ' · ' + x.sin_tasa + ' sin tasa cargada' : ''}</span></div>
+        <div class="pend-card"><b>$${fm(x.usd_divisas)}</b><span>recibido en divisas</span></div>
+        <div class="pend-card"><b>Bs ${fm(x.bs_bolivares)}</b><span>recibido en bolívares</span></div>
+        <div class="pend-card"><b>Bs ${fm(x.diferencial_debito_bs)} / ${fm(x.diferencial_credito_bs)}</b><span>diferencial: débito / crédito</span></div>`;
+      document.getElementById('contPagos').innerHTML = d.pagos.length ? d.pagos.map(p => `
+        <tr><td>${esc(p.fecha)}</td><td>${esc(p.nombre || p.telefono)}</td><td>${p.metodo === 'divisas' ? 'Divisas' : 'Bolívares'}</td>
+        <td class="num">${p.moneda === 'USD' ? '$' : 'Bs '}${fm(p.monto_original)}</td><td class="num">${p.tasa_pago ? fm(p.tasa_pago) : '<span class="error">sin tasa</span>'}</td>
+        <td class="num">${p.monto_usd == null ? '—' : '$' + fm(p.monto_usd)}</td><td class="num">${p.monto_bs == null ? '—' : fm(p.monto_bs)}</td>
+        <td>${esc([p.banco, p.referencia].filter(Boolean).join(' · '))}</td></tr>`).join('') : '<tr><td colspan="8" class="empty">No hay pagos confirmados en ese período.</td></tr>';
+      document.getElementById('contNotas').innerHTML = d.notas.length ? d.notas.map(n => `
+        <tr><td>${esc(n.nombre || n.telefono)}</td><td>${n.tipo === 'debito' ? 'Nota de débito' : 'Nota de crédito'}</td><td class="num">$${fm(n.base_usd)}</td>
+        <td class="num">${fm(n.tasa_emision)} → ${fm(n.tasa_pago)}</td><td class="num">Bs ${fm(n.monto_bs)}</td><td>${esc(n.estado)}</td>
+        <td class="acciones-td">${n.estado === 'borrador' ? `<button class="btn ghost sm" type="button" data-nota="${n.id}" data-estado="revisada">Marcar revisada</button><button class="btn ghost sm" type="button" data-nota="${n.id}" data-estado="descartada">Descartar</button>` : ''}</td></tr>`).join('')
+        : '<tr><td colspan="7" class="empty">Sin diferencial cambiario en el período.</td></tr>';
+    } catch(e){ document.getElementById('contPagos').innerHTML = `<tr><td colspan="8" class="error">No pude cargar la contabilidad (${esc(e.message)}).</td></tr>`; }
+  }
+  function iniciarContabilidad(){
+    document.getElementById('contActualizar').addEventListener('click', cargarContabilidad);
+    document.getElementById('contNotas').addEventListener('click', async (ev) => {
+      const b = ev.target.closest('[data-nota]'); if (!b) return;
+      const rr = await api('/api/erp/notas-cambiarias/' + b.dataset.nota, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ estado: b.dataset.estado }) });
+      if (!rr.ok){ const dd = await rr.json().catch(()=>({})); alert(dd.error || 'No se pudo'); return; } cargarContabilidad();
+    });
+  }
+
   // -------- Usuarios --------
   const ROLES_USR = { vendedor:'Vendedor', admin:'Administrador', super_admin:'Super administrador' };
   function mostrarClave(nombre, clave){
@@ -1381,7 +1438,7 @@
     const i = e.informe;
     const alertas = i.alertas.map(a => `<li><span class="pago-pill ${NIVEL_IMP[a.nivel][1]}">${NIVEL_IMP[a.nivel][0]}</span> ${esc(a.texto)}</li>`).join('');
     const filas = e.lineas.map(l => `<tr><td>${esc(l.sku)}</td><td>${esc(l.descripcion||'')}</td><td class="num">${l.unidades}</td>
-      <td class="num">$${l.costo_unit_almacen.toFixed(4)}</td><td>${l.catalogo_id ? 'en catálogo' : 'se creará'}</td></tr>`).join('');
+      <td class="num">$${l.costo_unit_almacen.toFixed(4)}</td><td class="num sug" data-costo="${l.costo_unit_almacen}">—</td><td>${l.catalogo_id ? 'en catálogo' : 'se creará'}</td></tr>`).join('');
     let acciones = '';
     if (e.estado === 'borrador'){
       acciones = `${i.por_revisar ? '<label class="chk"><input type="checkbox" id="impAcepto"> Revisé los puntos marcados «Revisar»</label>' : ''}
@@ -1390,6 +1447,24 @@
     } else if (e.estado === 'aprobado'){
       acciones = '<button class="btn" type="button" id="impRecibir">Registrar recepción de la mercancía</button>';
     }
+    let maxMargen = 30; try { const rg = await (await api('/api/erp/reglas')).json(); maxMargen = rg.margen_max_pct || 30; } catch(_){ }
+    const tasaCard = `
+      <div class="card" style="margin:14px 0;padding:14px">
+        <b>IVA de importación como crédito fiscal</b>
+        <p class="muted" style="margin:6px 0">Se usa a la tasa del BCV del día de la declaración aduanera y no se reexpresa después. ${i.iva_importacion_usd ? 'IVA de importación: $' + i.iva_importacion_usd.toLocaleString('es-VE', {minimumFractionDigits:2}) + '.' : 'Este archivo no trae la línea del IVA de importación.'}</p>
+        <div class="toolbar" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <label>Tasa de aduana (Bs por $)<br><input type="text" inputmode="decimal" id="impTasaAd" value="${e.tasa_aduana || ''}" placeholder="ej. 836,50"></label>
+          <button class="btn" type="button" id="impTasaGuardar">Guardar tasa</button>
+          <span>${e.iva_credito_bs ? '<b>Crédito fiscal: Bs ' + e.iva_credito_bs.toLocaleString('es-VE', {minimumFractionDigits:2}) + '</b>' : '<span class="muted">Falta la tasa de aduana para calcular el crédito en bolívares.</span>'}</span>
+        </div>
+      </div>
+      <div class="card" style="margin:14px 0;padding:14px">
+        <b>Precio sugerido por unidad</b>
+        <div class="toolbar" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <label>Margen sobre el costo puesto en almacén (%)<br><input type="text" inputmode="decimal" id="impMargen" placeholder="ej. 25"></label>
+          <span id="impMargenMsg" class="muted">Máximo permitido: ${maxMargen} %. El margen se aplica solo al costo puesto en almacén (incluye gastos aduanales y flete).</span>
+        </div>
+      </div>`;
     document.getElementById('impDetalle').innerHTML = `
       <div class="pend-resumen">
         <div class="pend-card"><b>${esc(i.referencia)}</b><span>${esc(i.proveedor||'')} · ${esc(e.estado)}</span></div>
@@ -1398,8 +1473,9 @@
         <div class="pend-card"><b>${i.unidades}</b><span>unidades · prom. $${i.costo_promedio_unidad}</span></div>
       </div>
       <ul style="margin:14px 0;padding-left:18px;display:grid;gap:8px">${alertas}</ul>
+      ${tasaCard}
       <div class="toolbar">${acciones}</div>
-      <div class="table-wrap" style="max-height:340px"><table style="min-width:0"><thead><tr><th>Código</th><th>Descripción</th><th>Unidades</th><th>Costo unitario</th><th>Catálogo</th></tr></thead><tbody>${filas}</tbody></table></div>`;
+      <div class="table-wrap" style="max-height:340px"><table style="min-width:0"><thead><tr><th>Código</th><th>Descripción</th><th>Unidades</th><th>Costo unitario</th><th>Precio sugerido</th><th>Catálogo</th></tr></thead><tbody>${filas}</tbody></table></div>`;
     const accion = async (nombre, cuerpo, ok) => {
       const rr = await api(`/api/erp/importacion/${id}/${nombre}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo||{}) });
       const dd = await rr.json().catch(()=>({}));
@@ -1407,6 +1483,16 @@
       alert(ok(dd)); cargarImportacion(); verEmbarque(id);
     };
     const q = (x) => document.getElementById(x);
+    q('impTasaGuardar').onclick = async () => {
+      const rr = await api(`/api/erp/importacion/${id}/tasa-aduana`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tasa: q('impTasaAd').value }) });
+      const dd = await rr.json().catch(()=>({})); if (!rr.ok){ alert(dd.error || 'No se pudo guardar'); return; } verEmbarque(id);
+    };
+    q('impMargen').addEventListener('input', () => {
+      const m = parseFloat(String(q('impMargen').value).replace(',', '.')), msg = q('impMargenMsg'), pasa = !isNaN(m) && m > maxMargen;
+      document.querySelectorAll('#impDetalle .sug').forEach(td => { td.textContent = isNaN(m) || m < 0 ? '—' : '$' + (parseFloat(td.dataset.costo) * (1 + m / 100)).toFixed(2); td.style.color = pasa ? 'var(--danger)' : ''; });
+      msg.textContent = pasa ? `Ese margen supera el máximo permitido (${maxMargen} %). Ajústalo antes de cargar precios.` : `Máximo permitido: ${maxMargen} %. El margen se aplica solo al costo puesto en almacén (incluye gastos aduanales y flete).`;
+      msg.style.color = pasa ? 'var(--danger)' : '';
+    });
     if (q('impAprobar')) q('impAprobar').onclick = () => accion('aprobar', { acepto_revisar: !!(q('impAcepto') && q('impAcepto').checked) }, d => `Aprobado. Productos creados en el catálogo: ${d.productos_creados}.`);
     if (q('impDescartar')) q('impDescartar').onclick = () => confirm('¿Descartar este borrador?') && accion('descartar', {}, () => 'Descartado.');
     if (q('impRecibir')) q('impRecibir').onclick = () => confirm('¿La mercancía ya llegó al almacén? Esto suma las existencias y actualiza los costos promedio.') && accion('recibir', {}, d => `Recibido. Productos actualizados: ${d.lineas.length}.`);
@@ -1439,7 +1525,8 @@
         <div class="pend-card"><b>${t.tasa ? t.tasa.toFixed(2) : '—'}</b><span>Bs por $ · ${t.vigente ? 'vigente' : (t.tasa ? 'VENCIDA' : 'sin cargar')}<br>${esc(t.fuente || '')} ${t.auto ? '' : '(a mano: no se actualiza sola)'}</span></div>
         <div class="pend-card"><b>${t.eur ? t.eur.toFixed(2) : '—'}</b><span>Bs por € · fecha valor ${esc(t.fecha_valor || '—')}<br>${esc(cuando)}</span></div>
         <div class="pend-card"><b>${d.reserva_dias} días</b><span>de reserva sin pago</span></div>
-        <div class="pend-card"><b>$${d.pedido_minimo.usd} / ${d.pedido_minimo.unidades} uds</b><span>pedido mínimo al mayor (uno u otro)</span></div>`;
+        <div class="pend-card"><b>$${d.pedido_minimo.usd} / ${d.pedido_minimo.unidades} uds</b><span>pedido mínimo al mayor (uno u otro)</span></div>
+        <div class="pend-card"><b>${d.margen_max_pct} %</b><span>margen máximo sobre el costo puesto en almacén</span></div>`;
     } catch(e){
       document.getElementById('reglasResumen').innerHTML = `<p class="error">No pude cargar las reglas (${esc(e.message)}).</p>`;
     }

@@ -177,6 +177,42 @@ CREATE TABLE IF NOT EXISTS solicitudes_equipo (
     resuelta_en TEXT
 );
 
+-- Relación de ingresos: cada pago confirmado, con su moneda, método y la tasa del día del pago.
+CREATE TABLE IF NOT EXISTS erp_pagos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido_ref INTEGER NOT NULL,                 -- id de la primera línea de la orden
+    orden TEXT,
+    contacto_id INTEGER NOT NULL REFERENCES contactos(id),
+    comprobante_id INTEGER REFERENCES comprobantes(id),
+    fecha TEXT NOT NULL,                         -- fecha del pago (YYYY-MM-DD)
+    moneda TEXT NOT NULL,                        -- USD / VES
+    metodo TEXT NOT NULL,                        -- divisas / bolivares
+    monto_original REAL,
+    tasa_pago REAL,                              -- Bs por USD del día del pago (NULL si no había tasa cargada)
+    monto_usd REAL,
+    monto_bs REAL,
+    banco TEXT,
+    referencia TEXT,
+    registrado_por INTEGER REFERENCES usuarios(id),
+    registrado_en TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Diferencial cambiario: BORRADOR para la contadora (nota de débito o de crédito); no es un documento fiscal.
+CREATE TABLE IF NOT EXISTS erp_notas_cambiarias (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido_ref INTEGER NOT NULL,
+    contacto_id INTEGER NOT NULL REFERENCES contactos(id),
+    fecha TEXT NOT NULL DEFAULT '',              -- fecha del pago que originó el diferencial (YYYY-MM-DD)
+    tipo TEXT NOT NULL,                          -- debito / credito
+    base_usd REAL NOT NULL,
+    tasa_emision REAL NOT NULL,
+    tasa_pago REAL NOT NULL,
+    monto_bs REAL NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'borrador',     -- borrador / revisada / descartada
+    nota TEXT,
+    creada_en TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS comprobantes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pedido_id INTEGER REFERENCES pedidos(id),
@@ -255,6 +291,7 @@ def inicializar():
             ("credito_hasta", "TEXT"),                # fecha límite de pago si se autorizó crédito
             ("credito_autorizado_por", "INTEGER REFERENCES usuarios(id)"),
             ("credito_nota", "TEXT"),
+            ("tasa_emision", "REAL"),                 # Bs por USD vigente cuando se registró la orden (la de la cotización)
         ):
             if col not in cols_pedidos:
                 con.execute(f"ALTER TABLE pedidos ADD COLUMN {col} {ddl}")
@@ -586,6 +623,8 @@ def crear_orden(contacto_id: int, orden: str, lineas: list, estado_pago: str, co
     Si algo falla no queda nada guardado. Devuelve los totales por línea."""
     totales = []
     hasta = (datetime.utcnow() + timedelta(days=reserva_dias())).strftime("%Y-%m-%d %H:%M:%S")
+    _t = tasa_vigente()
+    tasa_emi = _t["tasa"] if _t["vigente"] else None
     with conectar() as con:
         for l in lineas:
             reservado = 0
@@ -601,9 +640,9 @@ def crear_orden(contacto_id: int, orden: str, lineas: list, estado_pago: str, co
             total = round(l["cantidad"] * l["precio"], 2)
             con.execute(
                 "INSERT INTO pedidos (contacto_id, producto, cantidad, precio_unitario, total, estado_pago, orden, "
-                "catalogo_id, reservado, existencia_confirmada_por, reservado_hasta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "catalogo_id, reservado, existencia_confirmada_por, reservado_hasta, tasa_emision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (contacto_id, l["producto"], l["cantidad"], l["precio"], total, estado_pago, orden,
-                 l.get("catalogo_id"), reservado, confirmado_por, hasta if reservado else None),
+                 l.get("catalogo_id"), reservado, confirmado_por, hasta if reservado else None, tasa_emi),
             )
             totales.append(total)
     return totales
@@ -793,6 +832,7 @@ def referencias_usadas(excluir_comprobante_id=None):
 def revisar_comprobante(comprobante_id: int, usuario_id: int, aceptar: bool, nota: str | None):
     """Decisión de la administración. Aceptar confirma el pago del pedido;
     rechazar lo devuelve a 'por_pagar' si no queda otro comprobante aceptado."""
+    t_pago = tasa_vigente()      # se lee antes de abrir la transacción
     with conectar() as con:
         comp = con.execute("SELECT pedido_id, estado FROM comprobantes WHERE id = ?", (comprobante_id,)).fetchone()
         if not comp:
@@ -813,6 +853,7 @@ def revisar_comprobante(comprobante_id: int, usuario_id: int, aceptar: bool, not
                 f"WHERE id IN ({','.join('?' * len(ids))})",
                 (usuario_id, *ids),
             )
+            _registrar_pago(con, comprobante_id, pid, usuario_id, t_pago["tasa"] if t_pago["vigente"] else None)
         elif pid:
             quedan = con.execute(
                 "SELECT COUNT(*) AS n FROM comprobantes WHERE pedido_id = ? AND estado IN ('pendiente', 'aceptado')",
@@ -825,6 +866,81 @@ def revisar_comprobante(comprobante_id: int, usuario_id: int, aceptar: bool, not
                         f"UPDATE pedidos SET estado_pago = 'por_pagar' WHERE id IN ({','.join('?' * len(ids))})", ids
                     )
     return True, "ok"
+
+
+def _registrar_pago(con, comprobante_id: int, pedido_id: int, usuario_id: int, tasa_pago):
+    """Deja el pago en la relación de ingresos y, si la tasa cambió desde la cotización, un borrador de nota por
+    diferencial cambiario. Nunca decide qué se declara: lo revisa la contadora."""
+    c = con.execute("SELECT * FROM comprobantes WHERE id = ?", (comprobante_id,)).fetchone()
+    lineas = [l for l in lineas_de_orden(pedido_id) if l["estado"] != "cancelado"]
+    if not c or not lineas:
+        return
+    ref, total_usd = lineas[0]["id"], round(sum(l["total"] or 0 for l in lineas), 2)
+    monto, moneda = c["monto"], (c["moneda"] or "USD").upper()
+    usd = bs = None
+    if monto is not None:
+        if moneda == "VES":
+            bs = round(monto, 2)
+            usd = round(monto / tasa_pago, 2) if tasa_pago else None
+        else:
+            usd = round(monto, 2)
+            bs = round(monto * tasa_pago, 2) if tasa_pago else None
+    fecha = c["fecha_pago"] or datetime.now().strftime("%Y-%m-%d")
+    con.execute(
+        "INSERT INTO erp_pagos (pedido_ref, orden, contacto_id, comprobante_id, fecha, moneda, metodo, monto_original, tasa_pago, "
+        "monto_usd, monto_bs, banco, referencia, registrado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (ref, lineas[0]["orden"], lineas[0]["contacto_id"], comprobante_id, fecha, moneda, "bolivares" if moneda == "VES" else "divisas",
+         monto, tasa_pago, usd, bs, c["banco"], c["referencia"], usuario_id),
+    )
+    t_emi = lineas[0]["tasa_emision"]
+    if t_emi and tasa_pago and abs(total_usd * (tasa_pago - t_emi)) >= 0.01:
+        dif = round(total_usd * (tasa_pago - t_emi), 2)
+        ya = con.execute("SELECT 1 FROM erp_notas_cambiarias WHERE pedido_ref = ? AND estado != 'descartada'", (ref,)).fetchone()
+        if not ya:
+            con.execute(
+                "INSERT INTO erp_notas_cambiarias (pedido_ref, contacto_id, fecha, tipo, base_usd, tasa_emision, tasa_pago, monto_bs) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (ref, lineas[0]["contacto_id"], fecha, "debito" if dif > 0 else "credito", total_usd, t_emi, tasa_pago, abs(dif)),
+            )
+
+
+def relacion_ingresos(desde: str | None = None, hasta: str | None = None) -> dict:
+    """Pagos confirmados entre dos fechas (YYYY-MM-DD), con totales por moneda, y las notas por diferencial del período."""
+    cond, args = [], []
+    if desde:
+        cond.append("p.fecha >= ?"); args.append(desde)
+    if hasta:
+        cond.append("p.fecha <= ?"); args.append(hasta)
+    donde = ("WHERE " + " AND ".join(cond)) if cond else ""
+    with conectar() as con:
+        pagos = [dict(f) for f in con.execute(
+            "SELECT p.*, c.nombre, c.telefono FROM erp_pagos p JOIN contactos c ON c.id = p.contacto_id "
+            f"{donde} ORDER BY p.fecha DESC, p.id DESC", args).fetchall()]
+        cond_n = [x.replace("p.fecha", "n.fecha") for x in cond]
+        notas = [dict(f) for f in con.execute(
+            "SELECT n.*, c.nombre, c.telefono FROM erp_notas_cambiarias n JOIN contactos c ON c.id = n.contacto_id "
+            + (("WHERE " + " AND ".join(cond_n)) if cond_n else "") + " ORDER BY n.id DESC", args).fetchall()]
+    resumen = {"pagos": len(pagos), "usd_divisas": 0.0, "bs_bolivares": 0.0, "total_usd": 0.0, "total_bs": 0.0, "sin_tasa": 0}
+    for p in pagos:
+        if p["metodo"] == "divisas":
+            resumen["usd_divisas"] += p["monto_usd"] or 0
+        else:
+            resumen["bs_bolivares"] += p["monto_bs"] or 0
+        resumen["total_usd"] += p["monto_usd"] or 0
+        resumen["total_bs"] += p["monto_bs"] or 0
+        resumen["sin_tasa"] += 0 if p["tasa_pago"] else 1
+    resumen = {k: (round(v, 2) if isinstance(v, float) else v) for k, v in resumen.items()}
+    resumen["diferencial_debito_bs"] = round(sum(n["monto_bs"] for n in notas if n["tipo"] == "debito" and n["estado"] != "descartada"), 2)
+    resumen["diferencial_credito_bs"] = round(sum(n["monto_bs"] for n in notas if n["tipo"] == "credito" and n["estado"] != "descartada"), 2)
+    return {"pagos": pagos, "notas": notas, "resumen": resumen}
+
+
+def estado_nota_cambiaria(nota_id: int, estado: str, nota: str | None = None):
+    if estado not in ("borrador", "revisada", "descartada"):
+        raise ValueError("estado inválido")
+    with conectar() as con:
+        cur = con.execute("UPDATE erp_notas_cambiarias SET estado = ?, nota = COALESCE(?, nota) WHERE id = ?", (estado, nota, nota_id))
+    if cur.rowcount == 0:
+        raise ValueError("nota no encontrada")
 
 
 # ---------------------------------------------------------------------
