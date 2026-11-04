@@ -79,9 +79,17 @@ MAX_ADJUNTO = 10 * 1024 * 1024
 LOCAL = "-4 hours"      # Venezuela: UTC-4, sin horario de verano
 
 
+COLUMNAS_BANCOS = (("categoria", "TEXT"), ("origen", "TEXT"), ("lote_id", "TEXT"), ("anulado", "INTEGER NOT NULL DEFAULT 0"),
+                   ("anulado_motivo", "TEXT"), ("anulado_por", "INTEGER"), ("anulado_en", "TEXT"))
+
+
 def asegurar_tablas():
     with db.conectar() as con:
         con.executescript(ESQUEMA)
+        existentes = {r["name"] for r in con.execute("PRAGMA table_info(erp_bancos)").fetchall()}
+        for col, tipo in COLUMNAS_BANCOS:
+            if col not in existentes:
+                con.execute(f"ALTER TABLE erp_bancos ADD COLUMN {col} {tipo}")
 
 
 def _fecha(f) -> str:
@@ -273,7 +281,7 @@ def bancos(desde=None, hasta=None) -> dict:
     asegurar_tablas()
     d, h = _rango(desde, hasta)
     with db.conectar() as con:
-        filas = [dict(x) for x in con.execute("SELECT * FROM erp_bancos WHERE fecha BETWEEN ? AND ? ORDER BY fecha DESC, id DESC", (d, h)).fetchall()]
+        filas = [dict(x) for x in con.execute("SELECT * FROM erp_bancos WHERE COALESCE(anulado, 0) = 0 AND fecha BETWEEN ? AND ? ORDER BY fecha DESC, id DESC", (d, h)).fetchall()]
         adj = {x["entidad_id"]: x["n"] for x in con.execute("SELECT entidad_id, COUNT(*) AS n FROM erp_adjuntos WHERE entidad = 'banco' GROUP BY entidad_id").fetchall()}
     por_cuenta = {}
     for x in filas:

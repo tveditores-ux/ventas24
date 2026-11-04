@@ -292,6 +292,45 @@
 .tema-btn:hover{background:var(--side-hover);color:var(--side-strong)}
 .tema-btn .ic{font-size:15px;width:18px;text-align:center}
 @media (max-width:900px){ .tasa-side{display:none} .tema-btn{width:auto} .tema-btn .tx{display:none} }
+
+  /* ---------- Inicio: ingresos y egresos ---------- */
+  .fin-kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-bottom:6px; }
+  .fin-kpi{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow-sm); }
+  .fin-kpi .et{ font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-faint); }
+  .fin-kpi b{ display:block; font-size:26px; line-height:1.15; margin-top:4px; font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+  .fin-kpi .sub{ font-size:12px; color:var(--ink-soft); margin-top:3px; }
+  .fin-kpi.ing b{ color:var(--ok); } .fin-kpi.egr b{ color:var(--danger); } .fin-kpi.neto b.pos{ color:var(--ok); } .fin-kpi.neto b.neg{ color:var(--danger); }
+  .fin-delta.bien{ color:var(--ok); font-weight:700; } .fin-delta.mal{ color:var(--danger); font-weight:700; }
+  .fin-acciones{ display:flex; gap:8px; flex-wrap:wrap; margin-left:auto; }
+  .fin-paneles{ display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); gap:14px; margin-top:14px; }
+  @media (max-width:980px){ .fin-paneles{ grid-template-columns:1fr; } }
+  .fin-panel{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow-sm); min-width:0; }
+  .fin-panel h3{ font-size:14px; margin:0 0 8px; }
+  .fin-leyenda{ display:flex; gap:14px; font-size:12px; color:var(--ink-soft); margin-bottom:4px; flex-wrap:wrap; }
+  .fin-leyenda i{ display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  svg.fin-svg{ width:100%; height:auto; display:block; overflow:visible; }
+  svg.fin-svg text{ font:500 10.5px var(--font-mono); fill:var(--ink-faint); }
+  svg.fin-svg .rej{ stroke:var(--line); stroke-width:1; }
+  svg.fin-svg .b-ing{ fill:var(--ok); } svg.fin-svg .b-egr{ fill:var(--danger); }
+  svg.fin-svg .l-neto{ fill:none; stroke:var(--primary); stroke-width:2.2; stroke-linejoin:round; stroke-linecap:round; }
+  svg.fin-svg .a-neto{ fill:var(--primary); opacity:.12; }
+  svg.fin-svg .cero{ stroke:var(--ink-faint); stroke-width:1; stroke-dasharray:3 3; }
+  .fin-fila-b{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 10px; margin:9px 0; font-size:13px; }
+  .fin-fila-b .nom{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fin-fila-b .val{ font-variant-numeric:tabular-nums; font-weight:700; }
+  .fin-fila-b .pista{ grid-column:1 / -1; height:7px; border-radius:99px; background:var(--surface-3); overflow:hidden; }
+  .fin-fila-b .pista i{ display:block; height:100%; border-radius:99px; }
+  .fin-vacio{ color:var(--ink-faint); font-size:13px; padding:18px 4px; }
+  .fin-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; }
+  .fin-grid label{ font-size:12.5px; font-weight:700; display:block; } .fin-grid label.ancho{ grid-column:1 / -1; }
+  .fin-grid input, .fin-grid select, .fin-dlg textarea{ width:100%; margin-top:4px; padding:8px 10px; border-radius:8px; border:1px solid var(--line-strong); background:var(--bg); color:var(--ink); font:inherit; }
+  .fin-dlg{ border:1px solid var(--line-strong); border-radius:14px; background:var(--surface); color:var(--ink); width:min(640px,95vw); padding:18px; }
+  .fin-dlg.ancho{ width:min(980px,96vw); }
+  .fin-dlg::backdrop{ background:rgba(8,14,22,.55); }
+  .fin-dlg textarea{ min-height:150px; font-family:var(--font-mono); font-size:12px; resize:vertical; }
+  .fin-chip{ display:inline-block; padding:2px 8px; border-radius:99px; font-size:11.5px; font-weight:700; }
+  .fin-chip.ok{ background:var(--ok-bg); color:var(--ok); } .fin-chip.mal{ background:var(--danger-bg); color:var(--danger); } .fin-chip.av{ background:var(--warn-bg); color:var(--warn); } .fin-chip.cap{ background:var(--primary-soft); color:var(--primary); }
+  tr.fin-error td{ background:var(--danger-bg); } tr.fin-dup td{ background:var(--warn-bg); }
 </style>
 </head>
 <body>
@@ -314,6 +353,7 @@
   <div class="tasa-side" id="tasaSide" hidden></div>
   <button class="tema-btn" id="btnTema" type="button" aria-label="Cambiar tema de color"><span class="ic" id="temaIc">◐</span><span class="tx" id="temaTx">Tema: automático</span></button>
   <nav class="subnav" id="subnav" hidden>
+    <button class="erp-solo" data-tab="inicio" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/><path d="M3 7l5-3 4 3 8-5"/></svg>Inicio</button>
     <button data-tab="pendientes" type="button"><svg viewBox="0 0 24 24"><path d="M4 13l2.2-7A2 2 0 0 1 8.1 4.6h7.8A2 2 0 0 1 17.8 6L20 13"/><path d="M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5h-4.5l-1 2.5h-5l-1-2.5z"/></svg>Por atender<span class="badge" id="badgePend" hidden></span></button>
     <button data-tab="conversaciones" class="active" type="button"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg>Conversaciones</button>
     <button data-tab="catalogo" type="button"><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>Catálogo</button>
@@ -452,6 +492,57 @@
   <div class="toolbar" style="margin:14px 0"><a class="btn ghost" href="/api/admin/respaldo" download>Descargar respaldo de la base de datos</a></div>
   <p class="nota-erp">Al crear un usuario el sistema genera una clave temporal que se muestra una sola vez: envíasela por un canal privado. En su primer ingreso le pide crear una propia. Las claves nunca se guardan en claro.</p>
 </div>
+
+<div id="inicioWrap" hidden>
+  <div class="toolbar" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+    <label>Período<br><select id="finPeriodo" class="sel"><option value="mes">Este mes</option><option value="mes_ant">Mes pasado</option><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="anio">Este año</option><option value="otro">Fechas a elegir…</option></select></label>
+    <label>Desde<br><input type="date" id="finDesde"></label>
+    <label>Hasta<br><input type="date" id="finHasta"></label>
+    <div class="fin-acciones">
+      <button class="btn" id="finNuevoIng" type="button">+ Ingreso</button>
+      <button class="btn" id="finNuevoEgr" type="button" style="background:var(--danger)">+ Egreso</button>
+      <button class="btn ghost" id="finLote" type="button">Cargar por lote</button>
+    </div>
+  </div>
+  <div id="finAviso"></div>
+  <div class="fin-kpis" id="finKpis"></div>
+  <div class="fin-paneles">
+    <div class="fin-panel"><h3>Ingresos y egresos <span id="finAgrupa" class="count"></span></h3>
+      <div class="fin-leyenda"><span><i style="background:var(--ok)"></i>Ingresos</span><span><i style="background:var(--danger)"></i>Egresos</span></div>
+      <div id="finBarras"></div></div>
+    <div class="fin-panel"><h3>En qué se va el dinero</h3><div id="finCatEgr"></div><h3 style="margin-top:16px">De dónde entra</h3><div id="finCatIng"></div></div>
+  </div>
+  <div class="fin-paneles" style="grid-template-columns:minmax(0,1fr)">
+    <div class="fin-panel"><h3>Resultado acumulado del período (ingresos menos egresos)</h3><div id="finLinea"></div></div>
+  </div>
+  <h3 class="pend-h" style="margin-top:18px">Movimientos</h3>
+  <div class="toolbar" style="gap:10px;align-items:flex-end">
+    <label>Mostrar<br><select id="finTipo" class="sel"><option value="">Todo</option><option value="ingreso">Solo ingresos</option><option value="egreso">Solo egresos</option></select></label>
+    <input type="search" id="finBuscar" placeholder="Buscar por concepto, cuenta, referencia o categoría…" style="flex:1;min-width:220px">
+    <span class="count" id="finContar"></span>
+  </div>
+  <div class="table-wrap"><table style="min-width:0"><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Categoría</th><th>Cuenta</th><th>Monto</th><th>USD</th><th></th></tr></thead><tbody id="finCuerpo"></tbody></table></div>
+  <p class="nota-erp">Los pagos de pedidos confirmados se suman solos: no los cargues aquí o se contarían dos veces. Aquí van las ventas hechas fuera del sistema, los gastos y los demás ingresos y egresos. Un movimiento no se borra: se anula con motivo y deja de sumar. Todo en dólares usa la tasa del BCV vigente al registrarlo (o la que escribas). Son datos administrativos para la contadora, no libros contables.</p>
+</div>
+<datalist id="finCuentas"><option value="Caja chica"><option value="Caja USD"><option value="Zelle"><option value="Banesco"><option value="Mercantil"><option value="Banco de Venezuela"><option value="Provincial"></datalist>
+<dialog id="dlgMov" class="fin-dlg"><form id="frmMov" novalidate><h3 id="movT">Registrar movimiento</h3>
+  <div class="fin-grid" style="margin-top:12px">
+    <label>Tipo<select name="tipo" id="movTipo"><option value="ingreso">Ingreso</option><option value="egreso">Egreso</option></select></label>
+    <label>Fecha<input type="date" name="fecha" required></label>
+    <label class="ancho">Concepto<input type="text" name="concepto" maxlength="200" autocomplete="off" required></label>
+    <label>Monto<input type="text" name="monto" inputmode="decimal" autocomplete="off" placeholder="1.250,50" required></label>
+    <label>Moneda<select name="moneda"><option value="USD">Dólares</option><option value="VES">Bolívares</option></select></label>
+    <label>Cuenta<input type="text" name="cuenta" list="finCuentas" autocomplete="off" placeholder="Banco, Zelle, Caja chica…" required></label>
+    <label>Categoría<select name="categoria" id="movCat"></select></label>
+    <label>Referencia (opcional)<input type="text" name="referencia" maxlength="60" autocomplete="off"></label>
+    <label>Tasa (opcional)<input type="text" name="tasa" inputmode="decimal" autocomplete="off" placeholder="la del día si lo dejas vacío"></label>
+  </div>
+  <p class="nota-erp" id="movAviso" style="margin:10px 0 0"></p>
+  <p class="error" id="movError" style="margin:8px 0 0" hidden></p>
+  <div class="toolbar" style="margin:14px 0 0;justify-content:flex-end"><button class="btn ghost" type="button" id="movX">Cancelar</button><button class="btn" type="submit" id="movOk">Guardar</button></div>
+</form></dialog>
+<dialog id="dlgLote" class="fin-dlg ancho"><div id="loteCuerpo"></div></dialog>
+<input type="file" id="finArchivo" accept=".csv,.txt,.tsv" hidden>
 
 <div id="librosWrap" hidden>
   <div class="toolbar" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
@@ -644,9 +735,9 @@
     if (esAdmin()){
       document.querySelectorAll('.erp-solo').forEach(el => el.hidden = false);
       if (usuario.rol === 'super_admin') document.querySelectorAll('.super-solo').forEach(el => el.hidden = false);
-      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza(); iniciarReglas(); iniciarImportacion(); iniciarUsuarios(); iniciarContabilidad(); iniciarLibros();
+      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza(); iniciarReglas(); iniciarImportacion(); iniciarUsuarios(); iniciarContabilidad(); iniciarLibros(); iniciarInicio();
     }
-    activarTab('pendientes');
+    activarTab(esAdmin() ? 'inicio' : 'pendientes');
     setInterval(refrescarInsignia, 30000);
   }
 
@@ -657,13 +748,14 @@
   });
 
   // -------- pestañas --------
-  const TABS = ['pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza', 'reglas', 'importacion', 'usuarios', 'contabilidad', 'libros'];
+  const TABS = ['inicio', 'pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza', 'reglas', 'importacion', 'usuarios', 'contabilidad', 'libros'];
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
   const PAGO_LABEL = { por_pagar:'Por pagar', comprobante_recibido:'En validación', pago_confirmado:'Pago confirmado' };
   const esAdmin = () => usuario && (usuario.rol === 'admin' || usuario.rol === 'super_admin');
   const VISTAS = {
+    inicio: ['Inicio', 'Cómo van los ingresos y los egresos del negocio.'],
     pendientes: ['Por atender', 'Lo que espera a una persona del equipo.'],
     conversaciones: ['Conversaciones', 'Habla con tus clientes o deja que el bot los atienda.'],
     catalogo: ['Catálogo', 'Productos, precios y existencias.'],
@@ -691,7 +783,8 @@
     if (tab === 'conversaciones'){
       cargarContactos();
       pollTimer = setInterval(cargarContactos, 20000);
-    } else if (tab === 'catalogo') cargarCatalogo();
+    } else if (tab === 'inicio') cargarInicio();
+    else if (tab === 'catalogo') cargarCatalogo();
     else if (tab === 'espera') cargarEspera();
     else if (tab === 'pedidos') cargarPedidos();
     else if (tab === 'comprobantes') cargarComprobantes();
@@ -1354,6 +1447,229 @@
   }
 
 
+
+  // -------- Inicio: ingresos y egresos (tablero, carga manual y por lote) --------
+  const fid = (i) => document.getElementById(i);
+  let finCats = null, tmFin = null, loteResp = null;
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const isoFecha = (x) => new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const usdTxt = (n) => (n < 0 ? '-' : '') + '$' + fm(Math.abs(n));
+  async function finEnviar(ruta, cuerpo){
+    const r = await api(ruta, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+    if (r.status === 401){ irALogin(); throw new Error('Tu sesión venció'); }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || ('Error ' + r.status));
+    return d;
+  }
+  function finRango(p){
+    const h = new Date(), y = h.getFullYear(), m = h.getMonth();
+    if (p === 'mes') return [isoFecha(new Date(y, m, 1)), isoFecha(h)];
+    if (p === 'mes_ant') return [isoFecha(new Date(y, m - 1, 1)), isoFecha(new Date(y, m, 0))];
+    if (p === '30' || p === '90') return [isoFecha(new Date(h.getTime() - (Number(p) - 1) * 864e5)), isoFecha(h)];
+    if (p === 'anio') return [isoFecha(new Date(y, 0, 1)), isoFecha(h)];
+    return null;
+  }
+  function finDelta(act, prev, subeEsBien){
+    if (!prev) return '<span class="fin-delta">sin datos del período anterior</span>';
+    const p = (act - prev) / Math.abs(prev) * 100, bien = subeEsBien ? p >= 0 : p <= 0;
+    return `<span class="fin-delta ${Math.abs(p) < 0.5 ? '' : (bien ? 'bien' : 'mal')}">${p >= 0 ? '▲' : '▼'} ${fm(Math.abs(p), 1)} % frente al período anterior</span>`;
+  }
+  const finEtiqueta = (p, agrupar, larga) => agrupar === 'mes' ? MESES[Number(p.slice(5, 7)) - 1] + ' ' + (larga ? p.slice(0, 4) : p.slice(2, 4)) : (larga ? p.slice(8) + '/' + p.slice(5, 7) + '/' + p.slice(0, 4) : p.slice(8) + '/' + p.slice(5, 7));
+  function finPaso(max){ const e = Math.pow(10, Math.floor(Math.log10(max))), f = max / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * e; }
+  function finCorto(v){ const a = Math.abs(v); return (v < 0 ? '-' : '') + (a >= 1e6 ? fm(a / 1e6, 1) + 'M' : a >= 1e3 ? fm(a / 1e3, a >= 1e4 ? 0 : 1) + 'k' : fm(a, 0)); }
+  const FIN_VACIO = '<div class="fin-vacio">No hay ingresos ni egresos en este período. Registra uno con «+ Ingreso» o «+ Egreso», o cárgalos por lote.</div>';
+
+  function svgBarras(serie, agrupar){
+    const W = 760, H = 270, mL = 46, mR = 10, mT = 10, mB = 30, iw = W - mL - mR, ih = H - mT - mB, n = serie.length || 1;
+    const max = Math.max(0, ...serie.map(s => Math.max(s.ingresos, s.egresos)));
+    if (!max) return FIN_VACIO;
+    const paso = finPaso(max / 4), top = paso * Math.ceil(max / paso - 1e-9), base = mT + ih;
+    const y = v => base - v / top * ih, gw = iw / n, bw = Math.max(2, Math.min(20, gw * 0.36)), cada = Math.ceil(n / 12);
+    let s = `<svg class="fin-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Barras de ingresos y egresos por ${agrupar === 'mes' ? 'mes' : 'día'}">`;
+    for (let v = 0; v <= top + 1e-9; v += paso) s += `<line class="rej" x1="${mL}" x2="${W - mR}" y1="${y(v)}" y2="${y(v)}"/><text x="${mL - 6}" y="${y(v) + 3}" text-anchor="end">${finCorto(v)}</text>`;
+    serie.forEach((p, i) => {
+      const cx = mL + gw * i + gw / 2, tip = `${finEtiqueta(p.p, agrupar, true)}: ingresos $${fm(p.ingresos)} · egresos $${fm(p.egresos)}`;
+      s += `<g><title>${esc(tip)}</title><rect x="${mL + gw * i}" y="${mT}" width="${gw}" height="${ih}" fill="transparent"/>`
+        + (p.ingresos ? `<rect class="b-ing" x="${cx - bw - 1}" y="${y(p.ingresos)}" width="${bw}" height="${base - y(p.ingresos)}" rx="2"/>` : '')
+        + (p.egresos ? `<rect class="b-egr" x="${cx + 1}" y="${y(p.egresos)}" width="${bw}" height="${base - y(p.egresos)}" rx="2"/>` : '')
+        + '</g>';
+      if (i % cada === 0) s += `<text x="${cx}" y="${H - 10}" text-anchor="middle">${esc(finEtiqueta(p.p, agrupar, false))}</text>`;
+    });
+    return s + '</svg>';
+  }
+  function svgLinea(serie, agrupar){
+    if (!serie.some(p => p.ingresos || p.egresos)) return FIN_VACIO;
+    let acc = 0; const pts = serie.map(p => (acc += p.ingresos - p.egresos));
+    const W = 760, H = 200, mL = 46, mR = 14, mT = 12, mB = 28, iw = W - mL - mR, ih = H - mT - mB;
+    let mn = Math.min(0, ...pts), mx = Math.max(0, ...pts); if (mx === mn) mx = mn + 1;
+    const y = v => mT + ih - (v - mn) / (mx - mn) * ih, x = i => mL + (serie.length > 1 ? iw * i / (serie.length - 1) : iw / 2), cada = Math.ceil(serie.length / 12);
+    const linea = pts.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1)).join(' ');
+    let s = `<svg class="fin-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Resultado acumulado del período, termina en ${usdTxt(acc)}">`;
+    [mn, 0, mx].filter((v, i, a) => a.indexOf(v) === i).forEach(v => { s += `<line class="${v === 0 ? 'cero' : 'rej'}" x1="${mL}" x2="${W - mR}" y1="${y(v)}" y2="${y(v)}"/><text x="${mL - 6}" y="${y(v) + 3}" text-anchor="end">${finCorto(v)}</text>`; });
+    s += `<path class="a-neto" d="${linea} L${x(pts.length - 1).toFixed(1)},${y(0).toFixed(1)} L${x(0).toFixed(1)},${y(0).toFixed(1)} Z"/><path class="l-neto" d="${linea}"/>`;
+    serie.forEach((p, i) => {
+      s += `<circle cx="${x(i).toFixed(1)}" cy="${y(pts[i]).toFixed(1)}" r="${serie.length <= 62 ? 3 : 2}" fill="var(--primary)"><title>${esc(finEtiqueta(p.p, agrupar, true) + ': acumulado ' + usdTxt(pts[i]))}</title></circle>`;
+      if (i % cada === 0) s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${esc(finEtiqueta(p.p, agrupar, false))}</text>`;
+    });
+    return s + '</svg>';
+  }
+  function filasBarra(lista, color){
+    if (!lista.length) return '<div class="fin-vacio">Sin datos en este período.</div>';
+    const tot = lista.reduce((a, x) => a + x.usd, 0) || 1, max = lista[0].usd || 1, ver = lista.slice(0, 8), resto = lista.slice(8).reduce((a, x) => a + x.usd, 0);
+    return ver.map(x => `<div class="fin-fila-b"><span class="nom" title="${esc(x.nombre)}">${esc(x.nombre)}</span><span class="val">$${fm(x.usd)} <span style="color:var(--ink-faint);font-weight:500">${fm(x.usd / tot * 100, 0)} %</span></span><span class="pista"><i style="width:${(x.usd / max * 100).toFixed(1)}%;background:${color}"></i></span></div>`).join('')
+      + (resto ? `<div class="fin-fila-b"><span class="nom">Otras ${lista.length - 8} categorías</span><span class="val">$${fm(resto)}</span></div>` : '');
+  }
+
+  function pintarInicio(d){
+    const k = d.kpi, a = k.anterior, pos = k.neto_usd >= 0, m = d.por_moneda;
+    fid('finKpis').innerHTML = `
+      <div class="fin-kpi ing"><span class="et">Ingresos</span><b>${usdTxt(k.ingresos_usd)}</b><div class="sub">${k.ventas_usd ? 'de pedidos cobrados: ' + usdTxt(k.ventas_usd) + '<br>' : ''}${finDelta(k.ingresos_usd, a.ingresos_usd, true)}</div></div>
+      <div class="fin-kpi egr"><span class="et">Egresos</span><b>${usdTxt(k.egresos_usd)}</b><div class="sub">${finDelta(k.egresos_usd, a.egresos_usd, false)}</div></div>
+      <div class="fin-kpi neto"><span class="et">Resultado del período</span><b class="${pos ? 'pos' : 'neg'}">${usdTxt(k.neto_usd)}</b><div class="sub">${finDelta(k.neto_usd, a.neto_usd, true)}</div></div>
+      <div class="fin-kpi"><span class="et">Por cobrar (crédito)</span><b>${usdTxt(k.por_cobrar_usd)}</b><div class="sub">pedidos a crédito sin cobrar</div></div>
+      <div class="fin-kpi"><span class="et">Por pagar</span><b>${usdTxt(k.por_pagar_usd)}</b><div class="sub">compras y gastos pendientes</div></div>
+      <div class="fin-kpi"><span class="et">Por moneda</span><div class="sub" style="margin-top:8px;line-height:1.7">Divisas: entró <b style="display:inline;font-size:13px;color:var(--ok)">$${fm(m.USD.ingresos)}</b> · salió <b style="display:inline;font-size:13px;color:var(--danger)">$${fm(m.USD.egresos)}</b><br>Bolívares: entró <b style="display:inline;font-size:13px;color:var(--ok)">Bs ${fm(m.VES.ingresos)}</b> · salió <b style="display:inline;font-size:13px;color:var(--danger)">Bs ${fm(m.VES.egresos)}</b></div></div>`;
+    const avisos = [];
+    if (k.sin_conversion) avisos.push(`⚠ ${k.sin_conversion} movimiento(s) no entran en los totales en dólares porque no había tasa cargada. Carga la tasa en «Reglas» o escríbela al registrar.`);
+    if (k.capital_in_usd || k.capital_out_usd) avisos.push(`Movimientos de capital (aportes, préstamos y retiros de socios) fuera del resultado: entró ${usdTxt(k.capital_in_usd)} · salió ${usdTxt(k.capital_out_usd)}.`);
+    fid('finAviso').innerHTML = avisos.map((t, i) => `<p class="nota-erp" style="margin:0 0 8px;${i === 0 && k.sin_conversion ? 'color:var(--warn);font-weight:700' : ''}">${esc(t)}</p>`).join('');
+    fid('finAgrupa').textContent = d.agrupar === 'mes' ? '· por mes' : '· por día';
+    fid('finBarras').innerHTML = svgBarras(d.serie, d.agrupar);
+    fid('finLinea').innerHTML = svgLinea(d.serie, d.agrupar);
+    fid('finCatEgr').innerHTML = filasBarra(d.egresos_categorias, 'var(--danger)');
+    fid('finCatIng').innerHTML = filasBarra(d.ingresos_fuentes, 'var(--ok)');
+  }
+  async function cargarMovs(){
+    const q = `desde=${fid('finDesde').value}&hasta=${fid('finHasta').value}&tipo=${encodeURIComponent(fid('finTipo').value)}&q=${encodeURIComponent(fid('finBuscar').value.trim())}`;
+    const r = await api('/api/erp/finanzas/movimientos?' + q);
+    if (r.status === 401){ irALogin(); return; }
+    const d = await r.json();
+    if (!r.ok){ fid('finCuerpo').innerHTML = `<tr><td colspan="8" class="error">${esc(d.error || 'No pude cargar los movimientos')}</td></tr>`; return; }
+    fid('finContar').textContent = d.total > d.filas.length ? `mostrando ${d.filas.length} de ${d.total}` : d.total + ' movimientos';
+    fid('finCuerpo').innerHTML = d.filas.length ? d.filas.map(x => {
+      const ing = x.tipo === 'ingreso', origen = x.fuente === 'pedido' ? 'pedido' : x.fuente === 'compra' ? 'compra' : (x.origen === 'lote' ? 'lote' : '');
+      return `<tr><td>${esc(x.fecha)}</td><td><span class="fin-chip ${ing ? 'ok' : 'mal'}">${ing ? 'Ingreso' : 'Egreso'}</span>${x.capital ? ' <span class="fin-chip cap">capital</span>' : ''}</td>
+        <td>${esc(x.concepto)}${x.referencia ? ` <span style="color:var(--ink-faint)">· ${esc(x.referencia)}</span>` : ''}${origen ? ` <span class="fin-chip av">${origen}</span>` : ''}</td><td>${esc(x.categoria_nombre)}</td><td>${esc(x.cuenta)}</td>
+        <td class="num" style="color:var(--${ing ? 'ok' : 'danger'})">${ing ? '+' : '−'}${x.moneda === 'USD' ? '$' : 'Bs '}${fm(x.monto)}</td><td class="num">${x.monto_usd == null ? '<span class="error">sin tasa</span>' : '$' + fm(x.monto_usd)}</td>
+        <td class="acciones-td">${x.anulable ? `<button class="btn ghost sm" type="button" data-anular="${x.id}">Anular</button>` : ''}</td></tr>`;
+    }).join('') : '<tr><td colspan="8" class="empty">No hay movimientos con ese filtro en el período.</td></tr>';
+  }
+  async function cargarInicio(){
+    const sel = fid('finPeriodo'), des = fid('finDesde'), has = fid('finHasta');
+    if (!des.value){ const [a, b] = finRango(sel.value); des.value = a; has.value = b; }
+    try {
+      const r = await api(`/api/erp/finanzas/resumen?desde=${des.value}&hasta=${has.value}`);
+      if (r.status === 401){ irALogin(); return; }
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      pintarInicio(d);
+    } catch(e){
+      fid('finKpis').innerHTML = `<p class="error">No pude cargar el tablero (${esc(e.message)}).</p>`;
+    }
+    cargarMovs();
+  }
+
+  // ---- carga manual ----
+  async function asegurarCats(){ if (!finCats){ const r = await api('/api/erp/finanzas/categorias'); finCats = await r.json(); } }
+  function llenarCats(){
+    const t = fid('movTipo').value, sel = fid('movCat');
+    sel.innerHTML = (finCats[t] || []).map(c => `<option value="${c.clave}" data-cap="${c.capital ? 1 : 0}">${esc(c.nombre)}${c.capital ? ' (capital)' : ''}</option>`).join('');
+    sel.value = t === 'ingreso' ? 'otros_ingresos' : 'otros_egresos';
+    avisoMov();
+  }
+  function avisoMov(){
+    const cap = fid('movCat').selectedOptions[0] && fid('movCat').selectedOptions[0].dataset.cap === '1';
+    fid('movAviso').textContent = cap ? 'Los aportes, préstamos y retiros de socios no cuentan como ingreso ni gasto del negocio: se muestran aparte.'
+      : (fid('movTipo').value === 'ingreso' ? 'Si es el pago de un pedido del sistema, no lo registres aquí: ya se suma solo.' : '');
+  }
+  async function abrirMov(tipo){
+    await asegurarCats();
+    const f = fid('frmMov'); f.reset(); fid('movTipo').value = tipo; llenarCats();
+    f.elements.fecha.value = isoFecha(new Date()); fid('movT').textContent = tipo === 'ingreso' ? 'Registrar ingreso' : 'Registrar egreso';
+    fid('movError').hidden = true; fid('dlgMov').showModal(); f.elements.concepto.focus();
+  }
+
+  // ---- carga por lote ----
+  const LOTE_EJEMPLO = 'fecha\ttipo\tconcepto\tmonto\tmoneda\tcuenta\tcategoria\treferencia\n2026-11-02\tingreso\tVenta de mostrador\t350,00\tUSD\tCaja USD\tVenta directa\t\n2026-11-03\tegreso\tPago de alquiler\t180,00\tUSD\tZelle\tAlquiler\tZL-5521';
+  function loteEntrada(msg){
+    loteResp = null;
+    fid('loteCuerpo').innerHTML = `<h3>Cargar ingresos y egresos por lote</h3>
+      <p class="nota-erp" style="margin:8px 0 12px">Pega las filas desde Excel o sube un archivo CSV. La primera fila lleva los títulos: <b>fecha, tipo, concepto y monto</b> son obligatorios; moneda, cuenta, categoría, referencia y tasa son opcionales. También sirve un estado de cuenta con columnas separadas de ingreso y egreso (o débito y crédito). <b>Nada se guarda hasta que revises.</b></p>
+      <div class="fin-grid"><label>Moneda si la fila no la trae<select id="loteMoneda"><option value="USD">Dólares</option><option value="VES">Bolívares</option></select></label>
+      <label>Cuenta si la fila no la trae<input type="text" id="loteCuenta" list="finCuentas" autocomplete="off" placeholder="Banco, Zelle, Caja chica…"></label></div>
+      <label style="display:block;margin-top:12px;font-size:12.5px;font-weight:700">Filas del lote<textarea id="loteTexto" spellcheck="false" placeholder="${esc(LOTE_EJEMPLO)}"></textarea></label>
+      <p class="error" id="loteError" style="margin:8px 0 0" ${msg ? '' : 'hidden'}>${esc(msg || '')}</p>
+      <div class="toolbar" style="margin:14px 0 0;justify-content:space-between"><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn ghost" href="/api/erp/finanzas/plantilla.csv" download>Descargar plantilla (CSV)</a><button class="btn ghost" type="button" id="loteSubir">Subir archivo CSV</button></div>
+      <div style="display:flex;gap:8px"><button class="btn ghost" type="button" id="loteCerrar">Cancelar</button><button class="btn" type="button" id="loteRevisar">Revisar el lote</button></div></div>`;
+  }
+  function lotePrevia(){
+    const r = loteResp.resumen, filas = loteResp.filas;
+    const estado = (f) => f.errores.length ? `<span class="fin-chip mal">${esc(f.errores.join('; '))}</span>` : (f.duplicado ? `<span class="fin-chip av">${esc(f.avisos.join('; '))}</span>` : (f.avisos.length ? `<span class="fin-chip av">${esc(f.avisos.join('; '))}</span>` : '<span class="fin-chip ok">listo</span>'));
+    fid('loteCuerpo').innerHTML = `<h3>Revisa el lote antes de guardar</h3>
+      <div class="fin-kpis" style="margin:10px 0"><div class="fin-kpi"><span class="et">Filas leídas</span><b>${r.total}</b><div class="sub">${r.validas} listas · ${r.con_error} con error</div></div>
+        <div class="fin-kpi ing"><span class="et">Ingresos del lote</span><b>${usdTxt(r.ingresos_usd)}</b></div><div class="fin-kpi egr"><span class="et">Egresos del lote</span><b>${usdTxt(r.egresos_usd)}</b></div>
+        <div class="fin-kpi"><span class="et">Ya existen</span><b>${r.duplicadas}</b><div class="sub">misma fecha, cuenta, monto y referencia</div></div></div>
+      ${r.con_error ? `<p class="error" style="margin:0 0 8px">Las filas con error no se guardan. Corrige el archivo y vuelve a revisarlo, o guarda solo las que están listas.</p>` : ''}
+      <div class="table-wrap" style="max-height:340px;overflow:auto"><table style="min-width:0"><thead><tr><th>Fila</th><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Categoría</th><th>Cuenta</th><th>Monto</th><th>Estado</th></tr></thead><tbody>
+      ${filas.map(f => `<tr class="${f.errores.length ? 'fin-error' : (f.duplicado ? 'fin-dup' : '')}"><td>${f.n}</td><td>${esc(f.fecha)}</td><td>${esc(f.tipo)}</td><td>${esc(f.concepto)}</td><td>${esc(f.categoria)}</td><td>${esc(f.cuenta)}</td><td class="num">${esc(f.moneda === 'USD' ? '$' : f.moneda === 'VES' ? 'Bs ' : '')}${typeof f.monto === 'number' ? fm(f.monto) : esc(f.monto)}</td><td>${estado(f)}</td></tr>`).join('')}</tbody></table></div>
+      <label class="chk" style="display:block;margin-top:12px"><input type="checkbox" id="loteOmitir" checked> Omitir las filas que ya existen en el sistema (recomendado)</label>
+      <p class="error" id="loteError" style="margin:8px 0 0" hidden></p>
+      <div class="toolbar" style="margin:14px 0 0;justify-content:flex-end"><button class="btn ghost" type="button" id="loteVolver">Volver</button><button class="btn" type="button" id="loteGuardar" ${r.validas ? '' : 'disabled'}>Guardar ${r.validas} movimiento${r.validas === 1 ? '' : 's'}</button></div>`;
+    const act = () => { const n = r.validas - (fid('loteOmitir').checked ? r.duplicadas : 0); fid('loteGuardar').textContent = `Guardar ${n} movimiento${n === 1 ? '' : 's'}`; fid('loteGuardar').disabled = n < 1; };
+    fid('loteOmitir').addEventListener('change', act); act();
+  }
+  async function leerArchivo(file){
+    const buf = await file.arrayBuffer();
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch(e){ return new TextDecoder('windows-1252').decode(buf); }
+  }
+  function iniciarInicio(){
+    const sel = fid('finPeriodo'), des = fid('finDesde'), has = fid('finHasta');
+    sel.addEventListener('change', () => { const r = finRango(sel.value); if (r){ des.value = r[0]; has.value = r[1]; cargarInicio(); } });
+    [des, has].forEach(e => e.addEventListener('change', () => { sel.value = 'otro'; if (des.value && has.value) cargarInicio(); }));
+    fid('finTipo').addEventListener('change', cargarMovs);
+    fid('finBuscar').addEventListener('input', () => { clearTimeout(tmFin); tmFin = setTimeout(cargarMovs, 300); });
+    fid('finNuevoIng').addEventListener('click', () => abrirMov('ingreso'));
+    fid('finNuevoEgr').addEventListener('click', () => abrirMov('egreso'));
+    fid('movTipo').addEventListener('change', llenarCats); fid('movCat').addEventListener('change', avisoMov);
+    fid('movX').addEventListener('click', () => fid('dlgMov').close());
+    fid('frmMov').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const btn = fid('movOk'), err = fid('movError'); btn.disabled = true; err.hidden = true;
+      try { await finEnviar('/api/erp/finanzas/movimiento', Object.fromEntries(new FormData(ev.target))); fid('dlgMov').close(); cargarInicio(); }
+      catch(e){ err.textContent = e.message; err.hidden = false; }
+      finally { btn.disabled = false; }
+    });
+    fid('finCuerpo').addEventListener('click', async (ev) => {
+      const b = ev.target.closest('[data-anular]'); if (!b) return;
+      const motivo = prompt('Motivo de la anulación (el registro se conserva, pero deja de sumar):'); if (!motivo) return;
+      try { await finEnviar(`/api/erp/finanzas/movimiento/${b.dataset.anular}/anular`, { motivo }); cargarInicio(); } catch(e){ alert(e.message); }
+    });
+    fid('finLote').addEventListener('click', () => { loteEntrada(); fid('dlgLote').showModal(); });
+    fid('loteCuerpo').addEventListener('click', async (ev) => {
+      const id = ev.target.id;
+      if (id === 'loteCerrar') fid('dlgLote').close();
+      else if (id === 'loteSubir') fid('finArchivo').click();
+      else if (id === 'loteVolver') loteEntrada();
+      else if (id === 'loteRevisar'){
+        const texto = fid('loteTexto').value, err = fid('loteError'); ev.target.disabled = true; err.hidden = true;
+        try { loteResp = await finEnviar('/api/erp/finanzas/lote/analizar', { texto, moneda: fid('loteMoneda').value, cuenta: fid('loteCuenta').value.trim() }); lotePrevia(); }
+        catch(e){ err.textContent = e.message; err.hidden = false; ev.target.disabled = false; }
+      } else if (id === 'loteGuardar'){
+        const err = fid('loteError'); ev.target.disabled = true; err.hidden = true;
+        try {
+          const r = await finEnviar('/api/erp/finanzas/lote/aplicar', { lote_id: loteResp.lote_id, filas: loteResp.filas.filter(f => !f.errores.length), omitir_duplicados: fid('loteOmitir').checked });
+          fid('loteCuerpo').innerHTML = `<h3>Listo</h3><p style="margin:10px 0">${esc(r.mensaje)}</p><div class="toolbar" style="justify-content:flex-end"><button class="btn" type="button" id="loteCerrar">Cerrar</button></div>`;
+          cargarInicio();
+        } catch(e){ err.textContent = e.message; err.hidden = false; ev.target.disabled = false; }
+      }
+    });
+    fid('finArchivo').addEventListener('change', async (ev) => {
+      const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+      if (/\.xlsx?$/i.test(f.name)){ fid('loteError').textContent = 'Los archivos de Excel no se leen directo: en Excel usa «Guardar como → CSV», o copia las filas y pégalas en el cuadro.'; fid('loteError').hidden = false; return; }
+      if (f.size > 3 * 1024 * 1024){ fid('loteError').textContent = 'El archivo es muy grande (máximo 3 MB).'; fid('loteError').hidden = false; return; }
+      fid('loteTexto').value = await leerArchivo(f); fid('loteError').hidden = true;
+    });
+  }
 
   // -------- Libros y soportes (para la contadora) --------
   let libActual = 'ventas', libDatos = null, libFormCb = null;

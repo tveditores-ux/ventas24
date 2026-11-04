@@ -46,6 +46,7 @@ import ciclo
 import bcv
 import contable
 import erp
+import finanzas
 import vendedor
 import voz
 import importacion
@@ -798,6 +799,75 @@ def erp_compra_nueva():
 def erp_banco_nuevo():
     d = request.get_json(silent=True) or {}
     return _intentar(lambda: {"id": contable.registrar_banco(d, request.usuario["id"])})
+
+
+# ---------------------------------------------------------------------
+# Ingresos y egresos: tablero de inicio, carga manual y por lote (ver finanzas.py)
+# ---------------------------------------------------------------------
+
+@app.route("/api/erp/finanzas/resumen", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def fin_resumen():
+    return _intentar(lambda: finanzas.resumen(*_rango_args()))
+
+
+@app.route("/api/erp/finanzas/movimientos", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def fin_movimientos():
+    return _intentar(lambda: finanzas.movimientos(*_rango_args(), tipo=request.args.get("tipo"), q=request.args.get("q"), limite=request.args.get("limite", 300)))
+
+
+@app.route("/api/erp/finanzas/categorias", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def fin_categorias():
+    return jsonify(finanzas.categorias())
+
+
+@app.route("/api/erp/finanzas/movimiento", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def fin_movimiento_nuevo():
+    d = request.get_json(silent=True) or {}
+    def hacer():
+        mid = finanzas.registrar(d, request.usuario["id"])
+        db.registrar_accion("Administración", None, "movimiento_manual", {"id": mid, "tipo": d.get("tipo"), "monto": d.get("monto"), "moneda": d.get("moneda")}, request.usuario["nombre"])
+        return {"id": mid}
+    return _intentar(hacer)
+
+
+@app.route("/api/erp/finanzas/movimiento/<int:mid>/anular", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def fin_movimiento_anular(mid):
+    d = request.get_json(silent=True) or {}
+    def hacer():
+        finanzas.anular(mid, d.get("motivo"), request.usuario["id"])
+        db.registrar_accion("Administración", None, "movimiento_anulado", {"id": mid, "motivo": d.get("motivo")}, request.usuario["nombre"])
+        return {"ok": True}
+    return _intentar(hacer)
+
+
+@app.route("/api/erp/finanzas/lote/analizar", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def fin_lote_analizar():
+    d = request.get_json(silent=True) or {}
+    return _intentar(lambda: finanzas.lote_analizar(d.get("texto"), {"moneda": d.get("moneda"), "cuenta": d.get("cuenta"), "tipo": d.get("tipo")}))
+
+
+@app.route("/api/erp/finanzas/lote/aplicar", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def fin_lote_aplicar():
+    d = request.get_json(silent=True) or {}
+    def hacer():
+        r = finanzas.lote_aplicar(d.get("lote_id"), d.get("filas"), request.usuario["id"], d.get("omitir_duplicados", True) is not False)
+        if not r.get("repetido"):
+            db.registrar_accion("Administración", None, "lote_movimientos", {"lote": d.get("lote_id"), "guardadas": r["guardadas"], "omitidas": r["omitidas"]}, request.usuario["nombre"])
+        return r
+    return _intentar(hacer)
+
+
+@app.route("/api/erp/finanzas/plantilla.csv", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def fin_plantilla():
+    return Response(finanzas.plantilla_csv(), mimetype="text/csv", headers={"Content-Disposition": 'attachment; filename="plantilla-ingresos-egresos.csv"'})
 
 
 @app.route("/api/erp/adjuntos", methods=["GET", "POST"])
