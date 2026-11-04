@@ -43,6 +43,7 @@ CAT_EGRESO = {
     "retiro_socio": ("Retiro de socio", True),
 }
 VENTAS_SISTEMA = "ventas_sistema"
+INTERNAS = {"transferencia"}          # pasa dinero de una cuenta a otra: no es ingreso ni egreso del negocio
 SIN_CATEGORIA = "sin_categoria"
 MAX_FILAS = 2000
 
@@ -95,6 +96,8 @@ def _es_capital(tipo: str, categoria: str) -> bool:
 def _nombre_categoria(tipo: str, categoria) -> str:
     if categoria == VENTAS_SISTEMA:
         return "Ventas cobradas (pedidos)"
+    if categoria in INTERNAS:
+        return "Transferencia entre cuentas"
     return (CAT_INGRESO if tipo == "ingreso" else CAT_EGRESO).get(categoria, ("Sin categoría", False))[0]
 
 
@@ -222,12 +225,14 @@ def anular(mov_id: int, motivo: str, usuario_id: int):
     if len(motivo) < 5:
         raise ValueError("escribe el motivo de la anulación (mínimo 5 caracteres)")
     with db.conectar() as con:
-        r = con.execute("SELECT id, COALESCE(anulado, 0) AS a FROM erp_bancos WHERE id = ?", (mov_id,)).fetchone()
+        r = con.execute("SELECT id, transferencia_id, COALESCE(anulado, 0) AS a FROM erp_bancos WHERE id = ?", (mov_id,)).fetchone()
         if not r:
             raise ValueError("movimiento no encontrado")
         if r["a"]:
             raise ValueError("ese movimiento ya está anulado")
-        con.execute("UPDATE erp_bancos SET anulado = 1, anulado_motivo = ?, anulado_por = ?, anulado_en = CURRENT_TIMESTAMP WHERE id = ?", (motivo, usuario_id, mov_id))
+        # una transferencia son dos (o tres) movimientos: se anulan juntos para que los saldos no queden descuadrados
+        donde, arg = ("transferencia_id = ?", r["transferencia_id"]) if r["transferencia_id"] else ("id = ?", mov_id)
+        con.execute(f"UPDATE erp_bancos SET anulado = 1, anulado_motivo = ?, anulado_por = ?, anulado_en = CURRENT_TIMESTAMP WHERE {donde}", (motivo, usuario_id, arg))
 
 
 # ---------------------------------------------------------------- carga por lote
@@ -389,6 +394,8 @@ def _movimientos(desde: str, hasta: str) -> list:
 def _totales(movs: list) -> dict:
     t = {"ingresos_usd": 0.0, "egresos_usd": 0.0, "ventas_usd": 0.0, "capital_in_usd": 0.0, "capital_out_usd": 0.0, "sin_conversion": 0}
     for m in movs:
+        if m["categoria"] in INTERNAS:
+            continue
         if m["monto_usd"] is None:
             t["sin_conversion"] += 1
             continue
@@ -444,7 +451,7 @@ def resumen(desde: str | None = None, hasta: str | None = None) -> dict:
             y, m = (y + 1, 1) if m == 12 else (y, m + 1)
     cats_e, cats_i, monedas = {}, {}, {"USD": {"ingresos": 0.0, "egresos": 0.0}, "VES": {"ingresos": 0.0, "egresos": 0.0}}
     for m in movs:
-        if _es_capital(m["tipo"], m["categoria"]):
+        if _es_capital(m["tipo"], m["categoria"]) or m["categoria"] in INTERNAS:
             continue
         if m["monto"] is not None and m["moneda"] in monedas:
             monedas[m["moneda"]]["ingresos" if m["tipo"] == "ingreso" else "egresos"] += m["monto"]

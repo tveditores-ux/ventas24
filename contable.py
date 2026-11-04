@@ -80,7 +80,8 @@ LOCAL = "-4 hours"      # Venezuela: UTC-4, sin horario de verano
 
 
 COLUMNAS_BANCOS = (("categoria", "TEXT"), ("origen", "TEXT"), ("lote_id", "TEXT"), ("anulado", "INTEGER NOT NULL DEFAULT 0"),
-                   ("anulado_motivo", "TEXT"), ("anulado_por", "INTEGER"), ("anulado_en", "TEXT"))
+                   ("anulado_motivo", "TEXT"), ("anulado_por", "INTEGER"), ("anulado_en", "TEXT"),
+                   ("conciliado", "INTEGER NOT NULL DEFAULT 0"), ("conciliado_en", "TEXT"), ("transferencia_id", "TEXT"))
 
 
 def asegurar_tablas():
@@ -90,6 +91,10 @@ def asegurar_tablas():
         for col, tipo in COLUMNAS_BANCOS:
             if col not in existentes:
                 con.execute(f"ALTER TABLE erp_bancos ADD COLUMN {col} {tipo}")
+        pagos = {r["name"] for r in con.execute("PRAGMA table_info(erp_pagos)").fetchall()}
+        if pagos and "conciliado" not in pagos:
+            con.execute("ALTER TABLE erp_pagos ADD COLUMN conciliado INTEGER NOT NULL DEFAULT 0")
+            con.execute("ALTER TABLE erp_pagos ADD COLUMN conciliado_en TEXT")
 
 
 def _fecha(f) -> str:

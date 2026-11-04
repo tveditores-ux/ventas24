@@ -331,6 +331,21 @@
   .fin-chip{ display:inline-block; padding:2px 8px; border-radius:99px; font-size:11.5px; font-weight:700; }
   .fin-chip.ok{ background:var(--ok-bg); color:var(--ok); } .fin-chip.mal{ background:var(--danger-bg); color:var(--danger); } .fin-chip.av{ background:var(--warn-bg); color:var(--warn); } .fin-chip.cap{ background:var(--primary-soft); color:var(--primary); }
   tr.fin-error td{ background:var(--danger-bg); } tr.fin-dup td{ background:var(--warn-bg); }
+
+  /* ---------- Bancos ---------- */
+  .bc-cards{ display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; }
+  .bc-card{ border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--surface-2); display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .bc-card.off{ opacity:.6; }
+  .bc-card .nom{ font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bc-card .meta{ font-size:12px; color:var(--ink-soft); }
+  .bc-card .saldo{ font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-.02em; margin-top:4px; }
+  .bc-card .saldo.neg{ color:var(--danger); }
+  .bc-card .acc{ display:flex; gap:6px; margin-top:8px; }
+  .bc-prog{ height:6px; border-radius:99px; background:var(--surface-3); overflow:hidden; margin-top:6px; }
+  .bc-prog i{ display:block; height:100%; background:var(--ok); border-radius:99px; }
+  .bc-grupo{ margin-top:14px; } .bc-grupo h4{ font-size:13px; margin:0 0 6px; }
+  .bc-chip-btn{ border:1px dashed var(--line-strong); background:var(--surface); color:var(--ink); border-radius:99px; padding:3px 10px; font:inherit; font-size:12px; cursor:pointer; margin:2px 4px 2px 0; }
+  .bc-previa{ font-size:13px; color:var(--ink-soft); margin-top:8px; min-height:18px; }
 </style>
 </head>
 <body>
@@ -364,6 +379,7 @@
     <button class="erp-solo" data-tab="reportes" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>Reportes</button>
     <button class="erp-solo" data-tab="cobranza" type="button" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5C9.5 8.4 10.6 8 12 8s2.5.6 2.5 1.7c0 2.4-5 1.3-5 3.8 0 1.1 1.1 1.7 2.5 1.7s2.5-.5 2.5-1.7"/></svg>Cobranza</button>
     <button class="super-solo" data-tab="usuarios" type="button" hidden><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14c2.5 0 4.5 2 4.5 4.5"/></svg>Usuarios</button>
+    <button class="erp-solo" data-tab="bancos" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 10l9-6 9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8"/><path d="M3 21h18"/></svg>Bancos</button>
     <button class="erp-solo" data-tab="libros" type="button" hidden><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h6M8 11h6"/></svg>Libros y soportes</button>
     <button class="erp-solo" data-tab="contabilidad" type="button" hidden><svg viewBox="0 0 24 24"><path d="M5 4h14v17H5z"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>Contabilidad</button>
     <button class="erp-solo" data-tab="importacion" type="button" hidden><svg viewBox="0 0 24 24"><path d="M3 15h13V6H3zM16 9h3l2 3v3h-5z"/><circle cx="7" cy="17" r="1.6"/><circle cx="17" cy="17" r="1.6"/></svg>Importación</button>
@@ -543,6 +559,73 @@
 </form></dialog>
 <dialog id="dlgLote" class="fin-dlg ancho"><div id="loteCuerpo"></div></dialog>
 <input type="file" id="finArchivo" accept=".csv,.txt,.tsv" hidden>
+
+<div id="bancosWrap" hidden>
+  <div class="toolbar" style="gap:8px">
+    <button class="btn" id="bcNueva" type="button">+ Cuenta</button>
+    <button class="btn ghost" id="bcTransf" type="button">Transferencia entre cuentas</button>
+    <button class="btn ghost" id="bcConc" type="button">Conciliar con el estado de cuenta</button>
+    <button class="btn ghost" id="bcPagar" type="button">Pagar compra pendiente</button>
+  </div>
+  <div id="bcAvisos"></div>
+  <div class="fin-kpis" id="bcKpis"></div>
+  <div class="fin-paneles">
+    <div class="fin-panel"><h3>Cuentas</h3><div class="bc-cards" id="bcCuentas"></div></div>
+    <div class="fin-panel"><h3>Dónde está el dinero (en USD)</h3><div id="bcDist"></div></div>
+  </div>
+  <div id="bcDetalle" hidden>
+    <h3 class="pend-h" style="margin-top:18px" id="bcDetTit"></h3>
+    <div class="toolbar" style="gap:12px;align-items:flex-end"><label>Desde<br><input type="date" id="bcDesde"></label><label>Hasta<br><input type="date" id="bcHasta"></label><button class="btn" id="bcDetOk" type="button">Actualizar</button><span class="count" id="bcDetInfo"></span></div>
+    <div class="fin-panel" style="margin-bottom:12px"><h3>Saldo de la cuenta en el período</h3><div id="bcLinea"></div></div>
+    <div class="table-wrap"><table style="min-width:0"><thead><tr><th>Fecha</th><th>Concepto</th><th>Referencia</th><th>Entra</th><th>Sale</th><th>Saldo</th><th>Conciliado</th></tr></thead><tbody id="bcFilas"></tbody></table></div>
+  </div>
+  <p class="nota-erp">El saldo de cada cuenta es su saldo inicial más lo que entró y salió desde esa fecha: los movimientos que cargas en «Inicio», las transferencias y los pagos de pedidos cuyo comprobante dice que se pagó a esa cuenta (por su nombre o alias). Una transferencia entre cuentas no es ingreso ni egreso del negocio. «Conciliado» significa que el movimiento ya aparece en el estado de cuenta del banco. No se guardan números de cuenta completos, solo los últimos 4 dígitos. Son controles administrativos para la contadora.</p>
+</div>
+<dialog id="dlgCuenta" class="fin-dlg"><form id="frmCuenta" novalidate><h3 id="cuT">Nueva cuenta</h3>
+  <div class="fin-grid" style="margin-top:12px">
+    <label class="ancho">Nombre (como lo verás en todo el sistema)<input type="text" name="nombre" maxlength="60" autocomplete="off" placeholder="Banesco Bs, Zelle, Caja chica…" required></label>
+    <label>Tipo<select name="tipo"><option value="banco">Cuenta bancaria</option><option value="efectivo">Efectivo o caja</option><option value="billetera">Billetera (Zelle, Pago Móvil, Binance…)</option><option value="otro">Otro</option></select></label>
+    <label>Moneda<select name="moneda"><option value="USD">Dólares</option><option value="VES">Bolívares</option></select></label>
+    <label>Banco o plataforma<input type="text" name="banco" maxlength="60" autocomplete="off" placeholder="Banesco, Mercantil…"></label>
+    <label>Últimos 4 dígitos<input type="text" name="numero" maxlength="4" inputmode="numeric" autocomplete="off"></label>
+    <label class="ancho">Titular<input type="text" name="titular" maxlength="80" autocomplete="off"></label>
+    <label>Saldo inicial<input type="text" name="saldo_inicial" inputmode="decimal" autocomplete="off" placeholder="0,00"></label>
+    <label>Saldo al día<input type="date" name="fecha_saldo"></label>
+    <label class="ancho">Alias (otros nombres con que llegan los comprobantes, separados por coma)<input type="text" name="alias" maxlength="200" autocomplete="off" placeholder="banesco, pago movil banesco"></label>
+    <label class="ancho" id="cuActivaL" hidden><input type="checkbox" name="activa" value="1" checked style="width:auto;margin:0 6px 0 0"> Cuenta activa (si la desactivas deja de ofrecerse, pero conserva su historial)</label>
+  </div>
+  <p class="nota-erp" style="margin:10px 0 0">El saldo inicial es lo que tenía la cuenta en esa fecha; desde ahí se suman los movimientos. El nombre y la moneda no se pueden cambiar después.</p>
+  <p class="error" id="cuError" style="margin:8px 0 0" hidden></p>
+  <div class="toolbar" style="margin:14px 0 0;justify-content:flex-end"><button class="btn ghost" type="button" id="cuX">Cancelar</button><button class="btn" type="submit">Guardar</button></div>
+</form></dialog>
+<dialog id="dlgTransf" class="fin-dlg"><form id="frmTransf" novalidate><h3>Transferencia entre cuentas</h3>
+  <div class="fin-grid" style="margin-top:12px">
+    <label>Sale de<select name="origen_id" id="trOrigen"></select></label>
+    <label>Llega a<select name="destino_id" id="trDestino"></select></label>
+    <label>Monto que sale<input type="text" name="monto" id="trMonto" inputmode="decimal" autocomplete="off" required></label>
+    <label>Fecha<input type="date" name="fecha"></label>
+    <label>Referencia (opcional)<input type="text" name="referencia" maxlength="60" autocomplete="off"></label>
+    <label>Comisión (opcional, en la cuenta de origen)<input type="text" name="comision" inputmode="decimal" autocomplete="off"></label>
+    <label class="trCruz" hidden>Tasa<input type="text" name="tasa" id="trTasa" inputmode="decimal" autocomplete="off"></label>
+    <label class="trCruz" hidden>Monto que llega (opcional, si el banco redondeó)<input type="text" name="monto_destino" id="trDestMonto" inputmode="decimal" autocomplete="off"></label>
+  </div>
+  <p class="bc-previa" id="trPrevia"></p>
+  <p class="error" id="trError" style="margin:8px 0 0" hidden></p>
+  <div class="toolbar" style="margin:14px 0 0;justify-content:flex-end"><button class="btn ghost" type="button" id="trX">Cancelar</button><button class="btn" type="submit">Registrar transferencia</button></div>
+</form></dialog>
+<dialog id="dlgConc" class="fin-dlg ancho"><div id="concCuerpo"></div></dialog>
+<dialog id="dlgPagar" class="fin-dlg"><form id="frmPagar" novalidate><h3>Pagar una compra pendiente</h3>
+  <div class="fin-grid" style="margin-top:12px">
+    <label class="ancho">Compra o gasto por pagar<select name="compra_id" id="pgCompra"></select></label>
+    <label>Pagar desde<select name="cuenta_id" id="pgCuenta"></select></label>
+    <label>Fecha del pago<input type="date" name="fecha"></label>
+    <label class="ancho">Referencia del pago (opcional)<input type="text" name="referencia" maxlength="60" autocomplete="off"></label>
+  </div>
+  <p class="nota-erp" style="margin:10px 0 0">Se crea un egreso en esa cuenta ligado a la compra, que deja de figurar como pendiente. No se cuenta dos veces en el tablero.</p>
+  <p class="error" id="pgError" style="margin:8px 0 0" hidden></p>
+  <div class="toolbar" style="margin:14px 0 0;justify-content:flex-end"><button class="btn ghost" type="button" id="pgX">Cancelar</button><button class="btn" type="submit" id="pgOk">Registrar pago</button></div>
+</form></dialog>
+<input type="file" id="concArchivo" accept=".csv,.txt,.tsv" hidden>
 
 <div id="librosWrap" hidden>
   <div class="toolbar" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
@@ -735,7 +818,7 @@
     if (esAdmin()){
       document.querySelectorAll('.erp-solo').forEach(el => el.hidden = false);
       if (usuario.rol === 'super_admin') document.querySelectorAll('.super-solo').forEach(el => el.hidden = false);
-      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza(); iniciarReglas(); iniciarImportacion(); iniciarUsuarios(); iniciarContabilidad(); iniciarLibros(); iniciarInicio();
+      iniciarInventario(); iniciarProveedores(); iniciarCompras(); iniciarErpExtras(); iniciarReportes(); iniciarAnalista(); iniciarCobranza(); iniciarReglas(); iniciarImportacion(); iniciarUsuarios(); iniciarContabilidad(); iniciarLibros(); iniciarInicio(); iniciarBancos();
     }
     activarTab(esAdmin() ? 'inicio' : 'pendientes');
     setInterval(refrescarInsignia, 30000);
@@ -748,7 +831,7 @@
   });
 
   // -------- pestañas --------
-  const TABS = ['inicio', 'pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza', 'reglas', 'importacion', 'usuarios', 'contabilidad', 'libros'];
+  const TABS = ['inicio', 'bancos', 'pendientes', 'conversaciones', 'catalogo', 'espera', 'pedidos', 'comprobantes', 'inventario', 'proveedores', 'compras', 'reportes', 'cobranza', 'reglas', 'importacion', 'usuarios', 'contabilidad', 'libros'];
   function esc(s){
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -756,6 +839,7 @@
   const esAdmin = () => usuario && (usuario.rol === 'admin' || usuario.rol === 'super_admin');
   const VISTAS = {
     inicio: ['Inicio', 'Cómo van los ingresos y los egresos del negocio.'],
+    bancos: ['Bancos', 'Cuentas, saldos, transferencias, conciliación y pagos.'],
     pendientes: ['Por atender', 'Lo que espera a una persona del equipo.'],
     conversaciones: ['Conversaciones', 'Habla con tus clientes o deja que el bot los atienda.'],
     catalogo: ['Catálogo', 'Productos, precios y existencias.'],
@@ -784,6 +868,7 @@
       cargarContactos();
       pollTimer = setInterval(cargarContactos, 20000);
     } else if (tab === 'inicio') cargarInicio();
+    else if (tab === 'bancos') cargarBancos();
     else if (tab === 'catalogo') cargarCatalogo();
     else if (tab === 'espera') cargarEspera();
     else if (tab === 'pedidos') cargarPedidos();
@@ -1668,6 +1753,247 @@
       if (/\.xlsx?$/i.test(f.name)){ fid('loteError').textContent = 'Los archivos de Excel no se leen directo: en Excel usa «Guardar como → CSV», o copia las filas y pégalas en el cuadro.'; fid('loteError').hidden = false; return; }
       if (f.size > 3 * 1024 * 1024){ fid('loteError').textContent = 'El archivo es muy grande (máximo 3 MB).'; fid('loteError').hidden = false; return; }
       fid('loteTexto').value = await leerArchivo(f); fid('loteError').hidden = true;
+    });
+  }
+
+  // -------- Bancos: cuentas, saldos, transferencias y conciliación --------
+  let bcDatos = null, bcSel = null, concResp = null;
+  const bcSig = (c) => c.moneda === 'USD' ? '$' : 'Bs ';
+  const bcCuenta = (id) => (bcDatos && bcDatos.cuentas.find(c => c.id === Number(id))) || null;
+  async function bcGet(ruta){
+    const r = await api(ruta);
+    if (r.status === 401){ irALogin(); throw new Error('Tu sesión venció'); }
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || ('Error ' + r.status));
+    return d;
+  }
+  function numEs(s){   // «1.250,50», «1,250.50» o «1250.5» -> número
+    let t = String(s == null ? '' : s).replace(/[^\d.,-]/g, '');
+    if (!t) return NaN;
+    const p = (t.match(/\./g) || []).length, c = (t.match(/,/g) || []).length;
+    if (p && c){ const dec = t.lastIndexOf(',') > t.lastIndexOf('.') ? ',' : '.'; t = t.split(dec === ',' ? '.' : ',').join('').replace(dec, '.'); }
+    else if (p + c){ const sep = p ? '.' : ',', partes = t.split(sep); t = (partes.length > 2 || (partes[1].length === 3 && partes[0].replace('-', '').length <= 3 && !/^-?0/.test(partes[0]))) ? partes.join('') : partes.join('.'); }
+    return Number(t);
+  }
+  const optsCuentas = (soloActivas) => (bcDatos ? bcDatos.cuentas : []).filter(c => !soloActivas || c.activa).map(c => `<option value="${c.id}">${esc(c.nombre)} (${c.moneda})</option>`).join('');
+
+  function svgSaldo(serie, agrupar, inicio){
+    if (!serie.some(p => p.ingresos || p.egresos)) return '<div class="fin-vacio">Esta cuenta no tiene movimientos en el período.</div>';
+    let acc = inicio; const pts = serie.map(p => (acc += p.ingresos - p.egresos));
+    const W = 760, H = 200, mL = 56, mR = 14, mT = 12, mB = 28, iw = W - mL - mR, ih = H - mT - mB;
+    let mn = Math.min(inicio, ...pts), mx = Math.max(inicio, ...pts); if (mx === mn){ mx += 1; mn -= 1; }
+    const pad = (mx - mn) * 0.08; mn -= pad; mx += pad;
+    const y = v => mT + ih - (v - mn) / (mx - mn) * ih, x = i => mL + (serie.length > 1 ? iw * i / (serie.length - 1) : iw / 2), cada = Math.ceil(serie.length / 12);
+    const linea = pts.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1)).join(' ');
+    let s = `<svg class="fin-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Saldo de la cuenta en el período, termina en ${fm(acc)}">`;
+    [mn + pad, (mn + mx) / 2, mx - pad].forEach(v => { s += `<line class="rej" x1="${mL}" x2="${W - mR}" y1="${y(v)}" y2="${y(v)}"/><text x="${mL - 6}" y="${y(v) + 3}" text-anchor="end">${finCorto(v)}</text>`; });
+    s += `<path class="a-neto" d="${linea} L${x(pts.length - 1).toFixed(1)},${(mT + ih).toFixed(1)} L${x(0).toFixed(1)},${(mT + ih).toFixed(1)} Z"/><path class="l-neto" d="${linea}"/>`;
+    serie.forEach((p, i) => {
+      s += `<circle cx="${x(i).toFixed(1)}" cy="${y(pts[i]).toFixed(1)}" r="${serie.length <= 62 ? 3 : 2}" fill="var(--primary)"><title>${esc(finEtiqueta(p.p, agrupar, true) + ': saldo ' + fm(pts[i]))}</title></circle>`;
+      if (i % cada === 0) s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${esc(finEtiqueta(p.p, agrupar, false))}</text>`;
+    });
+    return s + '</svg>';
+  }
+  function serieDeMovs(filas, desde, hasta){   // filas vienen de la más nueva a la más vieja
+    const d0 = new Date(desde + 'T00:00:00'), d1 = new Date(hasta + 'T00:00:00'), porDia = (d1 - d0) / 864e5 <= 62, cubo = {};
+    const clave = (f) => porDia ? f : f.slice(0, 7);
+    if (porDia){ for (let d = new Date(d0); d <= d1; d.setDate(d.getDate() + 1)) cubo[isoFecha(d)] = [0, 0]; }
+    else { for (let d = new Date(d0.getFullYear(), d0.getMonth(), 1); d <= d1; d.setMonth(d.getMonth() + 1)) cubo[isoFecha(d).slice(0, 7)] = [0, 0]; }
+    filas.forEach(m => { if (m.valor == null) return; const b = cubo[clave(m.fecha)] || (cubo[clave(m.fecha)] = [0, 0]); b[m.tipo === 'ingreso' ? 0 : 1] += m.valor; });
+    return { serie: Object.keys(cubo).sort().map(k => ({ p: k, ingresos: cubo[k][0], egresos: cubo[k][1] })), agrupar: porDia ? 'dia' : 'mes' };
+  }
+
+  function pintarBancos(){
+    const d = bcDatos, activas = d.cuentas.filter(c => c.activa);
+    fid('bcKpis').innerHTML = `
+      <div class="fin-kpi"><span class="et">Saldo total (USD)</span><b>${usdTxt(d.total_usd)}</b><div class="sub">${d.tasa ? 'las cuentas en bolívares se convierten a Bs ' + fm(d.tasa) + ' por dólar' : '⚠ sin tasa cargada: las cuentas en bolívares no se suman'}</div></div>
+      <div class="fin-kpi"><span class="et">Cuentas activas</span><b>${activas.length}</b><div class="sub">${d.cuentas.length - activas.length} desactivada(s)</div></div>
+      <div class="fin-kpi"><span class="et">Sin conciliar</span><b>${d.sin_conciliar}</b><div class="sub">movimientos que aún no cruzas con el banco</div></div>
+      <div class="fin-kpi"><span class="et">Compras por pagar</span><b>${usdTxt(d.compras_pendientes.usd)}</b><div class="sub">${d.compras_pendientes.n} pendiente(s)</div></div>`;
+    const av = [];
+    if (!d.cuentas.length) av.push('<p class="nota-erp" style="margin:0 0 8px"><b>Empieza creando tus cuentas</b> (bancos, efectivo, Zelle…) con su saldo inicial. Luego los movimientos que cargues en «Inicio» se reparten solos entre ellas.</p>');
+    if (d.sin_registrar.length) av.push(`<p class="nota-erp" style="margin:0 0 8px;color:var(--warn)">⚠ Hay movimientos cargados en cuentas que no existen todavía: ${d.sin_registrar.map(n => `<button class="bc-chip-btn" type="button" data-crear="${esc(n)}" title="Crear la cuenta">+ ${esc(n)}</button>`).join('')}</p>`);
+    if (d.pagos_sin_cuenta.n) av.push(`<p class="nota-erp" style="margin:0 0 8px">${d.pagos_sin_cuenta.n} pago(s) de pedidos (${usdTxt(d.pagos_sin_cuenta.usd)}) no indican una de tus cuentas, así que no suman al saldo de ninguna. Si el comprobante trae otro nombre para tu cuenta, agrégalo como «alias» en esa cuenta.</p>`);
+    fid('bcAvisos').innerHTML = av.join('');
+    fid('bcCuentas').innerHTML = d.cuentas.length ? d.cuentas.map(c => {
+      const pct = c.movimientos ? Math.round((c.movimientos - c.sin_conciliar) / c.movimientos * 100) : 100;
+      return `<div class="bc-card ${c.activa ? '' : 'off'}"><div class="nom" title="${esc(c.nombre)}">${esc(c.nombre)}</div>
+        <div class="meta">${esc([d.tipos[c.tipo], c.banco, c.numero ? '···' + c.numero : ''].filter(Boolean).join(' · '))}${c.activa ? '' : ' · desactivada'}</div>
+        <div class="saldo ${c.saldo < 0 ? 'neg' : ''}">${bcSig(c)}${fm(c.saldo)}</div>
+        ${c.usd_estimado ? `<div class="meta">≈ ${d.tasa ? usdTxt(c.saldo_usd) : 'sin tasa'}</div>` : ''}
+        <div class="bc-prog" title="${pct} % conciliado"><i style="width:${pct}%"></i></div><div class="meta">${c.sin_conciliar} sin conciliar de ${c.movimientos}${c.sin_tasa ? ' · ' + c.sin_tasa + ' sin tasa' : ''}</div>
+        <div class="acc"><button class="btn sm" type="button" data-ver="${c.id}">Ver movimientos</button><button class="btn ghost sm" type="button" data-editar="${c.id}">Editar</button></div></div>`;
+    }).join('') : '<div class="fin-vacio">Todavía no hay cuentas. Crea la primera con «+ Cuenta».</div>';
+    fid('bcDist').innerHTML = filasBarra(activas.filter(c => c.saldo_usd > 0).map(c => ({ nombre: c.nombre, usd: c.saldo_usd })).sort((a, b) => b.usd - a.usd), 'var(--primary)');
+  }
+  async function cargarBancos(){
+    try {
+      bcDatos = await bcGet('/api/erp/bancos/panel'); pintarBancos();
+      if (bcSel && bcCuenta(bcSel)) cargarDetalleBanco(); else { bcSel = null; fid('bcDetalle').hidden = true; }
+    } catch(e){ fid('bcKpis').innerHTML = `<p class="error">No pude cargar los bancos (${esc(e.message)}).</p>`; }
+  }
+  async function cargarDetalleBanco(){
+    const c0 = bcCuenta(bcSel); if (!c0) return;
+    const des = fid('bcDesde'), has = fid('bcHasta');
+    if (!des.value){ const h = new Date(); des.value = isoFecha(new Date(h.getTime() - 29 * 864e5)); has.value = isoFecha(h); if (des.value < c0.fecha_saldo) des.value = c0.fecha_saldo; }
+    try {
+      const d = await bcGet(`/api/erp/bancos/cuentas/${bcSel}/movimientos?desde=${des.value}&hasta=${has.value}`), c = d.cuenta, sig = bcSig(c);
+      fid('bcDetalle').hidden = false;
+      fid('bcDetTit').textContent = `${c.nombre} · saldo ${sig}${fm(c.saldo)}`;
+      fid('bcDetInfo').textContent = `saldo al inicio del período: ${sig}${fm(d.saldo_previo)} · ${d.filas.length} movimientos`;
+      const s = serieDeMovs(d.filas, des.value, has.value);
+      fid('bcLinea').innerHTML = svgSaldo(s.serie, s.agrupar, d.saldo_previo);
+      fid('bcFilas').innerHTML = d.filas.length ? d.filas.map(m => {
+        const ing = m.tipo === 'ingreso', v = m.valor == null ? '<span class="error">sin tasa</span>' : sig + fm(m.valor);
+        return `<tr><td>${esc(m.fecha)}</td><td>${esc(m.concepto)}${m.transferencia ? ' <span class="fin-chip cap">transferencia</span>' : ''}${m.fuente === 'pedido' ? ' <span class="fin-chip av">pedido</span>' : ''}</td><td>${esc(m.referencia || '')}</td>
+          <td class="num" style="color:var(--ok)">${ing ? v : ''}</td><td class="num" style="color:var(--danger)">${ing ? '' : v}</td><td class="num"><b>${sig}${fm(m.saldo)}</b></td>
+          <td style="text-align:center"><input type="checkbox" data-conc="${m.fuente}:${m.id}" ${m.conciliado ? 'checked' : ''} aria-label="Conciliado"></td></tr>`;
+      }).join('') : '<tr><td colspan="7" class="empty">Sin movimientos en este período.</td></tr>';
+    } catch(e){ fid('bcFilas').innerHTML = `<tr><td colspan="7" class="error">${esc(e.message)}</td></tr>`; }
+  }
+
+  // ---- cuenta ----
+  function abrirCuenta(cuenta, nombreSugerido){
+    const f = fid('frmCuenta'); f.reset(); fid('cuError').hidden = true; f.dataset.id = cuenta ? cuenta.id : '';
+    fid('cuT').textContent = cuenta ? 'Editar cuenta' : 'Nueva cuenta'; fid('cuActivaL').hidden = !cuenta;
+    f.elements.nombre.disabled = f.elements.moneda.disabled = !!cuenta;
+    if (cuenta){ ['nombre', 'tipo', 'moneda', 'banco', 'titular', 'alias', 'saldo_inicial', 'fecha_saldo'].forEach(k => f.elements[k].value = cuenta[k] == null ? '' : cuenta[k]); f.elements.numero.placeholder = cuenta.numero ? '···' + cuenta.numero : ''; f.elements.activa.checked = !!cuenta.activa; }
+    else { f.elements.fecha_saldo.value = isoFecha(new Date()); if (nombreSugerido) f.elements.nombre.value = nombreSugerido; }
+    fid('dlgCuenta').showModal(); (cuenta ? f.elements.banco : f.elements.nombre).focus();
+  }
+  // ---- transferencia ----
+  function trActualizar(){
+    const o = bcCuenta(fid('trOrigen').value), d = bcCuenta(fid('trDestino').value), cruz = !!(o && d && o.moneda !== d.moneda), f = fid('frmTransf');
+    document.querySelectorAll('.trCruz').forEach(e => e.hidden = !cruz);
+    if (cruz && !f.elements.tasa.value && bcDatos.tasa) f.elements.tasa.value = fm(bcDatos.tasa);
+    const m = numEs(f.elements.monto.value);
+    let t = '';
+    if (o && d && o.id === d.id) t = 'El origen y el destino son la misma cuenta.';
+    else if (o && d && m > 0){
+      const tasa = numEs(f.elements.tasa.value), dm = numEs(f.elements.monto_destino.value);
+      const llega = !cruz ? m : (dm > 0 ? dm : (tasa > 0 ? (o.moneda === 'USD' ? m * tasa : m / tasa) : NaN));
+      t = `Saldrán ${bcSig(o)}${fm(m)} de ${o.nombre}` + (isFinite(llega) ? ` y llegarán ${bcSig(d)}${fm(llega)} a ${d.nombre}.` : '. Escribe la tasa para calcular lo que llega.');
+    }
+    fid('trPrevia').textContent = t;
+  }
+  function abrirTransf(){
+    if (!bcDatos || bcDatos.cuentas.filter(c => c.activa).length < 2){ alert('Necesitas al menos dos cuentas activas para transferir entre ellas.'); return; }
+    const f = fid('frmTransf'); f.reset(); fid('trError').hidden = true;
+    fid('trOrigen').innerHTML = fid('trDestino').innerHTML = optsCuentas(true);
+    fid('trDestino').selectedIndex = 1; f.elements.fecha.value = isoFecha(new Date()); trActualizar(); fid('dlgTransf').showModal(); fid('trMonto').focus();
+  }
+  // ---- pagar compra ----
+  async function abrirPagar(){
+    if (!bcDatos || !bcDatos.cuentas.some(c => c.activa)){ alert('Primero crea una cuenta desde la que pagar.'); return; }
+    let r; try { r = await bcGet('/api/erp/bancos/compras-pendientes'); } catch(e){ alert(e.message); return; }
+    if (!r.compras.length){ alert('No hay compras ni gastos pendientes de pago.'); return; }
+    const f = fid('frmPagar'); f.reset(); fid('pgError').hidden = true;
+    fid('pgCompra').innerHTML = r.compras.map(c => `<option value="${c.id}">${esc(c.fecha)} · ${esc(c.proveedor)}${c.numero ? ' · ' + esc(c.numero) : ''} · ${c.moneda === 'USD' ? '$' : 'Bs '}${fm(c.monto)}</option>`).join('');
+    fid('pgCuenta').innerHTML = optsCuentas(true); f.elements.fecha.value = isoFecha(new Date()); fid('dlgPagar').showModal();
+  }
+  // ---- conciliación ----
+  function concEntrada(msg){
+    concResp = null;
+    fid('concCuerpo').innerHTML = `<h3>Conciliar con el estado de cuenta del banco</h3>
+      <p class="nota-erp" style="margin:8px 0 12px">Pega las filas del estado de cuenta (desde Excel o el portal del banco) o sube el CSV. La primera fila lleva los títulos: <b>fecha, descripción y monto</b> (o dos columnas, débito y crédito); la referencia ayuda a cruzar mejor. El sistema busca cada fila entre los movimientos sin conciliar (mismo monto y misma referencia, o fecha con hasta 3 días de diferencia). <b>Nada cambia hasta que confirmes.</b></p>
+      <div class="fin-grid"><label>Cuenta<select id="concCuenta">${optsCuentas(false)}</select></label><label>Saldo final según el estado de cuenta (opcional)<input type="text" id="concSaldo" inputmode="decimal" autocomplete="off"></label></div>
+      <label style="display:block;margin-top:12px;font-size:12.5px;font-weight:700">Filas del estado de cuenta<textarea id="concTexto" spellcheck="false" placeholder="Fecha;Descripción;Débito;Crédito;Referencia"></textarea></label>
+      <p class="error" id="concError" style="margin:8px 0 0" ${msg ? '' : 'hidden'}>${esc(msg || '')}</p>
+      <div class="toolbar" style="margin:14px 0 0;justify-content:space-between"><button class="btn ghost" type="button" id="concSubir">Subir archivo CSV</button><div style="display:flex;gap:8px"><button class="btn ghost" type="button" id="concCerrar">Cancelar</button><button class="btn" type="button" id="concRevisar">Cruzar</button></div></div>`;
+  }
+  function concPrevia(){
+    const r = concResp.res, sig = r.moneda === 'USD' ? '$' : 'Bs ', x = r.resumen;
+    const fila = (m, extra) => `<tr><td>${esc(m.fecha)}</td><td>${esc(m.tipo)}</td><td>${esc(m.concepto)}</td><td class="num">${sig}${fm(m.monto)}</td><td>${esc(m.referencia || '')}</td>${extra || ''}</tr>`;
+    fid('concCuerpo').innerHTML = `<h3>${esc(r.cuenta)}: resultado del cruce</h3>
+      <div class="fin-kpis" style="margin:10px 0"><div class="fin-kpi ing"><span class="et">Coinciden</span><b>${x.coinciden}</b><div class="sub">de ${x.filas} filas del banco</div></div>
+        <div class="fin-kpi egr"><span class="et">Solo en el banco</span><b>${x.solo_banco}</b><div class="sub">no están en el sistema</div></div>
+        <div class="fin-kpi"><span class="et">Solo en el sistema</span><b>${x.solo_sistema}</b><div class="sub">no aparecen en el estado de cuenta</div></div>
+        <div class="fin-kpi"><span class="et">Con error</span><b>${x.con_error}</b><div class="sub">filas que no pude leer</div></div></div>
+      ${r.errores.length ? `<p class="error" style="margin:0 0 8px">Filas ignoradas: ${r.errores.slice(0, 5).map(e => `fila ${e.n}: ${esc(e.error)}`).join('; ')}${r.errores.length > 5 ? '…' : ''}</p>` : ''}
+      <div class="bc-grupo"><h4>Coinciden · se marcarán como conciliadas</h4>${x.coinciden ? `<div class="table-wrap" style="max-height:220px;overflow:auto"><table style="min-width:0"><thead><tr><th><input type="checkbox" id="concTodas" checked aria-label="Todas"></th><th>Fecha banco</th><th>Concepto banco</th><th>Monto</th><th>Referencia</th><th>En el sistema</th></tr></thead><tbody>${r.coincidencias.map(m => `<tr><td><input type="checkbox" class="concPar" data-fuente="${m.fuente}" data-id="${m.id}" checked></td><td>${esc(m.fecha)}</td><td>${esc(m.concepto)}</td><td class="num">${sig}${fm(m.monto)}</td><td>${esc(m.referencia || '')}</td><td>${esc(m.fecha_sistema)} · ${esc(m.concepto_sistema)}${m.por_referencia ? ' <span class="fin-chip ok">misma referencia</span>' : ' <span class="fin-chip av">por monto y fecha</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="fin-vacio">Ninguna fila coincide.</div>'}</div>
+      ${x.solo_banco ? `<div class="bc-grupo"><h4>Solo en el banco · te falta cargarlas</h4><div class="table-wrap" style="max-height:180px;overflow:auto"><table style="min-width:0"><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Monto</th><th>Referencia</th></tr></thead><tbody>${r.solo_banco.map(m => fila(m)).join('')}</tbody></table></div>
+        <button class="btn ghost sm" type="button" id="concCargar" style="margin-top:8px">Registrar estas ${x.solo_banco} filas en el sistema</button> <span class="count">quedan como «otros ingresos/egresos»; después puedes cambiarles la categoría</span></div>` : ''}
+      ${x.solo_sistema ? `<div class="bc-grupo"><h4>Solo en el sistema · el banco aún no las muestra (o hay un error de carga)</h4><div class="table-wrap" style="max-height:180px;overflow:auto"><table style="min-width:0"><thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Monto</th><th>Referencia</th></tr></thead><tbody>${r.solo_sistema.map(m => fila(m)).join('')}</tbody></table></div></div>` : ''}
+      <p class="error" id="concError" style="margin:10px 0 0" hidden></p><p id="concOk" style="margin:10px 0 0;font-weight:700" hidden></p>
+      <div class="toolbar" style="margin:14px 0 0;justify-content:flex-end"><button class="btn ghost" type="button" id="concVolver">Volver</button><button class="btn" type="button" id="concAplicar" ${x.coinciden ? '' : 'disabled'}>Marcar como conciliadas</button></div>`;
+    const t = fid('concTodas'); if (t) t.addEventListener('change', () => document.querySelectorAll('.concPar').forEach(c => c.checked = t.checked));
+  }
+  const hex32 = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+
+  function iniciarBancos(){
+    fid('bcNueva').addEventListener('click', () => abrirCuenta(null));
+    fid('bcTransf').addEventListener('click', abrirTransf);
+    fid('bcPagar').addEventListener('click', abrirPagar);
+    fid('bcConc').addEventListener('click', () => { if (!bcDatos || !bcDatos.cuentas.length){ alert('Primero crea una cuenta.'); return; } concEntrada(); fid('dlgConc').showModal(); });
+    fid('bcDetOk').addEventListener('click', cargarDetalleBanco);
+    fid('bcAvisos').addEventListener('click', (ev) => { const b = ev.target.closest('[data-crear]'); if (b) abrirCuenta(null, b.dataset.crear); });
+    fid('bcCuentas').addEventListener('click', (ev) => {
+      const v = ev.target.closest('[data-ver]'), e = ev.target.closest('[data-editar]');
+      if (v){ bcSel = Number(v.dataset.ver); fid('bcDesde').value = ''; cargarDetalleBanco().then(() => fid('bcDetalle').scrollIntoView({ behavior: 'smooth' })); }
+      if (e) abrirCuenta(bcCuenta(e.dataset.editar));
+    });
+    fid('bcFilas').addEventListener('change', async (ev) => {
+      const k = ev.target.dataset.conc; if (!k) return; const [fuente, id] = k.split(':');
+      try { await finEnviar('/api/erp/bancos/conciliar/marcar', { fuente, id: Number(id), valor: ev.target.checked }); bcDatos = await bcGet('/api/erp/bancos/panel'); pintarBancos(); }
+      catch(e){ ev.target.checked = !ev.target.checked; alert(e.message); }
+    });
+    fid('cuX').addEventListener('click', () => fid('dlgCuenta').close());
+    fid('frmCuenta').addEventListener('submit', async (ev) => {
+      ev.preventDefault(); const f = ev.target, err = fid('cuError'); err.hidden = true;
+      const datos = Object.fromEntries(new FormData(f)); datos.activa = f.elements.activa.checked;
+      try {
+        await finEnviar(f.dataset.id ? `/api/erp/bancos/cuentas/${f.dataset.id}` : '/api/erp/bancos/cuentas', f.dataset.id ? { ...datos, nombre: undefined, moneda: undefined } : datos);
+        fid('dlgCuenta').close(); cargarBancos();
+      } catch(e){ err.textContent = e.message; err.hidden = false; }
+    });
+    ['trOrigen', 'trDestino'].forEach(i => fid(i).addEventListener('change', () => { fid('frmTransf').elements.tasa.value = ''; trActualizar(); }));
+    ['trMonto', 'trTasa', 'trDestMonto'].forEach(i => fid(i).addEventListener('input', trActualizar));
+    fid('trX').addEventListener('click', () => fid('dlgTransf').close());
+    fid('frmTransf').addEventListener('submit', async (ev) => {
+      ev.preventDefault(); const err = fid('trError'); err.hidden = true;
+      try { await finEnviar('/api/erp/bancos/transferencia', Object.fromEntries(new FormData(ev.target))); fid('dlgTransf').close(); cargarBancos(); }
+      catch(e){ err.textContent = e.message; err.hidden = false; }
+    });
+    fid('pgX').addEventListener('click', () => fid('dlgPagar').close());
+    fid('frmPagar').addEventListener('submit', async (ev) => {
+      ev.preventDefault(); const err = fid('pgError'); err.hidden = true; fid('pgOk').disabled = true;
+      try { await finEnviar('/api/erp/bancos/pagar-compra', Object.fromEntries(new FormData(ev.target))); fid('dlgPagar').close(); cargarBancos(); }
+      catch(e){ err.textContent = e.message; err.hidden = false; }
+      finally { fid('pgOk').disabled = false; }
+    });
+    fid('concCuerpo').addEventListener('click', async (ev) => {
+      const id = ev.target.id, err = fid('concError');
+      if (id === 'concCerrar') fid('dlgConc').close();
+      else if (id === 'concSubir') fid('concArchivo').click();
+      else if (id === 'concVolver') concEntrada();
+      else if (id === 'concRevisar'){
+        ev.target.disabled = true; err.hidden = true;
+        try { concResp = { cuentaId: Number(fid('concCuenta').value), saldo: fid('concSaldo').value, res: await finEnviar('/api/erp/bancos/conciliar/analizar', { cuenta_id: Number(fid('concCuenta').value), texto: fid('concTexto').value }) }; concPrevia(); }
+        catch(e){ err.textContent = e.message; err.hidden = false; ev.target.disabled = false; }
+      } else if (id === 'concCargar'){
+        if (!confirm(`Se registrarán ${concResp.res.solo_banco.length} movimientos nuevos en «${concResp.res.cuenta}». ¿Continuar?`)) return;
+        ev.target.disabled = true;
+        try {
+          const r = await finEnviar('/api/erp/finanzas/lote/aplicar', { lote_id: hex32(), filas: concResp.res.solo_banco, omitir_duplicados: true });
+          const ok = fid('concOk'); ok.textContent = r.mensaje + ' Vuelve a cruzar para conciliarlos.'; ok.hidden = false;
+          cargarBancos();
+        } catch(e){ err.textContent = e.message; err.hidden = false; ev.target.disabled = false; }
+      } else if (id === 'concAplicar'){
+        const pares = [...document.querySelectorAll('.concPar:checked')].map(c => ({ fuente: c.dataset.fuente, id: Number(c.dataset.id) }));
+        if (!pares.length){ err.textContent = 'Marca al menos una coincidencia.'; err.hidden = false; return; }
+        ev.target.disabled = true; err.hidden = true;
+        try {
+          const r = await finEnviar('/api/erp/bancos/conciliar/aplicar', { cuenta_id: concResp.cuentaId, pares, saldo_extracto: concResp.saldo });
+          const sig = concResp.res.moneda === 'USD' ? '$' : 'Bs ', ok = fid('concOk');
+          ok.innerHTML = `Se concilió ${r.conciliadas} movimiento(s). Saldo conciliado: ${sig}${fm(r.saldo_conciliado)}` + (r.diferencia == null ? '.' : ` · según el estado de cuenta: ${sig}${fm(r.saldo_extracto)} · <span style="color:var(--${Math.abs(r.diferencia) < 0.01 ? 'ok' : 'danger'})">${Math.abs(r.diferencia) < 0.01 ? 'cuadra' : 'diferencia de ' + sig + fm(r.diferencia)}</span>`);
+          ok.hidden = false; ev.target.hidden = true; cargarBancos();
+        } catch(e){ err.textContent = e.message; err.hidden = false; ev.target.disabled = false; }
+      }
+    });
+    fid('concArchivo').addEventListener('change', async (ev) => {
+      const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+      if (/\.xlsx?$/i.test(f.name) || f.size > 3 * 1024 * 1024){ fid('concError').textContent = 'Usa un CSV de hasta 3 MB (en Excel: «Guardar como → CSV») o pega las filas en el cuadro.'; fid('concError').hidden = false; return; }
+      fid('concTexto').value = await leerArchivo(f); fid('concError').hidden = true;
     });
   }
 

@@ -47,6 +47,7 @@ import bcv
 import contable
 import erp
 import finanzas
+import tesoreria
 import vendedor
 import voz
 import importacion
@@ -862,6 +863,101 @@ def fin_lote_aplicar():
             db.registrar_accion("Administración", None, "lote_movimientos", {"lote": d.get("lote_id"), "guardadas": r["guardadas"], "omitidas": r["omitidas"]}, request.usuario["nombre"])
         return r
     return _intentar(hacer)
+
+
+# ---------------------------------------------------------------------
+# Bancos y cajas: cuentas, saldos, transferencias, conciliación y pago de compras (ver tesoreria.py)
+# ---------------------------------------------------------------------
+
+def _accion_banco(nombre, datos):
+    db.registrar_accion("Administración", None, nombre, datos, request.usuario["nombre"])
+
+
+@app.route("/api/erp/bancos/panel", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def teso_panel():
+    return _intentar(tesoreria.panel)
+
+
+@app.route("/api/erp/bancos/cuentas", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def teso_cuenta_nueva():
+    d = request.get_json(silent=True) or {}
+    def hacer():
+        cid = tesoreria.crear_cuenta(d, request.usuario["id"])
+        _accion_banco("cuenta_creada", {"id": cid, "nombre": d.get("nombre"), "moneda": d.get("moneda")})
+        return {"id": cid}
+    return _intentar(hacer)
+
+
+@app.route("/api/erp/bancos/cuentas/<int:cid>", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def teso_cuenta_editar(cid):
+    d = request.get_json(silent=True) or {}
+    def hacer():
+        tesoreria.editar_cuenta(cid, d)
+        _accion_banco("cuenta_editada", {"id": cid, "activa": d.get("activa"), "saldo_inicial": d.get("saldo_inicial")})
+        return {"ok": True}
+    return _intentar(hacer)
+
+
+@app.route("/api/erp/bancos/cuentas/<int:cid>/movimientos", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def teso_movimientos(cid):
+    return _intentar(lambda: tesoreria.movimientos_cuenta(cid, *_rango_args()))
+
+
+@app.route("/api/erp/bancos/transferencia", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def teso_transferencia():
+    d = request.get_json(silent=True) or {}
+    def hacer():
+        r = tesoreria.transferencia(d, request.usuario["id"])
+        _accion_banco("transferencia", {"origen": r["origen"], "destino": r["destino"], "monto": r["monto"], "monto_destino": r["monto_destino"]})
+        return r
+    return _intentar(hacer)
+
+
+@app.route("/api/erp/bancos/compras-pendientes", methods=["GET"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def teso_compras_pendientes():
+    return _intentar(lambda: {"compras": tesoreria.compras_pendientes()})
+
+
+@app.route("/api/erp/bancos/pagar-compra", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def teso_pagar_compra():
+    d = request.get_json(silent=True) or {}
+    def hacer():
+        mid = tesoreria.pagar_compra(int(d.get("compra_id") or 0), int(d.get("cuenta_id") or 0), d.get("fecha"), d.get("referencia"), request.usuario["id"])
+        _accion_banco("compra_pagada", {"compra": d.get("compra_id"), "cuenta": d.get("cuenta_id"), "movimiento": mid})
+        return {"id": mid}
+    return _intentar(hacer)
+
+
+@app.route("/api/erp/bancos/conciliar/analizar", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def teso_conciliar_analizar():
+    d = request.get_json(silent=True) or {}
+    return _intentar(lambda: tesoreria.conciliar_analizar(int(d.get("cuenta_id") or 0), d.get("texto")))
+
+
+@app.route("/api/erp/bancos/conciliar/aplicar", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def teso_conciliar_aplicar():
+    d = request.get_json(silent=True) or {}
+    def hacer():
+        r = tesoreria.conciliar_aplicar(int(d.get("cuenta_id") or 0), d.get("pares"), d.get("saldo_extracto"))
+        _accion_banco("conciliacion", {"cuenta": d.get("cuenta_id"), "conciliadas": r["conciliadas"], "diferencia": r.get("diferencia")})
+        return r
+    return _intentar(hacer)
+
+
+@app.route("/api/erp/bancos/conciliar/marcar", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def teso_conciliar_marcar():
+    d = request.get_json(silent=True) or {}
+    return _intentar(lambda: (tesoreria.conciliar_marcar(d.get("fuente"), int(d.get("id") or 0), bool(d.get("valor"))), {"ok": True})[1])
 
 
 @app.route("/api/erp/finanzas/plantilla.csv", methods=["GET"])
