@@ -47,6 +47,7 @@ import bcv
 import contable
 import erp
 import finanzas
+import inventario_archivo
 import tesoreria
 import vendedor
 import voz
@@ -390,6 +391,40 @@ def erp_carga():
     if not filas or "codigo" not in (filas[0].keys() if filas else []) or "cantidad" not in filas[0].keys():
         return jsonify({"error": "el CSV necesita las columnas codigo y cantidad (opcionales: marca, costo, minimo)"}), 400
     resultado = erp.cargar_conteo([{k.strip().lower(): v for k, v in f.items() if k} for f in filas], request.usuario["id"])
+    return jsonify(resultado)
+
+
+@app.route("/api/erp/inventario/carga/archivo", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_carga_archivo():
+    """PDF, PNG o JPG (multipart, campo 'archivo'): Claude lee las filas y se devuelve una vista previa.
+    No cambia existencias; eso lo hace /carga/aplicar cuando la persona confirma."""
+    f = request.files.get("archivo")
+    if not f:
+        return jsonify({"error": "falta el archivo"}), 400
+    try:
+        datos = f.read(inventario_archivo.MAX_BYTES + 1)
+        leido = inventario_archivo.extraer(f.filename or "", f.mimetype, datos)
+        previa = inventario_archivo.vista_previa(leido["filas"])
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    previa["ilegibles"] = leido["ilegibles"]
+    db.registrar_accion("Inventario archivo", None, "leer", {"archivo": (f.filename or "")[:80], "filas": len(previa["filas"])}, request.usuario["nombre"])
+    return jsonify(previa)
+
+
+@app.route("/api/erp/inventario/carga/aplicar", methods=["POST"])
+@requiere_sesion(roles=ROLES_ADMIN)
+def erp_carga_aplicar():
+    """Aplica las filas revisadas en la vista previa (solo las que coinciden con un producto del catálogo)."""
+    d = request.get_json(silent=True) or {}
+    filas = [f for f in (d.get("filas") or []) if isinstance(f, dict)][:inventario_archivo.MAX_FILAS]
+    if not filas:
+        return jsonify({"error": "no hay filas para aplicar"}), 400
+    ok = [f for f in inventario_archivo.vista_previa(filas)["filas"] if f["estado"] == "ok"]
+    limpias = [{k: f[k] for k in ("codigo", "marca", "cantidad", "costo", "minimo") if f.get(k) is not None} for f in ok]
+    resultado = erp.cargar_conteo(limpias, request.usuario["id"])
+    db.registrar_accion("Inventario archivo", None, "aplicar", {"filas": len(filas)}, resultado)
     return jsonify(resultado)
 
 

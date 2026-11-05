@@ -812,8 +812,8 @@
   <div class="toolbar" style="margin-top:14px">
     <input type="search" id="invSearch" placeholder="Buscar por código, nombre o marca…">
     <label class="chk"><input type="checkbox" id="invBajo"> Solo stock bajo</label>
-    <button class="btn ghost" id="btnCarga" type="button">Cargar inventario (CSV)</button>
-    <input type="file" id="archivoCarga" accept=".csv,text/csv,text/plain" hidden>
+    <button class="btn ghost" id="btnCarga" type="button">Cargar inventario (CSV, PDF, PNG, JPG)</button>
+    <input type="file" id="archivoCarga" accept=".csv,.pdf,.png,.jpg,.jpeg,text/csv,text/plain,application/pdf,image/png,image/jpeg" hidden>
     <span class="count" id="invCount"></span>
   </div>
   <div class="table-wrap">
@@ -822,7 +822,7 @@
       <tbody id="invBody"></tbody>
     </table>
   </div>
-  <p class="nota-erp">Columnas del CSV: <code>codigo,cantidad</code> y opcionales <code>marca,costo,minimo</code>. Cada carga queda en el historial de movimientos.</p>
+  <p class="nota-erp">Columnas del CSV: <code>codigo,cantidad</code> y opcionales <code>marca,costo,minimo</code>. Los PDF y las fotos los lee Claude y te muestra una vista previa para confirmar antes de aplicar. Cada carga queda en el historial de movimientos.</p>
 </div>
 
 <div id="proveedoresWrap" hidden>
@@ -1449,6 +1449,36 @@
   }
 
 
+  // -------- ERP: carga desde PDF o foto, con vista previa antes de aplicar --------
+  async function cargarDesdeArchivo(f){
+    const btn = document.getElementById('btnCarga');
+    const texto = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Leyendo ' + f.name + '…';
+    try {
+      const fd = new FormData(); fd.append('archivo', f);
+      const r = await api('/api/erp/inventario/carga/archivo', { method:'POST', body: fd });
+      if (r.status === 401){ irALogin(); return; }
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok){ alert(d.error || 'No se pudo leer el archivo'); return; }
+      const res = d.resumen || {};
+      const ok = d.filas.filter(x => x.estado === 'ok');
+      let msg = `Claude leyó ${d.filas.length} renglones de ${f.name}.\n\n`;
+      msg += ok.slice(0, 15).map(x => `${x.codigo} (${x.marca || '—'}): ${x.actual === null || x.actual === undefined ? 'sin conteo' : x.actual} → ${x.cantidad}`).join('\n');
+      if (ok.length > 15) msg += `\n… y ${ok.length - 15} más`;
+      if (res.no_encontrado) msg += `\n\nNo están en el catálogo (se omiten): ${res.no_encontrado}`;
+      if (res.ambiguo) msg += `\nCódigo en varias marcas (se omiten): ${res.ambiguo}`;
+      if (res.invalida) msg += `\nCantidad inválida (se omiten): ${res.invalida}`;
+      if (d.ilegibles) msg += `\nRenglones ilegibles que Claude no incluyó: ${d.ilegibles}`;
+      if (!ok.length){ alert(msg + '\n\nNo hay nada que aplicar.'); return; }
+      if (!confirm(msg + `\n\nRevisa que coincidan con el documento. ¿Aplicar ${ok.length} conteos?`)) return;
+      const r2 = await api('/api/erp/inventario/carga/aplicar', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ filas: ok }) });
+      const d2 = await r2.json().catch(() => ({}));
+      if (!r2.ok){ alert(d2.error || 'No se pudo aplicar'); return; }
+      alert(`Productos actualizados: ${d2.actualizados}.`);
+      cargarInventario();
+    } finally { btn.disabled = false; btn.textContent = texto; }
+  }
+
   // -------- ERP: carga por CSV y nueva orden de compra --------
   function iniciarErpExtras(){
     const archivo = document.getElementById('archivoCarga');
@@ -1456,6 +1486,7 @@
     archivo.addEventListener('change', async () => {
       const f = archivo.files[0];
       if (!f) return;
+      if (!/\.csv$|\.txt$/i.test(f.name) && !/^text\//.test(f.type)){ archivo.value = ''; await cargarDesdeArchivo(f); return; }
       const texto = await f.text();
       archivo.value = '';
       const r = await api('/api/erp/inventario/carga', { method:'POST', headers:{ 'Content-Type':'text/csv' }, body: texto });
