@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --paper:#EEF1EF; --surface:#FFFFFF; --surface-2:#E4E9E7;
@@ -63,23 +64,25 @@
   }
   .error.show{ display:block; }
 
-  /* ===== Tema cristal (sin azul) ===== */
-  :root{ --paper:#efe6ff; --surface:rgba(255,255,255,.62); --surface-2:rgba(255,255,255,.78); --ink:#1c0f33; --ink-soft:#5a4880; --ink-faint:#8a78aa;
-    --steel:#8b2fe8; --rust:#c026d3; --danger:#e11d48; --danger-bg:rgba(244,63,94,.13); --line:rgba(120,70,210,.22);
-    --shadow:0 24px 70px -24px rgba(90,40,170,.5), inset 0 1px 0 rgba(255,255,255,.9); }
-  @media (prefers-color-scheme: dark){ :root{ --paper:#07030f; --surface:rgba(255,255,255,.07); --surface-2:rgba(255,255,255,.12); --ink:#f6f0ff; --ink-soft:#c8bae3; --ink-faint:#9486b4;
-    --steel:#c084fc; --rust:#f0abfc; --danger:#fb7185; --danger-bg:rgba(251,113,133,.16); --line:rgba(255,255,255,.16);
-    --shadow:0 30px 80px -24px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.2); } }
+  /* ===== Tema obsidiana ===== */
+  :root{ --paper:#f4efe6; --surface:rgba(255,255,255,.7); --surface-2:rgba(255,255,255,.86); --ink:#1d1812; --ink-soft:#5b5043; --ink-faint:#8c7f6e;
+    --steel:#8a6528; --rust:#a67c32; --danger:#a8324a; --danger-bg:rgba(168,50,74,.11); --line:rgba(70,50,20,.18);
+    --shadow:0 28px 70px -30px rgba(60,40,10,.45), inset 0 1px 0 rgba(255,255,255,.9); }
+  @media (prefers-color-scheme: dark){ :root{ --paper:#0b0a0d; --surface:rgba(255,255,255,.055); --surface-2:rgba(255,255,255,.09); --ink:#f2ede3; --ink-soft:#bdb3a2; --ink-faint:#8b8274;
+    --steel:#cfae6c; --rust:#e8d3a2; --danger:#e0768a; --danger-bg:rgba(224,118,138,.13); --line:rgba(255,255,255,.13);
+    --shadow:0 34px 80px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.14); } }
   body{ background:var(--paper); }
-  body::before{ content:""; position:fixed; inset:-8vmax; z-index:-1; pointer-events:none; animation:aurora 38s ease-in-out infinite alternate;
-    background:radial-gradient(60vmax 50vmax at 88% -8%, rgba(217,70,239,.40), transparent 60%), radial-gradient(55vmax 48vmax at -6% 104%, rgba(52,211,153,.32), transparent 58%), radial-gradient(40vmax 36vmax at 52% 52%, rgba(251,191,36,.18), transparent 62%), radial-gradient(46vmax 40vmax at 8% 6%, rgba(124,58,237,.42), transparent 60%); }
-  @keyframes aurora{ from{ transform:translate3d(0,0,0) scale(1); } to{ transform:translate3d(-2.5vmax,2vmax,0) scale(1.08); } }
-  .card{ background-image:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,.02) 45%,rgba(255,255,255,.08)); -webkit-backdrop-filter:blur(26px) saturate(180%); backdrop-filter:blur(26px) saturate(180%); border:1px solid var(--line); }
-  input{ background:var(--surface-2); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
-  button{ background:linear-gradient(135deg,#c026d3,#8b2fe8); border:1px solid rgba(255,255,255,.35); box-shadow:0 10px 28px -10px #a21caf, inset 0 1px 0 rgba(255,255,255,.45); }
-  button:hover:not(:disabled){ filter:brightness(1.1) saturate(1.1); }
-  .brand .mark{ filter:drop-shadow(0 4px 14px rgba(192,38,211,.55)); }
-  .brand .mark circle{ fill:#7c3aed; } .brand .mark path[fill="#2B4562"]{ fill:#7c3aed; } .brand .mark path[fill="#C1631A"]{ fill:#f59e0b; }
+  body::before{ content:""; position:fixed; inset:-6vmax; z-index:-1; pointer-events:none; animation:aurora 90s ease-in-out infinite alternate;
+    background:radial-gradient(55vmax 46vmax at 90% -10%, rgba(140,70,95,.24), transparent 62%), radial-gradient(50vmax 44vmax at -8% 106%, rgba(40,110,85,.20), transparent 60%), radial-gradient(38vmax 32vmax at 52% 55%, rgba(190,150,70,.08), transparent 62%); }
+  @keyframes aurora{ from{ transform:translate3d(0,0,0) scale(1); } to{ transform:translate3d(-1.5vmax,1vmax,0) scale(1.04); } }
+  .card{ background-image:linear-gradient(145deg,rgba(255,255,255,.12),rgba(255,255,255,.015) 48%,rgba(255,255,255,.05)); -webkit-backdrop-filter:blur(22px) saturate(125%); backdrop-filter:blur(22px) saturate(125%); border:1px solid var(--line); }
+  h1, .brand span{ font-family:'Cormorant Garamond','Iowan Old Style',Georgia,serif; }
+  h1{ font-size:28px; font-weight:600; letter-spacing:-.005em; } .brand span{ font-size:24px; font-weight:700; }
+  input{ background:var(--surface-2); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+  button{ background:linear-gradient(180deg,#e8d3a2,#cfae6c); color:#1b1407; border:1px solid #9c7f3f; box-shadow:0 1px 2px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.4); letter-spacing:.02em; }
+  @media (prefers-color-scheme: light){ button{ background:linear-gradient(180deg,#a67c32,#8a6528); color:#fff; border-color:#6f511b; } }
+  button:hover:not(:disabled){ filter:brightness(1.06); }
+  .brand .mark circle{ fill:#1d1914; stroke:#cfae6c; stroke-width:5; } .brand .mark path[fill="#2B4562"]{ fill:#1d1914; } .brand .mark path[fill="#C1631A"]{ fill:#cfae6c; }
   @media (prefers-reduced-motion: reduce){ body::before{ animation:none; } }
 </style>
 </head>
