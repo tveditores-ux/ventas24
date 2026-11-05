@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0b0a0d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>V24 · Control remoto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem('v24r-tema');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+<style>
+  :root{
+    --lienzo:#f4efe6; --surface:rgba(255,255,255,.68); --surface-2:rgba(255,255,255,.86); --surface-3:rgba(70,50,20,.07);
+    --line:rgba(70,50,20,.14); --line-strong:rgba(70,50,20,.28);
+    --ink:#1d1812; --ink-soft:#5b5043; --ink-faint:#8c7f6e;
+    --primary:#8a6528; --primary-2:#a67c32; --primary-ink:#fff; --primary-soft:rgba(166,124,50,.14);
+    --ok:#2f7a5a; --ok-bg:rgba(47,122,90,.13); --warn:#9a6a0c; --warn-bg:rgba(190,140,20,.15); --danger:#a8324a; --danger-bg:rgba(168,50,74,.11);
+    --brillo:rgba(255,255,255,.9); --cristal:linear-gradient(145deg,rgba(255,255,255,.55),rgba(255,255,255,.12) 50%,rgba(255,255,255,.3));
+    --sombra:0 10px 30px -16px rgba(60,40,10,.35), inset 0 1px 0 var(--brillo);
+    --aurora:radial-gradient(60vmax 50vmax at 95% -10%, rgba(176,120,60,.22), transparent 62%), radial-gradient(55vmax 48vmax at -10% 105%, rgba(70,130,100,.18), transparent 60%);
+    --serif:'Cormorant Garamond','Iowan Old Style',Georgia,serif; --cuerpo:'Manrope',system-ui,-apple-system,'Segoe UI',sans-serif;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --lienzo:#0b0a0d; --surface:rgba(255,255,255,.055); --surface-2:rgba(255,255,255,.09); --surface-3:rgba(255,255,255,.12);
+    --line:rgba(255,255,255,.10); --line-strong:rgba(255,255,255,.2);
+    --ink:#f2ede3; --ink-soft:#bdb3a2; --ink-faint:#8b8274;
+    --primary:#cfae6c; --primary-2:#e8d3a2; --primary-ink:#1b1407; --primary-soft:rgba(207,174,108,.14);
+    --ok:#6dbf9a; --ok-bg:rgba(109,191,154,.13); --warn:#e0b25c; --warn-bg:rgba(224,178,92,.13); --danger:#e0768a; --danger-bg:rgba(224,118,138,.13);
+    --brillo:rgba(255,255,255,.12); --cristal:linear-gradient(145deg,rgba(255,255,255,.10),rgba(255,255,255,.015) 48%,rgba(255,255,255,.045));
+    --sombra:0 14px 36px -18px rgba(0,0,0,.85), inset 0 1px 0 var(--brillo);
+    --aurora:radial-gradient(60vmax 50vmax at 95% -10%, rgba(140,70,95,.28), transparent 62%), radial-gradient(55vmax 48vmax at -10% 105%, rgba(40,110,85,.24), transparent 60%);
+    color-scheme:dark; } }
+  :root[data-theme="dark"]{
+    --lienzo:#0b0a0d; --surface:rgba(255,255,255,.055); --surface-2:rgba(255,255,255,.09); --surface-3:rgba(255,255,255,.12);
+    --line:rgba(255,255,255,.10); --line-strong:rgba(255,255,255,.2);
+    --ink:#f2ede3; --ink-soft:#bdb3a2; --ink-faint:#8b8274;
+    --primary:#cfae6c; --primary-2:#e8d3a2; --primary-ink:#1b1407; --primary-soft:rgba(207,174,108,.14);
+    --ok:#6dbf9a; --ok-bg:rgba(109,191,154,.13); --warn:#e0b25c; --warn-bg:rgba(224,178,92,.13); --danger:#e0768a; --danger-bg:rgba(224,118,138,.13);
+    --brillo:rgba(255,255,255,.12); --cristal:linear-gradient(145deg,rgba(255,255,255,.10),rgba(255,255,255,.015) 48%,rgba(255,255,255,.045));
+    --sombra:0 14px 36px -18px rgba(0,0,0,.85), inset 0 1px 0 var(--brillo);
+    --aurora:radial-gradient(60vmax 50vmax at 95% -10%, rgba(140,70,95,.28), transparent 62%), radial-gradient(55vmax 48vmax at -10% 105%, rgba(40,110,85,.24), transparent 60%);
+    color-scheme:dark; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; } [hidden]{ display:none !important; }
+  html,body{ height:100%; margin:0; }
+  body{ background:var(--lienzo); color:var(--ink); font:14px/1.45 var(--cuerpo); -webkit-font-smoothing:antialiased; overflow:hidden; }
+  body::before{ content:""; position:fixed; inset:-6vmax; z-index:-1; pointer-events:none; background:var(--aurora); }
+  button,input,select{ font:inherit; color:inherit; }
+  button{ border:1px solid var(--line-strong); background:var(--surface); border-radius:12px; min-height:42px; padding:6px 14px; font-weight:700; cursor:pointer; -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
+  button:active{ transform:scale(.97); }
+  button:focus-visible, select:focus-visible, input:focus-visible{ outline:2px solid var(--primary); outline-offset:2px; }
+  .app{ height:100dvh; display:grid; grid-template-rows:auto 1fr auto; max-width:680px; margin:0 auto; }
+  header{ padding:calc(10px + env(safe-area-inset-top)) 16px 6px; }
+  .fila{ display:flex; align-items:center; gap:10px; } .sep{ justify-content:space-between; } .envolver{ flex-wrap:wrap; }
+  .marca{ font-family:var(--serif); font-size:24px; font-weight:700; letter-spacing:.01em; line-height:1; }
+  .marca small{ display:block; font:600 10.5px var(--cuerpo); letter-spacing:.16em; text-transform:uppercase; color:var(--ink-faint); margin-top:3px; }
+  .icono{ width:42px; padding:0; font-size:18px; }
+  .chip{ font:700 11px var(--cuerpo); letter-spacing:.04em; padding:6px 12px; border-radius:999px; border:1px solid var(--line-strong); background:var(--surface); white-space:nowrap; min-height:0; }
+  .chip.on{ background:var(--primary); color:var(--primary-ink); border-color:transparent; }
+  .periodos{ display:flex; gap:8px; overflow-x:auto; padding:10px 16px 4px; scrollbar-width:none; } .periodos::-webkit-scrollbar{ display:none; }
+  main{ overflow-y:auto; padding:6px 16px 20px; -webkit-overflow-scrolling:touch; }
+  nav.dock{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; padding:8px 12px calc(8px + env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--surface-2); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); }
+  nav.dock button{ display:flex; flex-direction:column; align-items:center; gap:2px; min-height:54px; padding:4px; border:0; background:none; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint); border-radius:14px; }
+  nav.dock button svg{ width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  nav.dock button[aria-selected="true"]{ color:var(--primary); background:var(--primary-soft); }
+  .vidrio{ background:var(--surface); background-image:var(--cristal); border:1px solid var(--line); border-radius:16px; padding:14px 16px; margin-top:12px; box-shadow:var(--sombra); -webkit-backdrop-filter:blur(18px) saturate(120%); backdrop-filter:blur(18px) saturate(120%); }
+  .vidrio h3{ margin:0 0 8px; font-family:var(--serif); font-size:20px; font-weight:600; }
+  .et{ font:700 10.5px var(--cuerpo); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); }
+  .kpis{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .kpi{ background:var(--surface); background-image:var(--cristal); border:1px solid var(--line); border-radius:16px; padding:12px 14px; box-shadow:var(--sombra); min-width:0; }
+  .kpi.ancho{ grid-column:1 / -1; }
+  .kpi b{ display:block; font-family:var(--serif); font-size:31px; font-weight:600; line-height:1.1; margin-top:3px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  .kpi .sub{ font-size:11.5px; color:var(--ink-soft); margin-top:3px; }
+  .ing b{ color:var(--ok); } .egr b{ color:var(--danger); } .pos{ color:var(--ok); } .neg{ color:var(--danger); }
+  .delta.bien{ color:var(--ok); font-weight:700; } .delta.mal{ color:var(--danger); font-weight:700; }
+  svg.g{ width:100%; height:auto; display:block; } svg.g text{ font:500 9.5px var(--cuerpo); fill:var(--ink-faint); } svg.g .rej{ stroke:var(--line); stroke-width:1; }
+  svg.g .bi{ fill:var(--ok); opacity:.92; } svg.g .be{ fill:var(--danger); opacity:.92; } svg.g .ln{ fill:none; stroke:var(--primary); stroke-width:2.2; stroke-linejoin:round; stroke-linecap:round; } svg.g .ar{ fill:var(--primary); opacity:.12; }
+  .leyenda{ display:flex; gap:14px; font-size:11.5px; color:var(--ink-soft); margin-bottom:4px; } .leyenda i{ display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:5px; }
+  .barra{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:2px 10px; margin:9px 0; font-size:13px; }
+  .barra .nom{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .barra .val{ font-weight:700; font-variant-numeric:tabular-nums; }
+  .barra .pista{ grid-column:1 / -1; height:7px; border-radius:99px; background:var(--surface-3); overflow:hidden; } .barra .pista i{ display:block; height:100%; border-radius:99px; }
+  .mov{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1px 10px; padding:10px 0; border-top:1px solid var(--line); } .mov:first-of-type{ border-top:0; }
+  .mov .t{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .mov .m{ text-align:right; font-weight:800; font-variant-numeric:tabular-nums; } .mov .s{ font-size:11.5px; color:var(--ink-faint); } .mov .u{ font-size:11.5px; color:var(--ink-faint); text-align:right; }
+  .pill{ display:inline-block; padding:1px 8px; border-radius:99px; font-size:10.5px; font-weight:800; letter-spacing:.04em; } .pill.ok{ background:var(--ok-bg); color:var(--ok); } .pill.mal{ background:var(--danger-bg); color:var(--danger); } .pill.av{ background:var(--warn-bg); color:var(--warn); } .pill.cap{ background:var(--primary-soft); color:var(--primary); }
+  .cuenta{ width:100%; text-align:left; display:block; margin-top:10px; padding:13px 15px; border-radius:16px; background:var(--surface); background-image:var(--cristal); box-shadow:var(--sombra); }
+  .cuenta .nom{ font-weight:800; font-size:15px; } .cuenta .meta{ font-size:11.5px; color:var(--ink-soft); font-weight:500; }
+  .cuenta .saldo{ font-family:var(--serif); font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:4px; }
+  .prog{ height:5px; border-radius:99px; background:var(--surface-3); overflow:hidden; margin-top:8px; } .prog i{ display:block; height:100%; background:var(--ok); }
+  .aviso{ margin-top:12px; padding:10px 12px; border-radius:12px; font-size:12.5px; background:var(--warn-bg); color:var(--warn); font-weight:600; }
+  .nota{ font-size:11.5px; color:var(--ink-faint); margin:14px 4px 0; }
+  .vacio{ text-align:center; color:var(--ink-faint); padding:24px 10px; }
+  .hoja{ position:fixed; inset:0; z-index:30; background:rgba(8,6,10,.55); -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px); display:flex; align-items:flex-end; justify-content:center; }
+  .hoja > div{ width:100%; max-width:680px; max-height:90dvh; overflow:auto; background:var(--lienzo); background-image:var(--cristal); border:1px solid var(--line-strong); border-radius:22px 22px 0 0; padding:16px 16px calc(18px + env(safe-area-inset-bottom)); box-shadow:0 -14px 50px -20px rgba(0,0,0,.7); }
+  a.boton{ display:block; text-align:center; text-decoration:none; padding:12px; border-radius:12px; font-weight:800; background:var(--primary); color:var(--primary-ink); margin-top:12px; }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="fila sep">
+      <div class="marca">Control remoto<small id="quien">ERP · Grupo Vextor</small></div>
+      <div class="fila"><button class="icono" id="btnTema" type="button" aria-label="Cambiar tema">◐</button><button class="icono" id="btnRefrescar" type="button" aria-label="Actualizar">↻</button></div>
+    </div>
+  </header>
+  <div class="periodos" id="periodos" role="group" aria-label="Período"></div>
+  <main id="vista" aria-live="polite"></main>
+  <nav class="dock" id="dock" role="tablist" aria-label="Secciones"></nav>
+</div>
+<div class="hoja" id="hoja" hidden></div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (i) { return document.getElementById(i); };
+  var S = { vista: "inicio", periodo: "mes", cache: {} };
+  try { var g = JSON.parse(localStorage.getItem("v24r") || "null"); if (g) { S.vista = g.vista || "inicio"; S.periodo = g.periodo || "mes"; } } catch (e) { /* sin almacenamiento */ }
+  function guardar() { try { localStorage.setItem("v24r", JSON.stringify({ vista: S.vista, periodo: S.periodo })); } catch (e) { /* sin almacenamiento */ } }
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+  var fm = function (n, d) { return n == null ? "—" : Number(n).toLocaleString("es-VE", { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 2 : d }); };
+  var usd = function (n) { return (n < 0 ? "-" : "") + "$" + fm(Math.abs(n)); };
+  var iso = function (x) { return new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  var MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+  function rango(p) {
+    var h = new Date(), y = h.getFullYear(), m = h.getMonth();
+    if (p === "mes") return [iso(new Date(y, m, 1)), iso(h)];
+    if (p === "mes_ant") return [iso(new Date(y, m - 1, 1)), iso(new Date(y, m, 0))];
+    if (p === "30") return [iso(new Date(h.getTime() - 29 * 864e5)), iso(h)];
+    if (p === "anio") return [iso(new Date(y, 0, 1)), iso(h)];
+    return [iso(new Date(y, m, 1)), iso(h)];
+  }
+  var PERIODOS = [["mes", "Este mes"], ["mes_ant", "Mes pasado"], ["30", "30 días"], ["anio", "Este año"]];
+
+  function api(ruta) {
+    return fetch(ruta, { credentials: "same-origin" }).then(function (r) {
+      if (r.status === 401) { location.href = "/login?next=/remoto"; throw new Error("Tu sesión venció"); }
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (r.status === 403) throw new Error("Esta pantalla es solo para administración.");
+        if (!r.ok) throw new Error(d.error || ("Error " + r.status));
+        return d;
+      });
+    });
+  }
+
+  /* ---------- gráficos ---------- */
+  function paso(max) { var e = Math.pow(10, Math.floor(Math.log10(max))), f = max / e; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * e; }
+  function corto(v) { var a = Math.abs(v); return (v < 0 ? "-" : "") + (a >= 1e6 ? fm(a / 1e6, 1) + "M" : a >= 1e3 ? fm(a / 1e3, a >= 1e4 ? 0 : 1) + "k" : fm(a, 0)); }
+  function etiqueta(p, agrupar, larga) { return agrupar === "mes" ? MESES[Number(p.slice(5, 7)) - 1] + " " + (larga ? p.slice(0, 4) : p.slice(2, 4)) : (larga ? p.slice(8) + "/" + p.slice(5, 7) + "/" + p.slice(0, 4) : p.slice(8) + "/" + p.slice(5, 7)); }
+  var VACIO = '<div class="vacio">Sin movimientos en este período.</div>';
+  function barras(serie, agrupar) {
+    var W = 360, H = 200, mL = 34, mR = 6, mT = 8, mB = 24, iw = W - mL - mR, ih = H - mT - mB, n = serie.length || 1, max = 0;
+    serie.forEach(function (s) { max = Math.max(max, s.ingresos, s.egresos); });
+    if (!max) return VACIO;
+    var pa = paso(max / 4), top = pa * Math.ceil(max / pa - 1e-9), base = mT + ih, gw = iw / n, bw = Math.max(1.5, Math.min(14, gw * 0.38)), cada = Math.ceil(n / 6);
+    var y = function (v) { return base - v / top * ih; };
+    var s = '<svg class="g" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Ingresos y egresos por ' + (agrupar === "mes" ? "mes" : "día") + '">';
+    for (var v = 0; v <= top + 1e-9; v += pa) s += '<line class="rej" x1="' + mL + '" x2="' + (W - mR) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text x="' + (mL - 4) + '" y="' + (y(v) + 3) + '" text-anchor="end">' + corto(v) + "</text>";
+    serie.forEach(function (p, i) {
+      var cx = mL + gw * i + gw / 2;
+      s += "<g><title>" + esc(etiqueta(p.p, agrupar, true) + ": ingresos $" + fm(p.ingresos) + " · egresos $" + fm(p.egresos)) + "</title><rect x=\"" + (mL + gw * i) + "\" y=\"" + mT + "\" width=\"" + gw + "\" height=\"" + ih + "\" fill=\"transparent\"/>" +
+        (p.ingresos ? '<rect class="bi" x="' + (cx - bw - 0.5) + '" y="' + y(p.ingresos) + '" width="' + bw + '" height="' + (base - y(p.ingresos)) + '" rx="1.5"/>' : "") +
+        (p.egresos ? '<rect class="be" x="' + (cx + 0.5) + '" y="' + y(p.egresos) + '" width="' + bw + '" height="' + (base - y(p.egresos)) + '" rx="1.5"/>' : "") + "</g>";
+      if (i % cada === 0) s += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(etiqueta(p.p, agrupar, false)) + "</text>";
+    });
+    return s + "</svg>";
+  }
+  function linea(serie, agrupar, inicio, forzarCero, aria) {
+    if (!serie.some(function (p) { return p.ingresos || p.egresos; })) return VACIO;
+    var acc = inicio || 0, pts = serie.map(function (p) { return (acc += p.ingresos - p.egresos); });
+    var W = 360, H = 170, mL = 40, mR = 8, mT = 10, mB = 24, iw = W - mL - mR, ih = H - mT - mB;
+    var mn = Math.min.apply(null, pts.concat([inicio || 0].concat(forzarCero ? [0] : []))), mx = Math.max.apply(null, pts.concat([inicio || 0].concat(forzarCero ? [0] : [])));
+    if (mx === mn) { mx += 1; mn -= 1; } var pad = forzarCero ? 0 : (mx - mn) * 0.08; mn -= pad; mx += pad;
+    var y = function (v) { return mT + ih - (v - mn) / (mx - mn) * ih; }, x = function (i) { return mL + (serie.length > 1 ? iw * i / (serie.length - 1) : iw / 2); }, cada = Math.ceil(serie.length / 6);
+    var d = pts.map(function (v, i) { return (i ? "L" : "M") + x(i).toFixed(1) + "," + y(v).toFixed(1); }).join(" ");
+    var s = '<svg class="g" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(aria) + ", termina en " + fm(acc) + '">';
+    [mn + pad, (mn + mx) / 2, mx - pad].forEach(function (v) { s += '<line class="rej" x1="' + mL + '" x2="' + (W - mR) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text x="' + (mL - 4) + '" y="' + (y(v) + 3) + '" text-anchor="end">' + corto(v) + "</text>"; });
+    var piso = forzarCero ? y(0) : mT + ih;
+    s += '<path class="ar" d="' + d + " L" + x(pts.length - 1).toFixed(1) + "," + piso.toFixed(1) + " L" + x(0).toFixed(1) + "," + piso.toFixed(1) + ' Z"/><path class="ln" d="' + d + '"/>';
+    serie.forEach(function (p, i) {
+      s += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(pts[i]).toFixed(1) + '" r="' + (serie.length <= 40 ? 2.6 : 1.8) + '" fill="var(--primary)"><title>' + esc(etiqueta(p.p, agrupar, true) + ": " + fm(pts[i])) + "</title></circle>";
+      if (i % cada === 0) s += '<text x="' + x(i) + '" y="' + (H - 7) + '" text-anchor="middle">' + esc(etiqueta(p.p, agrupar, false)) + "</text>";
+    });
+    return s + "</svg>";
+  }
+  function listaBarras(lista, color) {
+    if (!lista.length) return '<div class="vacio">Sin datos.</div>';
+    var tot = lista.reduce(function (a, x) { return a + x.usd; }, 0) || 1, max = lista[0].usd || 1, resto = lista.slice(7).reduce(function (a, x) { return a + x.usd; }, 0);
+    return lista.slice(0, 7).map(function (x) {
+      return '<div class="barra"><span class="nom">' + esc(x.nombre) + '</span><span class="val">$' + fm(x.usd) + ' <span style="color:var(--ink-faint);font-weight:500">' + fm(x.usd / tot * 100, 0) + ' %</span></span><span class="pista"><i style="width:' + (x.usd / max * 100).toFixed(1) + "%;background:" + color + '"></i></span></div>';
+    }).join("") + (resto ? '<div class="barra"><span class="nom">Otras ' + (lista.length - 7) + ' categorías</span><span class="val">$' + fm(resto) + "</span></div>" : "");
+  }
+  function delta(act, prev, sube) {
+    if (!prev) return '<span class="delta">sin período anterior</span>';
+    var p = (act - prev) / Math.abs(prev) * 100, bien = sube ? p >= 0 : p <= 0;
+    return '<span class="delta ' + (Math.abs(p) < 0.5 ? "" : (bien ? "bien" : "mal")) + '">' + (p >= 0 ? "▲" : "▼") + " " + fm(Math.abs(p), 1) + " % vs. anterior</span>";
+  }
+
+  /* ---------- INICIO ---------- */
+  function vInicio(r) {
+    var d = r[0], mv = r[1], k = d.kpi, a = k.anterior, m = d.por_moneda, pos = k.neto_usd >= 0, av = [];
+    if (k.sin_conversion) av.push("⚠ " + k.sin_conversion + " movimiento(s) sin tasa no entran en los totales en dólares.");
+    if (k.capital_in_usd || k.capital_out_usd) av.push("Capital de socios fuera del resultado: entró " + usd(k.capital_in_usd) + " · salió " + usd(k.capital_out_usd) + ".");
+    var h = (av.length ? '<div class="aviso">' + av.map(esc).join("<br>") + "</div>" : "") + '<div class="kpis">' +
+      '<div class="kpi ing"><span class="et">Ingresos</span><b>' + usd(k.ingresos_usd) + '</b><div class="sub">' + (k.ventas_usd ? "de pedidos: " + usd(k.ventas_usd) + "<br>" : "") + delta(k.ingresos_usd, a.ingresos_usd, true) + "</div></div>" +
+      '<div class="kpi egr"><span class="et">Egresos</span><b>' + usd(k.egresos_usd) + '</b><div class="sub">' + delta(k.egresos_usd, a.egresos_usd, false) + "</div></div>" +
+      '<div class="kpi ancho"><span class="et">Resultado del período</span><b class="' + (pos ? "pos" : "neg") + '">' + usd(k.neto_usd) + '</b><div class="sub">' + delta(k.neto_usd, a.neto_usd, true) + "</div></div>" +
+      '<div class="kpi"><span class="et">Por cobrar</span><b>' + usd(k.por_cobrar_usd) + '</b><div class="sub">crédito sin cobrar</div></div>' +
+      '<div class="kpi"><span class="et">Por pagar</span><b>' + usd(k.por_pagar_usd) + '</b><div class="sub">compras pendientes</div></div></div>' +
+      '<div class="vidrio"><h3>Ingresos y egresos</h3><div class="leyenda"><span><i style="background:var(--ok)"></i>Ingresos</span><span><i style="background:var(--danger)"></i>Egresos</span></div>' + barras(d.serie, d.agrupar) + "</div>" +
+      '<div class="vidrio"><h3>Resultado acumulado</h3>' + linea(d.serie, d.agrupar, 0, true, "Resultado acumulado del período") + "</div>" +
+      '<div class="vidrio"><h3>En qué se va el dinero</h3>' + listaBarras(d.egresos_categorias, "var(--danger)") + '<h3 style="margin-top:16px">De dónde entra</h3>' + listaBarras(d.ingresos_fuentes, "var(--ok)") + "</div>" +
+      '<div class="vidrio"><h3>Por moneda</h3><div style="line-height:1.9">Divisas: entró <b class="pos">$' + fm(m.USD.ingresos) + '</b> · salió <b class="neg">$' + fm(m.USD.egresos) + "</b><br>Bolívares: entró <b class=\"pos\">Bs " + fm(m.VES.ingresos) + '</b> · salió <b class="neg">Bs ' + fm(m.VES.egresos) + "</b></div></div>" +
+      '<div class="vidrio"><h3>Últimos movimientos</h3>' + (mv.filas.length ? mv.filas.map(function (x) {
+        var ing = x.tipo === "ingreso";
+        return '<div class="mov"><span class="t">' + esc(x.concepto) + '</span><span class="m ' + (ing ? "pos" : "neg") + '">' + (ing ? "+" : "−") + (x.moneda === "USD" ? "$" : "Bs ") + fm(x.monto) + '</span><span class="s">' + esc(x.fecha) + " · " + esc(x.categoria_nombre) + (x.capital ? ' <span class="pill cap">capital</span>' : "") + '</span><span class="u">' + (x.monto_usd == null ? "sin tasa" : "$" + fm(x.monto_usd)) + "</span></div>";
+      }).join("") : VACIO) + '</div><p class="nota">Pantalla de consulta. Para cargar o anular movimientos usa el ERP en la computadora.</p>';
+    return h;
+  }
+
+  /* ---------- BANCOS ---------- */
+  function vBancos(r) {
+    var d = r[0], av = [];
+    if (d.sin_registrar.length) av.push("Hay movimientos en cuentas sin registrar: " + d.sin_registrar.join(", ") + ".");
+    if (d.pagos_sin_cuenta.n) av.push(d.pagos_sin_cuenta.n + " pago(s) de pedidos (" + usd(d.pagos_sin_cuenta.usd) + ") sin cuenta asignada.");
+    return (av.length ? '<div class="aviso">' + av.map(esc).join("<br>") + "</div>" : "") +
+      '<div class="kpis"><div class="kpi ancho"><span class="et">Saldo total (USD)</span><b>' + usd(d.total_usd) + '</b><div class="sub">' + (d.tasa ? "cuentas en bolívares a Bs " + fm(d.tasa) + " por dólar" : "⚠ sin tasa: no se suman las cuentas en bolívares") + "</div></div>" +
+      '<div class="kpi"><span class="et">Sin conciliar</span><b>' + d.sin_conciliar + '</b><div class="sub">movimientos</div></div><div class="kpi"><span class="et">Compras por pagar</span><b>' + usd(d.compras_pendientes.usd) + '</b><div class="sub">' + d.compras_pendientes.n + " pendiente(s)</div></div></div>" +
+      '<div class="vidrio"><h3>Dónde está el dinero</h3>' + listaBarras(d.cuentas.filter(function (c) { return c.activa && c.saldo_usd > 0; }).map(function (c) { return { nombre: c.nombre, usd: c.saldo_usd }; }).sort(function (a, b) { return b.usd - a.usd; }), "var(--primary)") + "</div>" +
+      (d.cuentas.length ? d.cuentas.map(function (c) {
+        var sig = c.moneda === "USD" ? "$" : "Bs ", pct = c.movimientos ? Math.round((c.movimientos - c.sin_conciliar) / c.movimientos * 100) : 100;
+        return '<button class="cuenta" type="button" data-cuenta="' + c.id + '"' + (c.activa ? "" : ' style="opacity:.6"') + '><div class="fila sep"><span class="nom">' + esc(c.nombre) + '</span><span class="meta">' + esc(c.moneda) + (c.activa ? "" : " · desactivada") + '</span></div><div class="meta">' + esc([d.tipos[c.tipo], c.banco, c.numero ? "···" + c.numero : ""].filter(Boolean).join(" · ")) + '</div>' +
+          '<div class="saldo ' + (c.saldo < 0 ? "neg" : "") + '">' + sig + fm(c.saldo) + "</div>" + (c.usd_estimado ? '<div class="meta">≈ ' + (d.tasa ? usd(c.saldo_usd) : "sin tasa") + "</div>" : "") +
+          '<div class="prog" title="' + pct + ' % conciliado"><i style="width:' + pct + '%"></i></div><div class="meta" style="margin-top:4px">' + c.sin_conciliar + " sin conciliar de " + c.movimientos + "</div></button>";
+      }).join("") : '<div class="vidrio vacio">Todavía no hay cuentas registradas.</div>') + '<p class="nota">Toca una cuenta para ver sus movimientos. Las transferencias y la conciliación se hacen en el ERP en la computadora.</p>';
+  }
+  function detalleCuenta(id) {
+    var des = iso(new Date(Date.now() - 29 * 864e5)), has = iso(new Date());
+    $("hoja").hidden = false; $("hoja").innerHTML = '<div><div class="vacio">Cargando…</div></div>';
+    api("/api/erp/bancos/cuentas/" + id + "/movimientos?desde=" + des + "&hasta=" + has).then(function (d) {
+      var c = d.cuenta, sig = c.moneda === "USD" ? "$" : "Bs ";
+      var cubo = {}, dia = new Date(des + "T00:00:00"), fin = new Date(has + "T00:00:00");
+      for (var x = new Date(dia); x <= fin; x.setDate(x.getDate() + 1)) cubo[iso(x)] = [0, 0];
+      d.filas.forEach(function (m) { if (m.valor == null) return; var b = cubo[m.fecha] || (cubo[m.fecha] = [0, 0]); b[m.tipo === "ingreso" ? 0 : 1] += m.valor; });
+      var serie = Object.keys(cubo).sort().map(function (k) { return { p: k, ingresos: cubo[k][0], egresos: cubo[k][1] }; });
+      $("hoja").innerHTML = '<div><div class="fila sep"><div><div class="et">' + esc(c.moneda) + '</div><div style="font-weight:800;font-size:17px">' + esc(c.nombre) + '</div></div><button class="icono" type="button" id="cerrar" aria-label="Cerrar">✕</button></div>' +
+        '<div class="cuenta" style="margin-top:10px"><div class="meta">Saldo actual</div><div class="saldo ' + (c.saldo < 0 ? "neg" : "") + '">' + sig + fm(c.saldo) + '</div><div class="meta">Al inicio de los últimos 30 días: ' + sig + fm(d.saldo_previo) + "</div></div>" +
+        '<div class="vidrio"><h3>Saldo, últimos 30 días</h3>' + linea(serie, "dia", d.saldo_previo, false, "Saldo de la cuenta") + "</div>" +
+        '<div class="vidrio"><h3>Movimientos</h3>' + (d.filas.length ? d.filas.slice(0, 60).map(function (m) {
+          var ing = m.tipo === "ingreso";
+          return '<div class="mov"><span class="t">' + esc(m.concepto) + '</span><span class="m ' + (ing ? "pos" : "neg") + '">' + (m.valor == null ? "sin tasa" : (ing ? "+" : "−") + sig + fm(m.valor)) + '</span><span class="s">' + esc(m.fecha) + (m.referencia ? " · " + esc(m.referencia) : "") + (m.transferencia ? ' <span class="pill cap">transferencia</span>' : "") + (m.fuente === "pedido" ? ' <span class="pill av">pedido</span>' : "") + '</span><span class="u">' + sig + fm(m.saldo) + (m.conciliado ? " ✓" : "") + "</span></div>";
+        }).join("") : VACIO) + "</div></div>";
+    }).catch(function (e) { $("hoja").innerHTML = '<div><p class="neg">' + esc(e.message) + '</p><button type="button" id="cerrar" style="width:100%">Cerrar</button></div>'; });
+  }
+
+  /* ---------- CONTABILIDAD ---------- */
+  function vConta(r) {
+    var c = r[0], x = c.resumen, v = r[1].resumen, co = r[2].resumen, mes = rango(S.periodo)[0].slice(0, 7);
+    return '<div class="kpis"><div class="kpi"><span class="et">Pagos confirmados</span><b>' + x.pagos + '</b><div class="sub">' + (x.sin_tasa ? x.sin_tasa + " sin tasa cargada" : "con su tasa del día") + '</div></div>' +
+      '<div class="kpi"><span class="et">Total cobrado</span><b>' + usd(x.total_usd) + '</b><div class="sub">Bs ' + fm(x.total_bs) + '</div></div>' +
+      '<div class="kpi ing"><span class="et">En divisas</span><b>' + usd(x.usd_divisas) + '</b></div><div class="kpi"><span class="et">En bolívares</span><b style="font-size:25px">Bs ' + fm(x.bs_bolivares) + '</b></div>' +
+      '<div class="kpi ancho"><span class="et">Diferencial cambiario (borradores)</span><b style="font-size:24px">Débito Bs ' + fm(x.diferencial_debito_bs) + " · Crédito Bs " + fm(x.diferencial_credito_bs) + '</b><div class="sub">notas de débito y crédito que la contadora decide emitir o descartar</div></div></div>' +
+      '<div class="vidrio"><h3>Ventas y soporte fiscal</h3><div class="barra"><span class="nom">Ventas del período</span><span class="val">' + usd(v.total_usd) + "</span></div>" +
+      fila("Con factura", v.con_factura_usd, "var(--ok)", v.total_usd) + fila("Nota de despacho por facturar", v.despacho_pendiente_usd, "var(--warn)", v.total_usd) + fila("Nota de entrega (excepción)", v.nota_entrega_usd, "var(--danger)", v.total_usd) + fila("Sin documento", v.sin_documento_usd, "var(--ink-faint)", v.total_usd) +
+      (v.alerta_nota_entrega ? '<div class="aviso">⚠ Las notas de entrega son el ' + fm(v.nota_entrega_pct, 1) + " % de las ventas y pasan el límite del " + fm(v.nota_entrega_limite_pct, 0) + " %.</div>" : '<div class="nota" style="margin:8px 0 0">Notas de entrega: ' + fm(v.nota_entrega_pct, 1) + " % de las ventas (límite " + fm(v.nota_entrega_limite_pct, 0) + " %).</div>") + "</div>" +
+      '<div class="vidrio"><h3>Compras y gastos</h3><div class="barra"><span class="nom">Registros</span><span class="val">' + co.registros + "</span></div>" +
+      '<div class="barra"><span class="nom">Con soporte fiscal / sin soporte</span><span class="val">' + co.con_soporte + " / " + co.sin_soporte + "</span></div>" +
+      '<div class="barra"><span class="nom">Total en dólares</span><span class="val">' + usd(co.total_usd) + '</span></div><div class="barra"><span class="nom">IVA de compras</span><span class="val">Bs ' + fm(co.iva) + "</span></div>" +
+      '<div class="barra"><span class="nom">Retención de IVA / de ISLR</span><span class="val">Bs ' + fm(co.ret_iva) + " / Bs " + fm(co.ret_islr) + "</span></div></div>" +
+      '<div class="vidrio"><h3>Pagos recibidos</h3>' + (c.pagos.length ? c.pagos.slice(0, 15).map(function (p) {
+        return '<div class="mov"><span class="t">' + esc(p.nombre || p.telefono) + '</span><span class="m pos">' + (p.moneda === "USD" ? "$" : "Bs ") + fm(p.monto_original) + '</span><span class="s">' + esc(p.fecha) + " · " + (p.metodo === "divisas" ? "divisas" : "bolívares") + (p.banco ? " · " + esc(p.banco) : "") + '</span><span class="u">' + (p.tasa_pago ? "tasa " + fm(p.tasa_pago) : "sin tasa") + "</span></div>";
+      }).join("") : VACIO) + "</div>" +
+      '<div class="vidrio"><h3>Notas por diferencial</h3>' + (c.notas.length ? c.notas.slice(0, 10).map(function (n) {
+        return '<div class="mov"><span class="t">' + esc(n.nombre || n.telefono) + '</span><span class="m">Bs ' + fm(n.monto_bs) + '</span><span class="s">' + (n.tipo === "debito" ? "Nota de débito" : "Nota de crédito") + " · base $" + fm(n.base_usd) + '</span><span class="u"><span class="pill ' + (n.estado === "borrador" ? "av" : n.estado === "revisada" ? "ok" : "cap") + '">' + esc(n.estado) + "</span></span></div>";
+      }).join("") : '<div class="vacio">Sin notas en este período.</div>') + "</div>" +
+      '<a class="boton" href="/api/erp/carpeta-mensual?mes=' + mes + '">Descargar carpeta de soportes de ' + mes + " (ZIP)</a>" +
+      '<p class="nota">Reportes administrativos para la contadora: no son libros contables ni documentos fiscales.</p>';
+    function fila(nombre, valor, color, total) { return '<div class="barra"><span class="nom">' + nombre + '</span><span class="val">' + usd(valor) + '</span><span class="pista"><i style="width:' + (total ? Math.min(100, valor / total * 100) : 0).toFixed(1) + "%;background:" + color + '"></i></span></div>'; }
+  }
+
+  /* ---------- armado ---------- */
+  var VISTAS = {
+    inicio: { nombre: "Inicio", icono: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/><path d="M3 7l5-3 4 3 8-5"/></svg>', cargar: function (d, h) { return Promise.all([api("/api/erp/finanzas/resumen?desde=" + d + "&hasta=" + h), api("/api/erp/finanzas/movimientos?desde=" + d + "&hasta=" + h + "&limite=20")]); }, pintar: vInicio, periodo: true },
+    bancos: { nombre: "Bancos", icono: '<svg viewBox="0 0 24 24"><path d="M3 10l9-6 9 6"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8"/><path d="M3 21h18"/></svg>', cargar: function () { return Promise.all([api("/api/erp/bancos/panel")]); }, pintar: vBancos, periodo: false },
+    conta: { nombre: "Contabilidad", icono: '<svg viewBox="0 0 24 24"><path d="M5 4h14v17H5z"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>', cargar: function (d, h) { return Promise.all([api("/api/erp/contabilidad?desde=" + d + "&hasta=" + h), api("/api/erp/reportes/ventas?desde=" + d + "&hasta=" + h), api("/api/erp/reportes/compras?desde=" + d + "&hasta=" + h)]); }, pintar: vConta, periodo: true }
+  };
+  function pintarDock() {
+    $("dock").innerHTML = Object.keys(VISTAS).map(function (k) { return '<button type="button" role="tab" data-v="' + k + '" aria-selected="' + (S.vista === k) + '">' + VISTAS[k].icono + "<span>" + VISTAS[k].nombre + "</span></button>"; }).join("");
+  }
+  function pintarPeriodos() {
+    var p = $("periodos"); p.hidden = !VISTAS[S.vista].periodo;
+    p.innerHTML = PERIODOS.map(function (x) { return '<button type="button" class="chip ' + (S.periodo === x[0] ? "on" : "") + '" data-p="' + x[0] + '">' + x[1] + "</button>"; }).join("");
+  }
+  var pedido = 0;
+  function cargar() {
+    var v = VISTAS[S.vista], r = rango(S.periodo), n = ++pedido, vista = $("vista");
+    if (!S.cache[S.vista + S.periodo]) vista.innerHTML = '<div class="vacio">Cargando…</div>'; else vista.innerHTML = S.cache[S.vista + S.periodo];
+    v.cargar(r[0], r[1]).then(function (datos) {
+      if (n !== pedido) return;
+      var html = v.pintar(datos); S.cache[S.vista + S.periodo] = html;
+      var y = vista.scrollTop; vista.innerHTML = html; vista.scrollTop = y;
+    }).catch(function (e) { if (n === pedido) vista.innerHTML = '<div class="aviso">' + esc(e.message) + '</div>'; });
+  }
+  function ir(v) { S.vista = v; guardar(); pintarDock(); pintarPeriodos(); $("vista").scrollTop = 0; cargar(); }
+
+  $("dock").addEventListener("click", function (e) { var b = e.target.closest("[data-v]"); if (b) ir(b.dataset.v); });
+  $("periodos").addEventListener("click", function (e) { var b = e.target.closest("[data-p]"); if (b) { S.periodo = b.dataset.p; guardar(); pintarPeriodos(); cargar(); } });
+  $("btnRefrescar").addEventListener("click", function () { S.cache = {}; cargar(); });
+  $("vista").addEventListener("click", function (e) { var b = e.target.closest("[data-cuenta]"); if (b) detalleCuenta(b.dataset.cuenta); });
+  $("hoja").addEventListener("click", function (e) { if (e.target === $("hoja") || e.target.closest("#cerrar")) $("hoja").hidden = true; });
+  $("btnTema").addEventListener("click", function () {
+    var T = ["auto", "light", "dark"], actual = "auto"; try { var t = localStorage.getItem("v24r-tema"); actual = t === "light" || t === "dark" ? t : "auto"; } catch (er) { /* sin almacenamiento */ }
+    var sig = T[(T.indexOf(actual) + 1) % 3];
+    if (sig === "auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", sig);
+    try { if (sig === "auto") localStorage.removeItem("v24r-tema"); else localStorage.setItem("v24r-tema", sig); } catch (er) { /* sin almacenamiento */ }
+  });
+  setInterval(function () { if (!document.hidden && $("hoja").hidden) cargar(); }, 90000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) cargar(); });
+
+  api("/api/crm/yo").then(function (u) { $("quien").textContent = "ERP · " + (u.nombre || "Grupo Vextor"); }).catch(function () { });
+  if (!VISTAS[S.vista]) S.vista = "inicio";
+  pintarDock(); pintarPeriodos(); cargar();
+  window.__remoto = { estado: S, ir: ir };
+})();
+</script>
+</body>
+</html>

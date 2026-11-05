@@ -1089,6 +1089,20 @@ def vendedor_pagina():
     return resp
 
 
+@app.route("/remoto", methods=["GET"])
+def remoto_pagina():
+    """Control remoto del ERP para el celular (solo lectura): inicio, bancos y contabilidad. Solo administradores."""
+    usuario = _usuario_actual()
+    if not usuario:
+        return redirect("/login?next=/remoto")
+    if usuario["rol"] not in ROLES_ADMIN:
+        return redirect("/vendedor")
+    resp = send_from_directory(os.path.dirname(os.path.abspath(__file__)), "remoto.html")
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resp
+
+
 def _vend(fn):
     """Corre una función de vendedor.py y traduce sus ValueError a un 400 con el motivo."""
     try:
