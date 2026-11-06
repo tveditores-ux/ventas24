@@ -1,52 +1,22 @@
 """
-Carga de inventario desde PDF o imagen (PNG/JPG). Claude lee el documento y devuelve las filas;
-nada se aplica hasta que una persona revisa la vista previa y confirma. Un error de lectura
-no debe mover existencias, por eso este módulo solo extrae y compara con el catálogo.
+Carga de inventario desde PDF o imagen (PNG/JPG). Todo se lee dentro de Ventas-24: el texto del PDF con
+pypdf y las fotos con OCR local (Tesseract). Ningún archivo se envía a servicios externos.
+Nada se aplica hasta que una persona revisa la vista previa y confirma; un error de lectura no debe
+mover existencias, por eso este módulo solo extrae y compara con el catálogo.
 """
-import base64
-import json
+import io
 import os
+import re
+import shutil
+import subprocess
+import tempfile
 
-from anthropic import Anthropic
-
-import agente as base
 import db
 
 MAX_BYTES = 8 * 1024 * 1024
-TIPOS_IMAGEN = {"image/png": "image/png", "image/jpeg": "image/jpeg", "image/jpg": "image/jpeg"}
+TIPOS_IMAGEN = {"image/png", "image/jpeg", "image/jpg"}
 MAX_FILAS = 1500
-
-HERRAMIENTA = {
-    "name": "registrar_filas",
-    "description": "Registra las filas de inventario leídas del documento.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "filas": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "codigo": {"type": "string", "description": "código del producto tal como aparece"},
-                        "cantidad": {"type": "number", "description": "existencia contada"},
-                        "marca": {"type": "string"},
-                        "costo": {"type": "number"},
-                        "minimo": {"type": "number"},
-                    },
-                    "required": ["codigo", "cantidad"],
-                },
-            },
-            "ilegibles": {"type": "integer", "description": "renglones que no se pudieron leer con seguridad"},
-        },
-        "required": ["filas"],
-    },
-}
-
-INSTRUCCION = (
-    "Lee este documento de inventario y devuelve una fila por producto con su código y la cantidad en existencia. "
-    "Agrega marca, costo y mínimo solo si el documento los trae. No inventes ni completes datos: si un renglón no "
-    "se lee con seguridad, no lo incluyas y súmalo a 'ilegibles'. Copia los códigos exactamente como están escritos."
-)
+_NUM = re.compile(r"^\d{1,6}(?:[.,]\d+)?$")
 
 
 def tipo_de(nombre: str, content_type: str | None) -> str | None:
@@ -58,12 +28,73 @@ def tipo_de(nombre: str, content_type: str | None) -> str | None:
     return None
 
 
-def _bloque(tipo: str, datos: bytes, nombre: str, content_type: str | None) -> dict:
-    b64 = base64.standard_b64encode(datos).decode()
-    if tipo == "pdf":
-        return {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}}
-    medio = TIPOS_IMAGEN.get(content_type or "") or ("image/png" if nombre.lower().endswith(".png") else "image/jpeg")
-    return {"type": "image", "source": {"type": "base64", "media_type": medio, "data": b64}}
+def _texto_pdf(datos: bytes) -> str:
+    from pypdf import PdfReader
+    try:
+        lector = PdfReader(io.BytesIO(datos))
+        return "\n".join((pg.extract_text() or "") for pg in lector.pages[:60])
+    except Exception as e:
+        print(f"[inventario_archivo] pdf ilegible: {e}", flush=True)
+        raise ValueError("no pude abrir el PDF")
+
+
+def _texto_imagen(datos: bytes) -> str:
+    """OCR local con Tesseract: la imagen no sale del servidor de Ventas-24."""
+    if not shutil.which("tesseract"):
+        raise ValueError("el servidor aún no tiene el lector de imágenes (Tesseract) instalado; usa PDF o CSV mientras tanto")
+    with tempfile.TemporaryDirectory() as d:
+        ruta = os.path.join(d, "foto")
+        with open(ruta, "wb") as f:
+            f.write(datos)
+        for idioma in ("spa+eng", "eng"):
+            r = subprocess.run(["tesseract", ruta, "stdout", "-l", idioma, "--psm", "6"], capture_output=True, timeout=90)
+            if r.returncode == 0:
+                return r.stdout.decode("utf-8", errors="replace")
+    raise ValueError("no pude leer la imagen; prueba con una foto más nítida y derecha")
+
+
+def _entero(tok: str):
+    if not _NUM.match(tok):
+        return None
+    v = float(tok.replace(",", "."))
+    return int(v) if v == int(v) else None
+
+
+def interpretar(texto: str) -> dict:
+    """Busca en cada renglón un código del catálogo y la primera cantidad entera que le sigue.
+    Lo que no coincide con el catálogo no se adivina: se cuenta como ilegible."""
+    with db.conectar() as con:
+        filas_cat = con.execute("SELECT codigo, marca FROM catalogo WHERE codigo IS NOT NULL AND codigo != ''").fetchall()
+    codigos, marcas = set(), set()
+    for c in filas_cat:
+        codigos.add(c["codigo"].strip().lower())
+        if c["marca"]:
+            marcas.add(c["marca"].strip())
+    filas, ilegibles, vistos = [], 0, set()
+    for linea in texto.splitlines():
+        toks = [t for t in re.split(r"[\s;|]+", linea.strip()) if t]
+        if not toks:
+            continue
+        pos = next((k for k, t in enumerate(toks) if t.strip(".,:()").lower() in codigos), None)
+        if pos is None:
+            if any(_NUM.match(t) for t in toks) and any(re.search(r"[A-Za-z]", t) and re.search(r"\d", t) for t in toks):
+                ilegibles += 1
+            continue
+        codigo = toks[pos].strip(".,:()")
+        cant = next((v for v in (_entero(t) for t in toks[pos + 1:]) if v is not None), None)
+        if cant is None:
+            ilegibles += 1
+            continue
+        marca = next((m for m in marcas if m.lower() in linea.lower()), "")
+        clave = (codigo.lower(), marca.lower(), cant)
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+        fila = {"codigo": codigo, "cantidad": cant}
+        if marca:
+            fila["marca"] = marca
+        filas.append(fila)
+    return {"filas": filas[:MAX_FILAS], "ilegibles": ilegibles}
 
 
 def extraer(nombre: str, content_type: str | None, datos: bytes) -> dict:
@@ -74,28 +105,13 @@ def extraer(nombre: str, content_type: str | None, datos: bytes) -> dict:
         raise ValueError("el archivo está vacío")
     if len(datos) > MAX_BYTES:
         raise ValueError("el archivo pesa más de 8 MB")
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise ValueError("falta ANTHROPIC_API_KEY para leer PDF e imágenes; el CSV sigue funcionando")
-    workspace_id = os.environ.get("ANTHROPIC_WORKSPACE_ID")
-    cliente = Anthropic(api_key=api_key, default_headers={"anthropic-workspace-id": workspace_id} if workspace_id else None)
-    try:
-        r = cliente.messages.create(
-            model=base.MODELO, max_tokens=8192, tools=[HERRAMIENTA],
-            tool_choice={"type": "tool", "name": "registrar_filas"},
-            messages=[{"role": "user", "content": [_bloque(tipo, datos, nombre, content_type),
-                                                   {"type": "text", "text": INSTRUCCION}]}],
-        )
-    except Exception as e:  # el detalle va al log del servidor, no a la pantalla
-        print(f"[inventario_archivo] error leyendo {nombre}: {e}", flush=True)
-        raise ValueError("no pude leer el archivo; prueba con una foto más nítida o súbelo como CSV")
-    uso = next((b for b in r.content if b.type == "tool_use"), None)
-    if not uso:
-        raise ValueError("no encontré filas de inventario en el archivo")
-    filas = (uso.input or {}).get("filas") or []
-    if not filas:
-        raise ValueError("no encontré filas de inventario en el archivo")
-    return {"filas": filas[:MAX_FILAS], "ilegibles": int((uso.input or {}).get("ilegibles") or 0)}
+    texto = _texto_pdf(datos) if tipo == "pdf" else _texto_imagen(datos)
+    if len(texto.strip()) < 10:
+        raise ValueError("no encontré texto en el archivo (¿PDF escaneado o foto borrosa?); prueba con una foto nítida o el CSV")
+    r = interpretar(texto)
+    if not r["filas"]:
+        raise ValueError("no reconocí ningún código del catálogo en el archivo")
+    return r
 
 
 def vista_previa(filas: list) -> dict:
